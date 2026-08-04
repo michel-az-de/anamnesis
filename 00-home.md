@@ -23,6 +23,7 @@ Este cofre é a camada de conhecimento e especificação do Anamnesis. A pasta `
 - [[Arquitetura MOC]]
 - [[Protocolo de Agentes]]
 - [[Status Alpha]]
+- [[Resumo para Próxima Conversa]]
 
 ## Regra de trabalho
 
