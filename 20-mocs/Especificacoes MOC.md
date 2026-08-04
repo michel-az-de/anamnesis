@@ -21,4 +21,5 @@ related: ["[[Anamnesis Home]]", "[[Protocolo de Agentes]]"]
 ## Processo
 
 - [[Template de SPEK]]
+- [[Template de Entrega]]
 - [[Registro de Decisoes]]

@@ -24,6 +24,17 @@ O desenvolvimento é orientado pelas especificações em `30-especificacoes/`. A
 - Toda resposta de implementação deve citar SPEKs atendidas, testes executados e decisões pendentes.
 - CLIs autenticados por assinatura são adaptadores; não automatize a interface web de provedores.
 
+## Encerramento canônico de cada incremento
+
+Ao concluir uma implementação, revisão ou planejamento, o agente termina a resposta com estes quatro itens, nesta ordem:
+
+1. **Feito:** uma frase objetiva sobre a entrega.
+2. **Evolução estimada:** percentual do escopo da alpha concluído, com a base de cálculo. Se afetar o roadmap, atualizar `10-painel/Status Alpha.md`.
+3. **Falta:** lacunas concretas para a próxima meta testável.
+4. **Próximo passo sugerido:** um único incremento pequeno, preferencialmente a próxima SPEK.
+
+Use `30-especificacoes/05-templates/Template de Entrega.md` como formato. Não apresente percentual como medição exata: ele é uma estimativa ponderada pelo valor da alpha, e não por arquivos, linhas ou commits.
+
 ## Qualidade
 
 - Siga Red → Green → Refactor.
