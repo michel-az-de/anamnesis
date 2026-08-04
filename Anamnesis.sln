@@ -16,6 +16,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Anamnesis.Domain.Tests", "t
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Anamnesis.Application.Tests", "tests\Anamnesis.Application.Tests\Anamnesis.Application.Tests.csproj", "{D9E02C0C-9BE5-43CA-9B5B-1CBF2F111107}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Anamnesis.Infrastructure.Tests", "tests\Anamnesis.Infrastructure.Tests\Anamnesis.Infrastructure.Tests.csproj", "{D9E02C0C-9BE5-43CA-9B5B-1CBF2F111108}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -36,5 +38,23 @@ Global
 		{D9E02C0C-9BE5-43CA-9B5B-1CBF2F111106}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{D9E02C0C-9BE5-43CA-9B5B-1CBF2F111107}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{D9E02C0C-9BE5-43CA-9B5B-1CBF2F111107}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D9E02C0C-9BE5-43CA-9B5B-1CBF2F111108}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D9E02C0C-9BE5-43CA-9B5B-1CBF2F111108}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D9E02C0C-9BE5-43CA-9B5B-1CBF2F111101}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D9E02C0C-9BE5-43CA-9B5B-1CBF2F111101}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D9E02C0C-9BE5-43CA-9B5B-1CBF2F111102}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D9E02C0C-9BE5-43CA-9B5B-1CBF2F111102}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D9E02C0C-9BE5-43CA-9B5B-1CBF2F111103}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D9E02C0C-9BE5-43CA-9B5B-1CBF2F111103}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D9E02C0C-9BE5-43CA-9B5B-1CBF2F111104}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D9E02C0C-9BE5-43CA-9B5B-1CBF2F111104}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D9E02C0C-9BE5-43CA-9B5B-1CBF2F111105}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D9E02C0C-9BE5-43CA-9B5B-1CBF2F111105}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D9E02C0C-9BE5-43CA-9B5B-1CBF2F111106}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D9E02C0C-9BE5-43CA-9B5B-1CBF2F111106}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D9E02C0C-9BE5-43CA-9B5B-1CBF2F111107}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D9E02C0C-9BE5-43CA-9B5B-1CBF2F111107}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D9E02C0C-9BE5-43CA-9B5B-1CBF2F111108}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D9E02C0C-9BE5-43CA-9B5B-1CBF2F111108}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

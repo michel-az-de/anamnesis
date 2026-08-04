@@ -17,6 +17,7 @@ related: ["[[Especificacoes MOC]]", "[[Protocolo de Agentes]]"]
 | SPEK-001 | [[SPEK-001 Ciclo de Reuniao]] | aprovado | `Domain`, `Application` |
 | SPEK-002 | [[SPEK-002 Geracao de Ata]] | rascunho | `Application`, `Infrastructure` |
 | SPEK-003 | [[SPEK-003 Retencao de Gravacao]] | rascunho | `Domain`, `Worker` |
+| SPEK-004 | [[SPEK-004 Fila Local de Jobs]] | aprovado | `Application`, `Infrastructure`, `Worker` |
 
 ## Fluxo obrigatório
 

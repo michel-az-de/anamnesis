@@ -14,5 +14,6 @@ related: ["[[Projeto MOC]]", "[[ADR-001 Arquitetura Modular]]", "[[ADR-002 Provi
 
 - [[ADR-001 Arquitetura Modular]]
 - [[ADR-002 Providers por CLI]]
+- [[ADR-003 SQLite do Windows]]
 - [[SPEK-001 Ciclo de Reuniao]]
 - [[SPEK-002 Geracao de Ata]]

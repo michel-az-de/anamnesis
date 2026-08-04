@@ -1,5 +1,6 @@
 using Anamnesis.Application.Contracts;
 using Anamnesis.Domain.Entidades;
+using System.Globalization;
 
 namespace Anamnesis.Infrastructure.Arquivos;
 
@@ -9,8 +10,8 @@ public sealed class DiscoArquivador(string diretorioRaiz) : IArquivador
     {
         var diretorioReuniao = Path.Combine(
             diretorioRaiz,
-            reuniao.CriadaEm.ToString("yyyy"),
-            reuniao.CriadaEm.ToString("MM"),
+            reuniao.CriadaEm.ToString("yyyy", CultureInfo.InvariantCulture),
+            reuniao.CriadaEm.ToString("MM", CultureInfo.InvariantCulture),
             reuniao.Id.ToString("N"));
 
         Directory.CreateDirectory(diretorioReuniao);
