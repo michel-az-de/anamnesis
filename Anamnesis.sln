@@ -1,0 +1,40 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Anamnesis.Domain", "src\Anamnesis.Domain\Anamnesis.Domain.csproj", "{D9E02C0C-9BE5-43CA-9B5B-1CBF2F111101}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Anamnesis.Application", "src\Anamnesis.Application\Anamnesis.Application.csproj", "{D9E02C0C-9BE5-43CA-9B5B-1CBF2F111102}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Anamnesis.Infrastructure", "src\Anamnesis.Infrastructure\Anamnesis.Infrastructure.csproj", "{D9E02C0C-9BE5-43CA-9B5B-1CBF2F111103}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Anamnesis.Tray", "src\Anamnesis.Tray\Anamnesis.Tray.csproj", "{D9E02C0C-9BE5-43CA-9B5B-1CBF2F111104}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Anamnesis.Worker", "src\Anamnesis.Worker\Anamnesis.Worker.csproj", "{D9E02C0C-9BE5-43CA-9B5B-1CBF2F111105}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Anamnesis.Domain.Tests", "tests\Anamnesis.Domain.Tests\Anamnesis.Domain.Tests.csproj", "{D9E02C0C-9BE5-43CA-9B5B-1CBF2F111106}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Anamnesis.Application.Tests", "tests\Anamnesis.Application.Tests\Anamnesis.Application.Tests.csproj", "{D9E02C0C-9BE5-43CA-9B5B-1CBF2F111107}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{D9E02C0C-9BE5-43CA-9B5B-1CBF2F111101}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D9E02C0C-9BE5-43CA-9B5B-1CBF2F111101}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D9E02C0C-9BE5-43CA-9B5B-1CBF2F111102}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D9E02C0C-9BE5-43CA-9B5B-1CBF2F111102}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D9E02C0C-9BE5-43CA-9B5B-1CBF2F111103}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D9E02C0C-9BE5-43CA-9B5B-1CBF2F111103}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D9E02C0C-9BE5-43CA-9B5B-1CBF2F111104}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D9E02C0C-9BE5-43CA-9B5B-1CBF2F111104}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D9E02C0C-9BE5-43CA-9B5B-1CBF2F111105}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D9E02C0C-9BE5-43CA-9B5B-1CBF2F111105}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D9E02C0C-9BE5-43CA-9B5B-1CBF2F111106}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D9E02C0C-9BE5-43CA-9B5B-1CBF2F111106}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D9E02C0C-9BE5-43CA-9B5B-1CBF2F111107}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D9E02C0C-9BE5-43CA-9B5B-1CBF2F111107}.Debug|Any CPU.Build.0 = Debug|Any CPU
+	EndGlobalSection
+EndGlobal

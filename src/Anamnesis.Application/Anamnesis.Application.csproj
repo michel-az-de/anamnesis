@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="..\Anamnesis.Domain\Anamnesis.Domain.csproj" />
+  </ItemGroup>
+</Project>

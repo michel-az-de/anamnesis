@@ -1,0 +1,63 @@
+using Anamnesis.Application.Contracts;
+using Anamnesis.Application.Modelos;
+using Anamnesis.Application.UseCases;
+using Anamnesis.Domain.Entidades;
+using Anamnesis.Domain.Tipos;
+using Xunit;
+
+namespace Anamnesis.Application.Tests;
+
+public sealed class ProcessarReuniaoHandlerTests
+{
+    [Fact]
+    public async Task DeveArquivarReuniaoAposGerarTranscricaoEAta()
+    {
+        var reuniao = new Reuniao(Guid.NewGuid(), "Planejamento", DateTimeOffset.UtcNow);
+        reuniao.IniciarGravacao(DateTimeOffset.UtcNow);
+        reuniao.FinalizarGravacao("C:\\gravacoes\\planejamento.mkv", DateTimeOffset.UtcNow);
+
+        var repository = new ReuniaoRepositoryFake(reuniao);
+        var handler = new ProcessarReuniaoHandler(
+            repository,
+            new TranscritorFake(),
+            new AtaRunnerFake(),
+            new ArquivadorFake(),
+            TimeProvider.System);
+
+        await handler.ExecutarAsync(reuniao.Id, CancellationToken.None);
+
+        Assert.Equal(StatusReuniao.Arquivada, reuniao.Status);
+        Assert.NotNull(reuniao.Ata);
+        Assert.Equal("Resumo da reunião.", reuniao.Ata!.ResumoExecutivo);
+    }
+
+    private sealed class ReuniaoRepositoryFake(Reuniao reuniao) : IReuniaoRepository
+    {
+        public Task<Reuniao?> ObterAsync(Guid reuniaoId, CancellationToken cancellationToken) =>
+            Task.FromResult<Reuniao?>(reuniao.Id == reuniaoId ? reuniao : null);
+
+        public Task SalvarAsync(Reuniao reuniao, CancellationToken cancellationToken) => Task.CompletedTask;
+    }
+
+    private sealed class TranscritorFake : ITranscritor
+    {
+        public Task<TranscricaoGerada> TranscreverAsync(string caminhoArquivo, CancellationToken cancellationToken) =>
+            Task.FromResult(new TranscricaoGerada("Felipe prepara a proposta.", "pt"));
+    }
+
+    private sealed class AtaRunnerFake : IAtaRunner
+    {
+        public string Nome => "Fake";
+
+        public Task<AtaGerada> GerarAsync(Reuniao reuniao, TranscricaoGerada transcricao, CancellationToken cancellationToken) =>
+            Task.FromResult(new AtaGerada(
+                "Resumo da reunião.",
+                ["Enviar proposta."],
+                [new Tarefa("Preparar proposta.", "Felipe", null)]));
+    }
+
+    private sealed class ArquivadorFake : IArquivador
+    {
+        public Task ArquivarAsync(Reuniao reuniao, CancellationToken cancellationToken) => Task.CompletedTask;
+    }
+}

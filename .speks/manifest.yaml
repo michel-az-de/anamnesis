@@ -1,0 +1,5 @@
+version: 1
+specsCanonicas: ../30-especificacoes
+indice: ../30-especificacoes/00-indice.md
+protocoloAgentes: ../30-especificacoes/04-processo/Protocolo de Agentes.md
+instrucoesCodigo: ../AGENTS.md
