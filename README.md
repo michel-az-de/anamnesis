@@ -27,6 +27,10 @@ tests/                        testes de domínio e aplicação
 
 Abra esta pasta no Obsidian e comece por `00-home.md`.
 
+## Status da alpha
+
+O roadmap ponderado está em **27%**. O fluxo completo ainda não é testável: a parte de gravação, transcrição, geração da ata e retenção segura será entregue nas próximas SPEKs. Consulte o [painel de alpha](10-painel/Status%20Alpha.md) para ver pesos, evidências e caminho crítico.
+
 ## Primeiro ciclo de desenvolvimento
 
 1. Implementar `ObsGravador` e o detector de reunião no `Tray`.

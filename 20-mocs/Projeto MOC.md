@@ -7,7 +7,7 @@ created: 2026-08-04
 updated: 2026-08-04
 status: evergreen
 summary: Visão geral, identidade e decisões fundamentais do Anamnesis.
-related: ["[[Anamnesis Home]]", "[[Arquitetura MOC]]", "[[Especificacoes MOC]]"]
+related: ["[[Anamnesis Home]]", "[[Arquitetura MOC]]", "[[Especificacoes MOC]]", "[[Status Alpha]]"]
 ---
 
 # Projeto — Map of Content
@@ -26,3 +26,4 @@ related: ["[[Anamnesis Home]]", "[[Arquitetura MOC]]", "[[Especificacoes MOC]]"]
 
 - [[Protocolo de Agentes]]
 - [[Guia TDD]]
+- [[Status Alpha]]

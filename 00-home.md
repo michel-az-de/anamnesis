@@ -7,7 +7,7 @@ created: 2026-08-04
 updated: 2026-08-04
 status: evergreen
 summary: Ponto de entrada do cofre Obsidian e do projeto Anamnesis.
-related: ["[[Projeto MOC]]", "[[Especificacoes MOC]]", "[[Arquitetura MOC]]", "[[Protocolo de Agentes]]"]
+related: ["[[Projeto MOC]]", "[[Especificacoes MOC]]", "[[Arquitetura MOC]]", "[[Protocolo de Agentes]]", "[[Status Alpha]]"]
 ---
 
 # Anamnesis
@@ -22,6 +22,7 @@ Este cofre é a camada de conhecimento e especificação do Anamnesis. A pasta `
 - [[Especificacoes MOC]]
 - [[Arquitetura MOC]]
 - [[Protocolo de Agentes]]
+- [[Status Alpha]]
 
 ## Regra de trabalho
 
