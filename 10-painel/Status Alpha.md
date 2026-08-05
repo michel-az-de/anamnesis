@@ -58,10 +58,11 @@ A alpha estará pronta quando, em uma máquina Windows limpa e com pré-requisit
 | Entrega | Estado | Evidência |
 | --- | --- | --- |
 | Instalador `0.1.0-beta.1` | SPEK 100% concluída | Workflow `31017790651`, EXE, SHA-256 e logs publicados |
+| Worker automático pelo Tray | SPEK 100% concluída | 53 testes e workflow `31020179379` verdes |
 
 ## Próximo incremento
 
-**Próximo ciclo: orquestrar o Worker pelo Tray.** Abrir a SPEK-023 para processar o job sem exigir que o usuário inicie dois executáveis manualmente.
+**Próximo ciclo: captura universal de áudio pelo OBS.** Abrir a SPEK-024 para validar áudio do sistema e microfone antes de gravar reuniões em qualquer plataforma.
 
 ## Como atualizar esta medição
 

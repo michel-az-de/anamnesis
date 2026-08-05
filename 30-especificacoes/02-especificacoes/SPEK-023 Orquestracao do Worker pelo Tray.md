@@ -5,7 +5,7 @@ tags: [especificacao, beta, tray, worker, processo]
 type: spec
 created: 2026-08-05
 updated: 2026-08-05
-status: validating
+status: completed
 summary: Inicia o Worker automaticamente depois da gravacao e ao abrir o Tray, preservando jobs quando o processo falha.
 related: ["[[SPEK-006 Worker e Retomada de Processamento]]", "[[SPEK-010 Tray Configuracao e Diagnosticos]]", "[[SPEK-022 Instalador da Beta em Windows Limpo]]"]
 ---
@@ -61,6 +61,13 @@ Permitir que o usuario use somente o Tray: ao abrir o aplicativo ou finalizar um
 - Estado final da reunião: `Arquivada`.
 - Instalador: `artifacts\installer-e2e\20260805-spek023\resultado.md`.
 - SHA-256 local: `fb4c3fe0341986cf3db880f7a8ace295505e4263f313132efce13585ab59e453`.
+
+## Execucao em Windows limpo
+
+- Workflow: `https://github.com/michel-az-de/anamnesis/actions/runs/31020179379`.
+- Resultado: 53 testes, build, instalacao, smoke e desinstalacao aprovados.
+- Duracao: 2 minutos e 52 segundos.
+- Artefato: `8936332244`.
 
 ## Decisoes pendentes
 
