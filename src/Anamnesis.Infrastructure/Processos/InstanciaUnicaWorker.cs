@@ -14,7 +14,13 @@ public sealed class InstanciaUnicaWorker : IDisposable
     private readonly Mutex _mutex;
     private bool _liberado;
 
-    private InstanciaUnicaWorker(Mutex mutex) => _mutex = mutex;
+    private InstanciaUnicaWorker(Mutex mutex, bool aguardouOutraInstancia)
+    {
+        _mutex = mutex;
+        AguardouOutraInstancia = aguardouOutraInstancia;
+    }
+
+    public bool AguardouOutraInstancia { get; }
 
     /// <summary>
     /// O nome deriva do banco, e não é constante, para que dois usuários da mesma máquina
@@ -36,7 +42,7 @@ public sealed class InstanciaUnicaWorker : IDisposable
         {
             if (Adquirir(mutex))
             {
-                return new InstanciaUnicaWorker(mutex);
+                return new InstanciaUnicaWorker(mutex, aguardouOutraInstancia: false);
             }
         }
         catch
@@ -47,6 +53,31 @@ public sealed class InstanciaUnicaWorker : IDisposable
 
         mutex.Dispose();
         return null;
+    }
+
+    /// <summary>
+    /// Adquire a exclusividade mesmo quando outro Worker ainda a detem. A espera fecha o
+    /// intervalo entre a ultima leitura da fila pelo dono anterior e a liberacao do mutex:
+    /// a instancia lancada para um job ja enfileirado sempre tera sua vez de consultar a fila.
+    /// </summary>
+    public static InstanciaUnicaWorker AdquirirAguardando(string caminhoBanco)
+    {
+        var mutex = new Mutex(initiallyOwned: false, ObterNome(caminhoBanco));
+        try
+        {
+            if (Adquirir(mutex))
+            {
+                return new InstanciaUnicaWorker(mutex, aguardouOutraInstancia: false);
+            }
+
+            AdquirirAguardando(mutex);
+            return new InstanciaUnicaWorker(mutex, aguardouOutraInstancia: true);
+        }
+        catch
+        {
+            mutex.Dispose();
+            throw;
+        }
     }
 
     public void Dispose()
@@ -71,6 +102,18 @@ public sealed class InstanciaUnicaWorker : IDisposable
             // O Worker anterior morreu sem liberar. A posse já foi transferida para este
             // processo, que é justamente quem deve retomar a fila.
             return true;
+        }
+    }
+
+    private static void AdquirirAguardando(Mutex mutex)
+    {
+        try
+        {
+            mutex.WaitOne();
+        }
+        catch (AbandonedMutexException)
+        {
+            // O mutex abandonado tambem transfere a posse para esta thread.
         }
     }
 }

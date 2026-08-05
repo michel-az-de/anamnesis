@@ -68,4 +68,20 @@ public sealed class SqliteJobQueryTests : IAsyncLifetime
         Assert.Equal(segundo.Id, maisRecente!.Id);
         Assert.Equal(EstadoJobProcessamento.Pendente, maisRecente.Estado);
     }
+
+    [Fact]
+    public async Task DeveContarSomenteJobsAindaNaoConcluidos()
+    {
+        var fila = new SqliteJobQueue(_caminhoBanco);
+        var agora = new DateTimeOffset(2026, 8, 5, 14, 0, 0, TimeSpan.Zero);
+        await fila.EnfileirarAsync(Guid.NewGuid(), agora, CancellationToken.None);
+        await fila.EnfileirarAsync(Guid.NewGuid(), agora.AddMinutes(1), CancellationToken.None);
+        var reservado = await fila.ReservarProximoAsync(agora.AddMinutes(2), CancellationToken.None);
+        await fila.ConcluirAsync(reservado!.Id, agora.AddMinutes(3), CancellationToken.None);
+        var query = new SqliteJobQuery(_caminhoBanco);
+
+        var pendentes = await query.ContarPendentesAsync(CancellationToken.None);
+
+        Assert.Equal(1, pendentes);
+    }
 }

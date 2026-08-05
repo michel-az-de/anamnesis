@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Anamnesis.Infrastructure.Processos;
 
 namespace Anamnesis.Infrastructure.Whisper;
 
@@ -6,11 +7,13 @@ public sealed class DockerProcessPreflight : IDockerPreflight
 {
     private const int MaximoTentativasPadrao = 60;
     private static readonly TimeSpan IntervaloPadrao = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan TimeoutVerificacaoPadrao = TimeSpan.FromSeconds(15);
     private readonly string _caminhoDockerDesktop;
     private readonly Func<CancellationToken, Task<bool>> _verificarEngine;
     private readonly Action<ProcessStartInfo> _iniciarProcesso;
     private readonly int _maximoTentativas;
     private readonly TimeSpan _intervalo;
+    private readonly TimeSpan _timeoutVerificacao;
 
     public DockerProcessPreflight(string caminhoDockerCli, string caminhoDockerDesktop)
         : this(
@@ -19,7 +22,8 @@ public sealed class DockerProcessPreflight : IDockerPreflight
             cancellationToken => VerificarEngineAsync(caminhoDockerCli, cancellationToken),
             IniciarProcesso,
             MaximoTentativasPadrao,
-            IntervaloPadrao)
+            IntervaloPadrao,
+            TimeoutVerificacaoPadrao)
     {
     }
 
@@ -29,7 +33,8 @@ public sealed class DockerProcessPreflight : IDockerPreflight
         Func<CancellationToken, Task<bool>> verificarEngine,
         Action<ProcessStartInfo> iniciarProcesso,
         int maximoTentativas,
-        TimeSpan intervalo)
+        TimeSpan intervalo,
+        TimeSpan? timeoutVerificacao = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(caminhoDockerCli);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximoTentativas);
@@ -38,11 +43,12 @@ public sealed class DockerProcessPreflight : IDockerPreflight
         _iniciarProcesso = iniciarProcesso;
         _maximoTentativas = maximoTentativas;
         _intervalo = intervalo;
+        _timeoutVerificacao = timeoutVerificacao ?? TimeoutVerificacaoPadrao;
     }
 
     public async Task PrepararAsync(CancellationToken cancellationToken)
     {
-        if (await _verificarEngine(cancellationToken))
+        if (await VerificarEngineComDeadlineAsync(cancellationToken))
         {
             return;
         }
@@ -51,7 +57,7 @@ public sealed class DockerProcessPreflight : IDockerPreflight
         for (var tentativa = 0; tentativa < _maximoTentativas; tentativa++)
         {
             await Task.Delay(_intervalo, cancellationToken);
-            if (await _verificarEngine(cancellationToken))
+            if (await VerificarEngineComDeadlineAsync(cancellationToken))
             {
                 return;
             }
@@ -121,9 +127,32 @@ public sealed class DockerProcessPreflight : IDockerPreflight
             ?? throw new InvalidOperationException("O Windows não retornou o processo do Docker CLI.");
         var saida = processo.StandardOutput.ReadToEndAsync(cancellationToken);
         var erro = processo.StandardError.ReadToEndAsync(cancellationToken);
-        await processo.WaitForExitAsync(cancellationToken);
-        await Task.WhenAll(saida, erro);
-        return processo.ExitCode == 0;
+        try
+        {
+            await processo.WaitForExitAsync(cancellationToken);
+            await Task.WhenAll(saida, erro);
+            return processo.ExitCode == 0;
+        }
+        catch (OperationCanceledException)
+        {
+            await ProcessoExterno.EncerrarAsync(processo);
+            await ProcessoExterno.ObservarSemSubstituirErroAsync(saida, erro);
+            throw;
+        }
+    }
+
+    private async Task<bool> VerificarEngineComDeadlineAsync(CancellationToken cancellationToken)
+    {
+        using var deadline = ProcessoExterno.CriarDeadline(_timeoutVerificacao, cancellationToken);
+        try
+        {
+            return await _verificarEngine(deadline.Token).WaitAsync(deadline.Token);
+        }
+        catch (OperationCanceledException excecao)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            throw ProcessoExterno.CriarTimeout("A verificação do Docker", _timeoutVerificacao, excecao);
+        }
     }
 
     private static void IniciarProcesso(ProcessStartInfo inicio)

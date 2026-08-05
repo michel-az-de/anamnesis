@@ -7,6 +7,8 @@ namespace Anamnesis.Tray;
 internal sealed class DesktopPocForm : Form
 {
     private static readonly string[] NiveisObservabilidade = ["Todos os níveis", "Info", "Aviso", "Erro"];
+    private static readonly string[] IntervalosObservabilidade =
+        ["Últimas 24 horas", "Última hora", "Últimos 7 dias", "Últimos 14 dias", "Todo o período"];
 
     private readonly DesktopPocPalette _paleta;
     private readonly TemaDesktopPoc _tema;
@@ -602,7 +604,9 @@ internal sealed class DesktopPocForm : Form
         {
             MostrarFalhaSegura(
                 $"Não foi possível abrir o artefato. {exception.Message}",
-                "Artefato indisponível");
+                "Artefato indisponível",
+                exception,
+                "abrir_artefato");
         }
     }
 
@@ -759,7 +763,7 @@ internal sealed class DesktopPocForm : Form
             "Observabilidade",
             _sessao.ModoDemonstracao
                 ? "Eventos operacionais, correlação e tempos do fluxo local"
-                : "Console real será conectado pela SPEK-031; nenhum evento é simulado neste modo",
+                : "Últimos 500 eventos locais persistidos, correlação e tempos do fluxo real",
             null,
             out var corpo);
 
@@ -777,7 +781,7 @@ internal sealed class DesktopPocForm : Form
         };
         var modo = new Label
         {
-            Text = _sessao.ModoDemonstracao ? "TELEMETRIA SIMULADA" : "OBSERVABILIDADE REAL NA SPEK-031",
+            Text = _sessao.ModoDemonstracao ? "TELEMETRIA SIMULADA" : "EVENTOS LOCAIS PERSISTIDOS",
             AutoSize = true,
             ForeColor = _paleta.Positivo,
             Font = new Font(_tokens.Tipografia.Mono, _tokens.Tipografia.Dado, FontStyle.Bold, GraphicsUnit.Point),
@@ -794,7 +798,7 @@ internal sealed class DesktopPocForm : Form
         };
         var aoVivo = new Label
         {
-            Text = _sessao.ModoDemonstracao ? "AO VIVO" : "SEM SIMULAÇÃO",
+            Text = "AO VIVO",
             AutoSize = true,
             ForeColor = _paleta.Positivo,
             Font = new Font(_tokens.Tipografia.Mono, _tokens.Tipografia.Dado, FontStyle.Bold, GraphicsUnit.Point),
@@ -822,18 +826,19 @@ internal sealed class DesktopPocForm : Form
         metricas.Controls.Add(CriarCartaoMetricaObservabilidade("EVENTOS", "Eventos visíveis", _paleta.Texto, out var totalEventos), 0, 0);
         metricas.Controls.Add(CriarCartaoMetricaObservabilidade("ALERTAS", "Avisos e erros", _paleta.Destaque, out var totalAlertas), 1, 0);
         metricas.Controls.Add(CriarCartaoMetricaObservabilidade("TEMPO MÉDIO", "Operações medidas", _paleta.Positivo, out var duracaoMedia), 2, 0);
-        metricas.Controls.Add(CriarCartaoMetricaObservabilidade("FILA", "Jobs aguardando", _paleta.Texto, out var jobsNaFila), 3, 0);
+        metricas.Controls.Add(CriarCartaoMetricaObservabilidade("FILA", "Jobs não concluídos", _paleta.Texto, out var jobsNaFila), 3, 0);
 
         var filtros = new TableLayoutPanel
         {
             Dock = DockStyle.Top,
             Height = 54,
-            ColumnCount = 3,
+            ColumnCount = 4,
             RowCount = 1,
             BackColor = _paleta.Superficies.Canvas,
             Padding = new Padding(0, 2, 0, 10)
         };
         filtros.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        filtros.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 176F));
         filtros.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 176F));
         filtros.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 190F));
 
@@ -843,13 +848,17 @@ internal sealed class DesktopPocForm : Form
         var nivel = CriarCombo(NiveisObservabilidade);
         nivel.Dock = DockStyle.Fill;
         nivel.Margin = new Padding(0, 2, 10, 2);
+        var intervalo = CriarCombo(IntervalosObservabilidade);
+        intervalo.Dock = DockStyle.Fill;
+        intervalo.Margin = new Padding(0, 2, 10, 2);
         var componentes = _observabilidade.Componentes.Prepend("Todos os componentes").ToArray();
         var componente = CriarCombo(componentes);
         componente.Dock = DockStyle.Fill;
         componente.Margin = new Padding(0, 2, 0, 2);
         filtros.Controls.Add(busca, 0, 0);
         filtros.Controls.Add(nivel, 1, 0);
-        filtros.Controls.Add(componente, 2, 0);
+        filtros.Controls.Add(intervalo, 2, 0);
+        filtros.Controls.Add(componente, 3, 0);
 
         var console = new DesktopSurfacePanel(
             _paleta,
@@ -885,7 +894,20 @@ internal sealed class DesktopPocForm : Form
                 _ => null
             };
             var componenteSelecionado = componente.SelectedIndex <= 0 ? null : componente.Text;
-            var visiveis = _observabilidade.Filtrar(busca.Text, nivelSelecionado, componenteSelecionado);
+            var agora = DateTimeOffset.Now;
+            DateTimeOffset? inicioUtc = intervalo.SelectedIndex switch
+            {
+                0 => agora.AddHours(-24),
+                1 => agora.AddHours(-1),
+                2 => agora.AddDays(-7),
+                3 => agora.AddDays(-14),
+                _ => null
+            };
+            var visiveis = _observabilidade.Filtrar(
+                busca.Text,
+                nivelSelecionado,
+                componenteSelecionado,
+                inicioUtc);
             var valores = _observabilidade.CalcularMetricas(visiveis);
 
             totalEventos.Text = valores.TotalEventos.ToString(CultureInfo.InvariantCulture);
@@ -918,6 +940,7 @@ internal sealed class DesktopPocForm : Form
 
         busca.TextChanged += (_, _) => AtualizarConsole();
         nivel.SelectedIndexChanged += (_, _) => AtualizarConsole();
+        intervalo.SelectedIndexChanged += (_, _) => AtualizarConsole();
         componente.SelectedIndexChanged += (_, _) => AtualizarConsole();
 
         corpo.Controls.Add(console);
@@ -1511,7 +1534,9 @@ internal sealed class DesktopPocForm : Form
 
             MostrarFalhaSegura(
                 $"Não foi possível iniciar a gravação. {exception.Message}",
-                "Gravação não iniciada");
+                "Gravação não iniciada",
+                exception,
+                "iniciar_gravacao_desktop");
         }
     }
 
@@ -1572,7 +1597,9 @@ internal sealed class DesktopPocForm : Form
             Navegar("atividade");
             MostrarFalhaSegura(
                 $"{exception.Message} O job permanece salvo e pode ser retomado pelo Tray.",
-                "Processamento pendente");
+                "Processamento pendente",
+                exception,
+                "iniciar_worker_desktop");
         }
         catch (Exception exception)
         {
@@ -1583,7 +1610,9 @@ internal sealed class DesktopPocForm : Form
 
             MostrarFalhaSegura(
                 $"Não foi possível encerrar a gravação. {exception.Message}",
-                "Gravação não encerrada");
+                "Gravação não encerrada",
+                exception,
+                "finalizar_gravacao_desktop");
         }
     }
 
@@ -1637,7 +1666,9 @@ internal sealed class DesktopPocForm : Form
         {
             MostrarFalhaSegura(
                 $"Não foi possível carregar a reunião. {exception.Message}",
-                "Falha ao carregar");
+                "Falha ao carregar",
+                exception,
+                "carregar_reuniao");
         }
     }
 
@@ -1657,9 +1688,16 @@ internal sealed class DesktopPocForm : Form
                 return;
             }
 
+            _observabilidade.SubstituirEventos(
+                _sessao.EventosOperacionais,
+                _sessao.JobsNaFila);
+
             var novaAssinatura = string.Join(
                 '|',
-                _sessao.Reunioes.Select(reuniao => $"{reuniao.Id:N}:{reuniao.Status}"));
+                _sessao.Reunioes.Select(reuniao => $"{reuniao.Id:N}:{reuniao.Status}")
+                    .Concat(_sessao.EventosOperacionais.Select(evento =>
+                        $"{evento.CriadoEm.ToUniversalTime().Ticks}:{evento.Evento}:{evento.CorrelacaoId}"))
+                    .Append($"jobs:{_sessao.JobsNaFila}"));
             var dadosMudaram = !string.Equals(_assinaturaDados, novaAssinatura, StringComparison.Ordinal);
             _assinaturaDados = novaAssinatura;
             AtualizarEstadoGlobal();
@@ -1699,10 +1737,10 @@ internal sealed class DesktopPocForm : Form
             _estadoGlobal.Text = "Ação necessária";
             _estadoGlobal.ForeColor = _paleta.Perigo;
             _estadoGlobal.AccessibleDescription = exception.Message;
-            _observabilidade.RegistrarFalhaLocal(
-                "Desktop",
-                "consulta.falhou",
-                "A atualização dos dados locais falhou.");
+            await _sessao.RegistrarFalhaOperacionalAsync(
+                "atualizar_desktop",
+                exception,
+                CancellationToken.None);
         }
         finally
         {
@@ -1727,7 +1765,11 @@ internal sealed class DesktopPocForm : Form
         };
     }
 
-    private void MostrarFalhaSegura(string mensagem, string titulo)
+    private void MostrarFalhaSegura(
+        string mensagem,
+        string titulo,
+        Exception? exception = null,
+        string operacao = "executar_acao_desktop")
     {
         if (IsDisposed)
         {
@@ -1736,12 +1778,12 @@ internal sealed class DesktopPocForm : Form
 
         _estadoGlobal.Text = "Ação necessária";
         _estadoGlobal.ForeColor = _paleta.Perigo;
-        if (!_sessao.ModoDemonstracao)
+        if (!_sessao.ModoDemonstracao && exception is not null)
         {
-            _observabilidade.RegistrarFalhaLocal(
-                "Desktop",
-                "acao.falhou",
-                "Uma ação local foi bloqueada após falhar.");
+            _ = _sessao.RegistrarFalhaOperacionalAsync(
+                operacao,
+                exception,
+                CancellationToken.None);
         }
 
         MessageBox.Show(

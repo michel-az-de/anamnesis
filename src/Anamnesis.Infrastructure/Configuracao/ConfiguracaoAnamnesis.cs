@@ -16,6 +16,7 @@ public sealed record ConfiguracaoAnamnesis
     public string NomeCli { get; init; } = "CLI configurada";
     public string CaminhoExecutavelCli { get; init; } = string.Empty;
     public IReadOnlyList<string> ArgumentosCli { get; init; } = [];
+    public int RetencaoEventosDias { get; init; } = 14;
 
     public static ConfiguracaoAnamnesis CriarPadrao()
     {

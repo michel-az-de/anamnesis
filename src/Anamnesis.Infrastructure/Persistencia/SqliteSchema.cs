@@ -107,4 +107,41 @@ internal static class SqliteSchema
             """;
         await comando.ExecuteNonQueryAsync(cancellationToken);
     }
+
+    public static async Task InicializarEventosOperacionaisAsync(
+        SqliteConnection conexao,
+        CancellationToken cancellationToken)
+    {
+        await using var comando = conexao.CreateCommand();
+        comando.CommandText = """
+            CREATE TABLE IF NOT EXISTS eventos_operacionais (
+                id TEXT NOT NULL PRIMARY KEY,
+                criado_em TEXT NOT NULL,
+                nivel TEXT NOT NULL,
+                codigo TEXT NOT NULL,
+                componente TEXT NOT NULL,
+                mensagem TEXT NOT NULL,
+                reuniao_id TEXT NULL,
+                job_id TEXT NULL,
+                operacao TEXT NULL,
+                tentativa INTEGER NULL,
+                resultado TEXT NULL,
+                motivo_codigo TEXT NULL,
+                duracao_ms REAL NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS ix_eventos_operacionais_criado
+            ON eventos_operacionais(criado_em DESC, id DESC);
+
+            CREATE INDEX IF NOT EXISTS ix_eventos_operacionais_filtros
+            ON eventos_operacionais(nivel, componente, codigo);
+
+            CREATE INDEX IF NOT EXISTS ix_eventos_operacionais_reuniao
+            ON eventos_operacionais(reuniao_id, criado_em DESC);
+
+            CREATE INDEX IF NOT EXISTS ix_eventos_operacionais_job
+            ON eventos_operacionais(job_id, criado_em DESC);
+            """;
+        await comando.ExecuteNonQueryAsync(cancellationToken);
+    }
 }

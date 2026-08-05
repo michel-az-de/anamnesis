@@ -22,7 +22,9 @@ Com dois Workers, o segundo liberava a reserva do primeiro e reservava o mesmo j
 
 ## Decisao
 
-O Worker adquire um mutex nomeado antes de tocar na fila. Sem ele, encerra com codigo zero e mensagem propria.
+O Worker adquire um mutex nomeado antes de tocar na fila. Se outro processo ja for o dono, a nova instancia aguarda a transferencia da exclusividade, informa a contencao e so entao consulta a fila.
+
+A espera e intencional. Encerrar imediatamente deixaria uma janela TOCTOU: o dono anterior poderia ja ter feito sua ultima leitura, enquanto o job que motivou a nova instancia ja estaria enfileirado. A transferencia garante que todo lancamento feito depois do enfileiramento tenha uma consulta da fila sob exclusividade.
 
 O nome deriva do caminho normalizado do banco, e nao e constante: `Local\Anamnesis.Worker.<sha256[..32]>`. Isso mantem Workers de usuarios diferentes independentes e impede que bancos temporarios de teste colidam entre si ou com o Worker real da maquina de quem desenvolve.
 
@@ -49,6 +51,7 @@ Deter o mutex passa a ser a invariante documentada que torna correta a liberacao
 - `Main` do Worker passou a ser sincrono: liberar um mutex exige a mesma thread que o adquiriu, o que a continuacao de um `async Main` nao garante.
 - A guarda fica na raiz de composicao do Worker, e nao em `ReuniaoConsumer` nem em `SqliteJobQueue`, porque o E2E hermetico da alpha exercita o consumidor dentro do proprio processo de teste.
 - A guarda fica depois do ramo de retencao: `--retencao-simular` e `--retencao-aplicar` sao comandos pontuais que nao tocam na fila e nao podem virar no-op durante um processamento longo.
-- Surge uma janela de perda de aviso: o Tray enfileira o job e so depois lanca o Worker, entao um Worker prestes a sair poderia nao ver o job novo enquanto o recem-lancado desiste. Fechada com uma segunda passagem na fila apos dois segundos de carencia.
+- O Tray enfileira o job antes de lancar o Worker. Se o dono atual ja tiver feito sua ultima leitura, o sucessor permanece aguardando, adquire o mutex depois da liberacao e processa o job. Nao existe intervalo entre consulta e liberacao capaz de descartar o aviso.
+- Um sucessor pode permanecer bloqueado enquanto o dono processa. Os limites dos processos externos definidos na SPEK-041 impedem que uma ferramenta travada retenha a exclusividade indefinidamente em operacao normal.
 - Nenhuma dependencia nova: `Mutex` e da biblioteca base.
 - Risco residual aceito: o mesmo usuario em duas sessoes simultaneas do Windows compartilha `%LOCALAPPDATA%` mas nao o espaco `Local\`, e teria dois Workers. Cenario fora do uso previsto do produto.

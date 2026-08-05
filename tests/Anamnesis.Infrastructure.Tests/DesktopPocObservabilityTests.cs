@@ -104,4 +104,35 @@ public sealed class DesktopPocObservabilityTests
         Assert.Contains(state.Eventos, evento => evento.Componente == "Worker" && evento.Evento == "job.concluido");
         Assert.Contains(state.Eventos, evento => evento.Componente == "Arquivo" && evento.Evento == "reuniao.arquivada");
     }
+
+    [Fact]
+    public void DeveSubstituirEventosReaisEFiltrarPorIntervalo()
+    {
+        var agora = new DateTimeOffset(2026, 8, 5, 18, 0, 0, TimeSpan.Zero);
+        var state = new DesktopPocObservabilityState(() => agora, incluirHistorico: false);
+        state.SubstituirEventos(
+        [
+            new EventoObservabilidadePoc(
+                agora.AddDays(-2),
+                NivelEventoPoc.Info,
+                "Worker",
+                "job.concluido",
+                "Job antigo.",
+                "r:antiga"),
+            new EventoObservabilidadePoc(
+                agora.AddMinutes(-10),
+                NivelEventoPoc.Erro,
+                "Whisper",
+                "operacao.falhou",
+                "Falha recente.",
+                "r:recente")
+        ],
+        jobsNaFila: 2);
+
+        var recentes = state.Filtrar(inicioUtc: agora.AddHours(-1));
+
+        Assert.Equal("operacao.falhou", Assert.Single(recentes).Evento);
+        Assert.Equal(2, state.Metricas.JobsNaFila);
+        Assert.Equal(2, state.Metricas.TotalEventos);
+    }
 }

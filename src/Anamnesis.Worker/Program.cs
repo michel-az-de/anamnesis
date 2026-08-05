@@ -1,9 +1,11 @@
 using System.Text;
+using Anamnesis.Application.Observabilidade;
 using Anamnesis.Application.UseCases;
 using Anamnesis.Infrastructure.Arquivos;
 using Anamnesis.Infrastructure.Cli;
 using Anamnesis.Infrastructure.Configuracao;
 using Anamnesis.Infrastructure.Fila;
+using Anamnesis.Infrastructure.Observabilidade;
 using Anamnesis.Infrastructure.Persistencia;
 using Anamnesis.Infrastructure.Processos;
 using Anamnesis.Infrastructure.Retencao;
@@ -13,13 +15,6 @@ namespace Anamnesis.Worker;
 
 internal static class Program
 {
-    /// <summary>
-    /// Janela extra de leitura da fila antes de encerrar. O Tray enfileira o job e só depois
-    /// lança o Worker; se este processo saísse imediatamente, um Worker recém-lançado que não
-    /// obteve a exclusividade desistiria e o job ficaria parado até a próxima abertura do Tray.
-    /// </summary>
-    private static readonly TimeSpan CarenciaFinal = TimeSpan.FromSeconds(2);
-
     /// <summary>
     /// Síncrono de propósito: o mutex de instância única precisa ser liberado pela mesma thread
     /// que o adquiriu, o que não é garantido na continuação de um <c>async Main</c>.
@@ -37,23 +32,25 @@ internal static class Program
                 .GetAwaiter()
                 .GetResult();
             var reuniaoRepository = new SqliteReuniaoRepository(configuracao.CaminhoBanco);
+            var eventoRepository = new SqliteEventoOperacionalRepository(configuracao.CaminhoBanco);
+            var journal = new JornalOperacional(eventoRepository, TimeProvider.System);
             if (modoRetencao is not null)
             {
                 // Retenção é um comando pontual que não toca na fila: exigir exclusividade aqui
                 // faria o comando virar um no-op silencioso durante um processamento longo.
-                return ExecutarRetencaoAsync(modoRetencao, reuniaoRepository)
+                return ExecutarRetencaoAsync(modoRetencao, reuniaoRepository, journal)
                     .GetAwaiter()
                     .GetResult();
             }
 
-            using var instanciaUnica = InstanciaUnicaWorker.TentarAdquirir(configuracao.CaminhoBanco);
-            if (instanciaUnica is null)
+            using var instanciaUnica = InstanciaUnicaWorker.AdquirirAguardando(configuracao.CaminhoBanco);
+            if (instanciaUnica.AguardouOutraInstancia)
             {
-                Console.WriteLine("Outro Worker já está processando esta fila. Encerrando sem processar.");
-                return 0;
+                Console.WriteLine(
+                    "Outro Worker estava processando esta fila. Exclusividade transferida; conferindo pendências.");
             }
 
-            return ConsumirFilaAsync(configuracao, reuniaoRepository).GetAwaiter().GetResult();
+            return ConsumirFilaAsync(configuracao, reuniaoRepository, journal).GetAwaiter().GetResult();
         }
         catch (Exception exception)
         {
@@ -64,7 +61,8 @@ internal static class Program
 
     private static async Task<int> ConsumirFilaAsync(
         ConfiguracaoAnamnesis configuracao,
-        SqliteReuniaoRepository reuniaoRepository)
+        SqliteReuniaoRepository reuniaoRepository,
+        JornalOperacional journal)
     {
         var fila = new SqliteJobQueue(configuracao.CaminhoBanco);
         var whisperOptions = new WhisperOptions(
@@ -87,8 +85,9 @@ internal static class Program
                 configuracao.ArgumentosCli)),
             new DiscoArquivador(configuracao.DiretorioArquivo),
             new SqliteArtefatoRepository(configuracao.CaminhoBanco),
-            TimeProvider.System);
-        var consumer = new ReuniaoConsumer(fila, processarReuniao, TimeProvider.System);
+            TimeProvider.System,
+            journal);
+        var consumer = new ReuniaoConsumer(fila, processarReuniao, TimeProvider.System, journal);
         var jobsProcessados = 0;
 
         async Task DrenarAsync()
@@ -102,8 +101,6 @@ internal static class Program
 
         await consumer.RetomarAsync(CancellationToken.None);
         await DrenarAsync();
-        await Task.Delay(CarenciaFinal);
-        await DrenarAsync();
 
         await Console.Out.WriteLineAsync("Fila vazia. Worker finalizado com sucesso.");
         return 0;
@@ -111,12 +108,14 @@ internal static class Program
 
     private static async Task<int> ExecutarRetencaoAsync(
         ModoRetencaoWorkerOptions options,
-        SqliteReuniaoRepository reuniaoRepository)
+        SqliteReuniaoRepository reuniaoRepository,
+        JornalOperacional journal)
     {
         var retencao = new RetencaoGravacaoHandler(
             reuniaoRepository,
             new LixeiraWindows(),
-            new RelogioFixo(options.Agora));
+            new RelogioFixo(options.Agora),
+            journal);
         var resultado = await retencao.SimularAsync(options.ReuniaoId, CancellationToken.None);
         await Console.Out.WriteLineAsync(
             $"Retenção avaliada. Reunião: {options.ReuniaoId:N}. Elegível: {resultado.PodeMover}. " +

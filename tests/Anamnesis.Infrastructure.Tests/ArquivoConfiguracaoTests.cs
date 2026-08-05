@@ -33,6 +33,7 @@ public sealed class ArquivoConfiguracaoTests : IAsyncLifetime
         Assert.Equal(criada.CaminhoBanco, carregada.CaminhoBanco);
         Assert.Equal(criada.DiretorioArquivo, carregada.DiretorioArquivo);
         Assert.Equal("pt", carregada.IdiomaWhisper);
+        Assert.Equal(14, carregada.RetencaoEventosDias);
         Assert.Empty(carregada.ArgumentosCli);
     }
 

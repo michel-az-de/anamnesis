@@ -2,6 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using Anamnesis.Application.Contracts;
 using Anamnesis.Application.Modelos;
+using Anamnesis.Application.Observabilidade;
 using Anamnesis.Application.UseCases;
 using Anamnesis.Domain.Entidades;
 using Anamnesis.Domain.Tipos;
@@ -18,13 +19,18 @@ internal sealed class DesktopRealSession(
     ControlarGravacaoHandler controlarGravacao,
     IArtefatoLauncher artefatoLauncher,
     TimeProvider relogio,
-    DesktopRuntimeInfo? ambiente = null) : IDesktopSession
+    DesktopRuntimeInfo? ambiente = null,
+    IEventoOperacionalQuery? eventoQuery = null,
+    IJobMetricasQuery? jobMetricasQuery = null,
+    JornalOperacional? journal = null) : IDesktopSession
 {
     private IReadOnlyList<ReuniaoDesktopPoc> _reunioes = [];
+    private IReadOnlyList<EventoObservabilidadePoc> _eventosOperacionais = [];
     private Guid? _reuniaoAcompanhadaId;
     private Guid? _gravacaoIniciadaNestaSessaoId;
     private DateTimeOffset? _gravacaoIniciadaEm;
     private readonly SemaphoreSlim _comandos = new(1, 1);
+    private readonly JornalOperacional _journal = journal ?? JornalOperacional.Nulo;
 
     public bool ModoDemonstracao => false;
 
@@ -45,6 +51,10 @@ internal sealed class DesktopRealSession(
     }
 
     public IReadOnlyList<ReuniaoDesktopPoc> Reunioes => _reunioes;
+
+    public IReadOnlyList<EventoObservabilidadePoc> EventosOperacionais => _eventosOperacionais;
+
+    public int JobsNaFila { get; private set; }
 
     public DesktopRuntimeInfo? Ambiente => ambiente;
 
@@ -89,7 +99,39 @@ internal sealed class DesktopRealSession(
         }
 
         _reunioes = resumos.Select(MapearResumo).ToArray();
+        await AtualizarObservabilidadeAsync(cancellationToken);
         AtualizarEtapa(resumos);
+    }
+
+    private async Task AtualizarObservabilidadeAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            if (eventoQuery is not null)
+            {
+                var eventos = await eventoQuery.ListarAsync(
+                    new EventoOperacionalFiltro(Limite: 500),
+                    cancellationToken);
+                _eventosOperacionais = eventos.Select(MapearEventoOperacional).ToArray();
+            }
+        }
+        catch (Exception)
+        {
+            // O journal e best-effort: corrupcao ou contencao nao muda o resultado do comando.
+            _eventosOperacionais = [];
+        }
+
+        try
+        {
+            JobsNaFila = jobMetricasQuery is null
+                ? 0
+                : await jobMetricasQuery.ContarPendentesAsync(cancellationToken);
+        }
+        catch (Exception)
+        {
+            // A metrica e diagnostica e nao participa do estado da reuniao.
+            JobsNaFila = 0;
+        }
     }
 
     public async Task IniciarGravacaoAsync(string titulo, CancellationToken cancellationToken)
@@ -173,6 +215,18 @@ internal sealed class DesktopRealSession(
 
     public Task MostrarNaPastaAsync(string caminho, CancellationToken cancellationToken) =>
         artefatoLauncher.MostrarNaPastaAsync(caminho, cancellationToken);
+
+    public Task RegistrarFalhaOperacionalAsync(
+        string operacao,
+        Exception exception,
+        CancellationToken cancellationToken) =>
+        _journal.RegistrarFalhaAsync(
+            "Desktop",
+            operacao,
+            exception,
+            null,
+            null,
+            cancellationToken);
 
     private void AtualizarEtapa(IReadOnlyList<ReuniaoResumo> resumos)
     {
@@ -379,4 +433,35 @@ internal sealed class DesktopRealSession(
         StatusReuniao.Falha => "O processamento falhou. Consulte o motivo e tente processar as pendências.",
         _ => "Reunião registrada localmente."
     };
+
+    private static EventoObservabilidadePoc MapearEventoOperacional(EventoOperacional evento) =>
+        new(
+            evento.CriadoEm,
+            evento.Nivel switch
+            {
+                NivelEventoOperacional.Aviso => NivelEventoPoc.Aviso,
+                NivelEventoOperacional.Erro => NivelEventoPoc.Erro,
+                _ => NivelEventoPoc.Info
+            },
+            evento.Componente,
+            evento.Codigo,
+            evento.Mensagem,
+            FormatarCorrelacao(evento),
+            evento.Metadados.DuracaoMs);
+
+    private static string FormatarCorrelacao(EventoOperacional evento)
+    {
+        var partes = new List<string>(2);
+        if (evento.ReuniaoId is not null)
+        {
+            partes.Add($"r:{evento.ReuniaoId:N}");
+        }
+
+        if (evento.JobId is not null)
+        {
+            partes.Add($"j:{evento.JobId:N}");
+        }
+
+        return partes.Count == 0 ? "sistema" : string.Join(' ', partes);
+    }
 }

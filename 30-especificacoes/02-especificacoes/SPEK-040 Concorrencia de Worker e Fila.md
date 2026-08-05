@@ -37,12 +37,12 @@ A reserva em si ja e atomica: `ReservarProximoAsync` usa um unico `UPDATE ... RE
 
 - O Worker adquire um mutex nomeado antes de tocar na fila, conforme ADR-012.
 - O nome do mutex deriva do caminho normalizado do banco e nao e constante, para isolar usuarios distintos e bancos temporarios de teste.
-- Uma segunda instancia encerra com codigo de saida zero e mensagem propria, sem alterar fila, reunioes ou artefatos.
-- Codigo de saida zero e obrigatorio: o Tray trata saida diferente de zero como falha de inicializacao e alarmaria o usuario por uma situacao normal.
+- Uma segunda instancia aguarda o dono atual liberar o mutex; depois da transferencia, consulta a fila sob exclusividade e pode processar somente o trabalho que ainda restar.
+- A mera contencao nao produz codigo de saida diferente de zero: o Tray nao deve alarmar o usuario por uma situacao normal.
 - Mutex abandonado equivale a aquisicao bem-sucedida, porque significa que o Worker anterior morreu sem liberar e o novo e justamente quem deve retomar.
 - Deter o mutex e a invariante que torna correta a liberacao incondicional de reservas, e essa premissa fica escrita no contrato da fila e no consumidor.
 - A guarda fica na raiz de composicao do Worker, depois do ramo de retencao, para nao transformar comandos pontuais de retencao em no-op durante um processamento longo.
-- Antes de encerrar, o Worker faz uma segunda passagem na fila apos uma carencia curta, porque o Tray enfileira o job antes de lancar o Worker.
+- Se outro Worker ja detiver o mutex, a nova instancia aguarda a transferencia da exclusividade e consulta a fila depois de adquiri-la. Ela nao pode desistir entre a ultima consulta do dono anterior e a liberacao do mutex, pois esse intervalo perderia o aviso do job ja enfileirado pelo Tray.
 - Datas persistidas sao normalizadas para UTC antes da serializacao, para que a ordenacao textual da fila corresponda a ordem cronologica.
 - O enfileiramento de um job e atomico: insercao e leitura ocorrem na mesma transacao e a leitura e deterministica.
 - Nenhuma dependencia nova e necessaria: `Mutex` e da biblioteca base.
@@ -50,25 +50,31 @@ A reserva em si ja e atomica: `ReservarProximoAsync` usa um unico `UPDATE ... RE
 ## Critérios de aceite
 
 - [x] Dois processos Worker iniciados sobre o mesmo banco processam o job uma unica vez e ambos encerram com codigo zero.
-- [x] A segunda instancia nao altera estado da reuniao nem invoca o transcritor.
+- [x] Enquanto aguarda, a segunda instancia nao altera a fila; depois da transferencia, o mesmo job concluido nao e processado novamente.
 - [x] Uma instancia liberada permite que a proxima adquira a exclusividade.
 - [x] Bancos diferentes admitem Workers simultaneos.
 - [x] O nome do mutex e o mesmo para caminhos equivalentes do mesmo banco e diferente para bancos distintos.
 - [x] Enfileirar a mesma reuniao concorrentemente produz um unico job ativo.
 - [x] A fila e ordenada pelo instante UTC, e nao pelo texto da data.
 - [x] A suite existente permanece verde.
+- [x] Um job enfileirado durante o encerramento do Worker ativo e processado pela instancia que aguardava o mutex, sem janela TOCTOU.
+- [x] O E2E black box encerra e mata a arvore do Worker quando o processo excede o limite de tempo.
 
 ## Testes associados
 
-- `InstanciaUnicaWorkerTests` para aquisicao, exclusao mutua, liberacao, isolamento por banco e derivacao do nome.
+- `InstanciaUnicaWorkerTests` para aquisicao, exclusao mutua, transferencia bloqueante, liberacao, isolamento por banco e derivacao do nome.
 - `SqliteJobQueueTests` para enfileiramento concorrente e ordenacao por instante UTC.
 - `WorkerBlackBoxE2ETests.DeveProcessarUmaUnicaVezQuandoDoisWorkersIniciamJuntos`, com dois processos reais, Whisper lento e contador de invocacoes.
+- `WorkerBlackBoxE2ETests.DeveProcessarJobEnfileiradoDuranteTransferenciaDeExclusividade`, com o dono anterior retido ate o sucessor estar aguardando.
+- `WorkerBlackBoxE2ETests.DeveEncerrarArvoreDoWorkerQuandoExcedeLimite`, com Whisper travado, timeout e verificacao de liberacao do mutex apos `Kill(entireProcessTree: true)`.
 - Nenhum teste unitario chama OBS, rede ou CLI real.
 
 ## Execucao local
 
 - Red registrado contra o binario anterior a correcao: codigo de saida 1 e `Falha do Worker: A reuniao esta em 'EmTranscricao'`.
 - Green apos a correcao: `dotnet test Anamnesis.sln --configuration Release`, 129 testes verdes e 0 avisos.
+- Reabertura por regressao: o teste de transferencia nao compilava porque so existia aquisicao imediata; a espera fixa antes do encerramento ainda deixava uma janela TOCTOU apos a ultima leitura.
+- Green da reabertura: 11 testes direcionados de `InstanciaUnicaWorkerTests` e `WorkerBlackBoxE2ETests` verdes em Release; o E2E mata a arvore travada em cinco segundos e libera o mutex abandonado.
 
 ## Decisoes pendentes
 

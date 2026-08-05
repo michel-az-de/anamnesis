@@ -42,6 +42,8 @@ As mensagens de timeout dos preflights citavam duracoes fixas que nao correspond
 - O laco de correlacao de respostas do OBS tem limite de mensagens descartadas.
 - A limpeza de arquivos temporarios nunca substitui a excecao que a provocou.
 - Mensagens de timeout derivam dos parametros reais de espera, e nao de texto fixo.
+- Cada processo externo possui deadline interno, mesmo quando o chamador fornece `CancellationToken.None`.
+- Ao atingir o deadline ou receber cancelamento, o adaptador encerra com seguranca toda a arvore do processo iniciado.
 - Nenhuma dependencia nova e necessaria, portanto esta SPEK nao exige ADR.
 
 ## Critérios de aceite
@@ -51,6 +53,8 @@ As mensagens de timeout dos preflights citavam duracoes fixas que nao correspond
 - [x] Encerrar a gravacao retorna o caminho mesmo com o OBS sem responder a restauracao de cena.
 - [x] As mensagens de timeout dos preflights refletem os parametros injetados.
 - [x] A suite existente permanece verde.
+- [x] CLI de ata, Whisper, FFmpeg e `docker info` encerram dentro do deadline interno com chamador nao cancelavel.
+- [x] Os processos travados sao encerrados sem deixar filhos executando.
 
 ## Testes associados
 
@@ -58,6 +62,8 @@ As mensagens de timeout dos preflights citavam duracoes fixas que nao correspond
 - `CliAtaRunnerTests.DeveIncluirSaidaDeErroNaFalhaDaCli`.
 - `ObsGravadorTests.DeveEncerrarMesmoQuandoRestauracaoDeCenaNaoResponde`, com o servidor falso silenciando apos o `StopRecord`.
 - `ObsProcessPreflightTests` e `DockerProcessPreflightTests` exigindo mensagem derivada.
+- `ProcessosExternosDeadlineTests` cobre CLI de ata, Whisper, FFmpeg e verificacao do Docker com `CancellationToken.None`.
+- Os fakes travados registram o PID e o teste confirma que a arvore do processo foi encerrada.
 - Nenhum teste unitario chama OBS, rede ou CLI real: o OBS e um servidor falso local e a CLI e um script.
 
 ## Execucao local
@@ -65,6 +71,19 @@ As mensagens de timeout dos preflights citavam duracoes fixas que nao correspond
 - Red registrado: o teste da CLI travou os 30 segundos da guarda antes da correcao.
 - Green apos a correcao: mesmo teste em menos de um segundo; o teste do OBS consome os 5 segundos do limite de restauracao, como esperado.
 - `dotnet test Anamnesis.sln`, 136 testes verdes e 0 avisos.
+- Red adicional: quatro erros de compilacao provaram a ausencia de deadlines injetaveis nos adaptadores.
+- Green adicional: 4 testes de processo travado passaram em 2 segundos; 12 testes afetados passaram em 1 segundo, Release e sem avisos.
+
+## Deadlines internos
+
+| Processo | Deadline padrao |
+| --- | ---: |
+| CLI de ata | 10 minutos |
+| FFmpeg | 10 minutos |
+| Whisper | 60 minutos |
+| `docker info` | 15 segundos por verificacao |
+
+Os valores podem ser reduzidos por opcao ou construtor em testes. Timeout e cancelamento encerram toda a arvore do processo antes de devolver o erro ao chamador.
 
 ## Decisoes pendentes
 

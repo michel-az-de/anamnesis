@@ -54,14 +54,29 @@ public sealed class DesktopPocObservabilityState
     public IReadOnlyList<EventoObservabilidadePoc> Filtrar(
         string? texto = null,
         NivelEventoPoc? nivel = null,
-        string? componente = null)
+        string? componente = null,
+        DateTimeOffset? inicioUtc = null)
     {
         var filtro = texto?.Trim();
         return _eventos.Where(evento =>
                 (nivel is null || evento.Nivel == nivel) &&
                 (string.IsNullOrWhiteSpace(componente) || string.Equals(evento.Componente, componente, StringComparison.Ordinal)) &&
+                (inicioUtc is null || evento.CriadoEm.ToUniversalTime() >= inicioUtc.Value.ToUniversalTime()) &&
                 (string.IsNullOrWhiteSpace(filtro) || Contem(evento, filtro)))
             .ToArray();
+    }
+
+    public void SubstituirEventos(
+        IEnumerable<EventoObservabilidadePoc> eventos,
+        int jobsNaFila)
+    {
+        ArgumentNullException.ThrowIfNull(eventos);
+        _eventos.Clear();
+        _eventos.AddRange(eventos.Select(evento => evento with
+        {
+            Mensagem = Sanitizar(evento.Mensagem)
+        }));
+        _jobsNaFila = Math.Max(0, jobsNaFila);
     }
 
     public MetricasObservabilidadePoc CalcularMetricas(IEnumerable<EventoObservabilidadePoc> eventos)

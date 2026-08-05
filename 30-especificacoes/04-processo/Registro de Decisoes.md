@@ -23,6 +23,7 @@ Formato: contexto, decisão, consequências e links para SPEKs afetadas.
 | [[ADR-012 Instancia Unica do Worker]] | Mutex nomeado por banco garante um Worker por fila; prazo de reserva recusado por piorar a recuperação de queda | 040 |
 | [[ADR-013 Engine SQLite Embarcada]] | `bundle_e_sqlite3` 3.0.5 no lugar da engine do Windows, para não depender do build do sistema | 043 |
 | [[ADR-014 Protecao de Segredos Locais]] | DPAPI por usuário com prefixo e migração transparente; mecanismo a ser reutilizado pelas integrações | 044 |
+| [[ADR-015 Journal SQLite Isolado]] | Journal best-effort em arquivo separado para isolar falhas, contenção e limpeza do estado de negócio | 031 |
 
 ## Fila pós-alpha
 

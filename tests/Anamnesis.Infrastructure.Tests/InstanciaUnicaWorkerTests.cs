@@ -32,6 +32,57 @@ public sealed class InstanciaUnicaWorkerTests
     }
 
     [Fact]
+    public void DeveTransferirExclusividadeParaInstanciaAguardando()
+    {
+        var caminhoBanco = CriarCaminhoBanco();
+        var primeira = InstanciaUnicaWorker.TentarAdquirir(caminhoBanco)!;
+        using var iniciouEspera = new ManualResetEventSlim();
+        using var adquiriu = new ManualResetEventSlim();
+        using var liberarSegunda = new ManualResetEventSlim();
+        Exception? falha = null;
+        var aguardouOutraInstancia = false;
+        var outroProcesso = new Thread(() =>
+        {
+            iniciouEspera.Set();
+            try
+            {
+                using var segunda = InstanciaUnicaWorker.AdquirirAguardando(caminhoBanco);
+                aguardouOutraInstancia = segunda.AguardouOutraInstancia;
+                adquiriu.Set();
+                liberarSegunda.Wait();
+            }
+            catch (Exception exception)
+            {
+                falha = exception;
+                adquiriu.Set();
+            }
+        });
+
+        outroProcesso.Start();
+        iniciouEspera.Wait();
+        var primeiraLiberada = false;
+        try
+        {
+            Assert.False(adquiriu.Wait(TimeSpan.FromMilliseconds(100)));
+            primeira.Dispose();
+            primeiraLiberada = true;
+            Assert.True(adquiriu.Wait(TimeSpan.FromSeconds(2)));
+            Assert.True(aguardouOutraInstancia);
+            Assert.Null(falha);
+        }
+        finally
+        {
+            if (!primeiraLiberada)
+            {
+                primeira.Dispose();
+            }
+
+            liberarSegunda.Set();
+            outroProcesso.Join();
+        }
+    }
+
+    [Fact]
     public void DevePermitirNovaAquisicaoDepoisDeLiberar()
     {
         var caminhoBanco = CriarCaminhoBanco();

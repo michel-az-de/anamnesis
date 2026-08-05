@@ -1,11 +1,13 @@
 using System.Diagnostics;
 using System.Text;
 using Anamnesis.Application.Contracts;
+using Anamnesis.Application.Observabilidade;
 using Anamnesis.Application.UseCases;
 using Anamnesis.Infrastructure.Arquivos;
 using Anamnesis.Infrastructure.Configuracao;
 using Anamnesis.Infrastructure.Fila;
 using Anamnesis.Infrastructure.Obs;
+using Anamnesis.Infrastructure.Observabilidade;
 using Anamnesis.Infrastructure.Persistencia;
 using Anamnesis.Infrastructure.Processos;
 
@@ -43,21 +45,30 @@ internal static class Program
         var arquivoConfiguracao = new ArquivoConfiguracao(caminhoConfiguracao);
         var configuracao = arquivoConfiguracao.CarregarAsync(CancellationToken.None).GetAwaiter().GetResult();
         var workerLauncher = CriarWorkerLauncher(modoValidacao, caminhoConfiguracao);
+        var reuniaoRepository = new SqliteReuniaoRepository(configuracao.CaminhoBanco);
+        var jobQueue = new SqliteJobQueue(configuracao.CaminhoBanco);
+        var jobQuery = new SqliteJobQuery(configuracao.CaminhoBanco);
+        var eventoRepository = new SqliteEventoOperacionalRepository(configuracao.CaminhoBanco);
+        var journal = new JornalOperacional(eventoRepository, TimeProvider.System);
+        journal.RemoverExpiradosAsync(configuracao.RetencaoEventosDias, CancellationToken.None)
+            .GetAwaiter()
+            .GetResult();
         var enderecoObs = Uri.TryCreate(configuracao.EnderecoObs, UriKind.Absolute, out var endereco) && endereco is not null
             ? endereco!
             : ObsWebSocketOptions.Padrao.Endereco;
         var controlarGravacao = new ControlarGravacaoHandler(
-            new SqliteReuniaoRepository(configuracao.CaminhoBanco),
-            new SqliteJobQueue(configuracao.CaminhoBanco),
+            reuniaoRepository,
+            jobQueue,
             new ObsGravador(new ObsWebSocketOptions(enderecoObs, configuracao.SenhaObs)),
             workerLauncher,
             new ObsProcessPreflight(
                 enderecoObs,
                 ObsProcessPreflight.ResolverCaminhoExecutavel(configuracao.CaminhoExecutavelObs)),
-            TimeProvider.System);
+            TimeProvider.System,
+            journal);
         var sessaoDesktop = new DesktopRealSession(
             new SqliteReuniaoQuery(configuracao.CaminhoBanco),
-            new SqliteJobQuery(configuracao.CaminhoBanco),
+            jobQuery,
             controlarGravacao,
             new WindowsArtefatoLauncher(),
             TimeProvider.System,
@@ -65,7 +76,10 @@ internal static class Program
                 caminhoConfiguracao,
                 configuracao.CaminhoBanco,
                 configuracao.DiretorioArquivo,
-                configuracao.NomeCli));
+                configuracao.NomeCli),
+            eventoRepository,
+            jobQuery,
+            journal);
 
         if (modoValidacao is not null)
         {
