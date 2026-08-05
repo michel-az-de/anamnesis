@@ -6,12 +6,15 @@ using Anamnesis.Domain.Tipos;
 using Anamnesis.Infrastructure.Configuracao;
 using Anamnesis.Infrastructure.Fila;
 using Anamnesis.Infrastructure.Persistencia;
+using Anamnesis.Infrastructure.Processos;
 using Xunit;
 
 namespace Anamnesis.Infrastructure.Tests;
 
 public sealed class WorkerBlackBoxE2ETests : IAsyncLifetime
 {
+    private static readonly TimeSpan LimiteExecucaoWorker = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan LimiteEncerramentoForcado = TimeSpan.FromSeconds(5);
     private string _diretorio = null!;
     private bool _preservarEvidencias;
 
@@ -143,7 +146,7 @@ public sealed class WorkerBlackBoxE2ETests : IAsyncLifetime
         Assert.Equal(1, resultados.Count(resultado =>
             resultado.Stdout.Contains("Job processado", StringComparison.Ordinal)));
         Assert.Equal(1, resultados.Count(resultado =>
-            resultado.Stdout.Contains("Outro Worker já está processando esta fila", StringComparison.Ordinal)));
+            resultado.Stdout.Contains("Exclusividade transferida", StringComparison.Ordinal)));
 
         var invocacoesWhisper = (await File.ReadAllLinesAsync(caminhoContador))
             .Count(linha => !string.IsNullOrWhiteSpace(linha));
@@ -153,6 +156,126 @@ public sealed class WorkerBlackBoxE2ETests : IAsyncLifetime
         Assert.NotNull(arquivada);
         Assert.Equal(StatusReuniao.Arquivada, arquivada!.Status);
         Assert.Null(arquivada.MotivoFalha);
+    }
+
+    [Fact]
+    public async Task DeveProcessarJobEnfileiradoDuranteTransferenciaDeExclusividade()
+    {
+        var caminhoBanco = Path.Combine(_diretorio, "handoff.db");
+        var caminhoGravacao = Path.Combine(_diretorio, "gravacao-handoff.mkv");
+        var caminhoModelo = Path.Combine(_diretorio, "modelo-handoff.bin");
+        await File.WriteAllTextAsync(caminhoGravacao, "gravação durante handoff");
+        await File.WriteAllTextAsync(caminhoModelo, "modelo de teste");
+        var caminhoFfmpeg = await CriarFfmpegFakeAsync();
+        var caminhoWhisper = await CriarWhisperFakeAsync();
+        var (caminhoCli, _) = await CriarCliFakeAsync();
+        var caminhoConfiguracao = Path.Combine(_diretorio, "config-handoff.json");
+        await new ArquivoConfiguracao(caminhoConfiguracao).SalvarAsync(
+            new ConfiguracaoAnamnesis
+            {
+                CaminhoBanco = caminhoBanco,
+                DiretorioArquivo = Path.Combine(_diretorio, "arquivo-handoff"),
+                CaminhoExecutavelFfmpeg = caminhoFfmpeg,
+                CaminhoExecutavelWhisper = caminhoWhisper,
+                CaminhoModeloWhisper = caminhoModelo,
+                CaminhoExecutavelCli = caminhoCli,
+                NomeCli = "CLI handoff"
+            },
+            CancellationToken.None);
+
+        var agora = DateTimeOffset.UtcNow;
+        var reuniao = new Reuniao(Guid.NewGuid(), "Worker handoff", agora);
+        reuniao.IniciarGravacao(agora);
+        reuniao.FinalizarGravacao(caminhoGravacao, agora);
+        var repository = new SqliteReuniaoRepository(caminhoBanco);
+        await repository.SalvarAsync(reuniao, CancellationToken.None);
+        await new SqliteJobQueue(caminhoBanco).EnfileirarAsync(reuniao.Id, agora, CancellationToken.None);
+
+        using var exclusividadeAdquirida = new ManualResetEventSlim();
+        using var liberarExclusividade = new ManualResetEventSlim();
+        Exception? falhaNoDonoAnterior = null;
+        var donoAnterior = new Thread(() =>
+        {
+            try
+            {
+                using var exclusividade = InstanciaUnicaWorker.TentarAdquirir(caminhoBanco);
+                if (exclusividade is null)
+                {
+                    throw new InvalidOperationException("O dono anterior não adquiriu a exclusividade do teste.");
+                }
+
+                exclusividadeAdquirida.Set();
+                liberarExclusividade.Wait();
+            }
+            catch (Exception exception)
+            {
+                falhaNoDonoAnterior = exception;
+                exclusividadeAdquirida.Set();
+            }
+        });
+        donoAnterior.Start();
+        exclusividadeAdquirida.Wait();
+        Assert.Null(falhaNoDonoAnterior);
+
+        var worker = ExecutarWorkerAsync(caminhoConfiguracao);
+        try
+        {
+            await Task.Delay(TimeSpan.FromSeconds(1));
+            Assert.False(worker.IsCompleted);
+        }
+        finally
+        {
+            liberarExclusividade.Set();
+            donoAnterior.Join();
+        }
+
+        var resultado = await worker;
+        Assert.Equal(0, resultado.CodigoSaida);
+        Assert.Contains("Exclusividade transferida", resultado.Stdout, StringComparison.Ordinal);
+        Assert.Contains("Job processado", resultado.Stdout, StringComparison.Ordinal);
+        Assert.Equal(StatusReuniao.Arquivada, (await repository.ObterAsync(reuniao.Id, CancellationToken.None))!.Status);
+    }
+
+    [Fact]
+    public async Task DeveEncerrarArvoreDoWorkerQuandoExcedeLimite()
+    {
+        var caminhoBanco = Path.Combine(_diretorio, "timeout.db");
+        var caminhoGravacao = Path.Combine(_diretorio, "gravacao-timeout.mkv");
+        var caminhoModelo = Path.Combine(_diretorio, "modelo-timeout.bin");
+        var caminhoMarcador = Path.Combine(_diretorio, "whisper-timeout-iniciado.txt");
+        await File.WriteAllTextAsync(caminhoGravacao, "gravação para timeout");
+        await File.WriteAllTextAsync(caminhoModelo, "modelo de teste");
+        var caminhoFfmpeg = await CriarFfmpegFakeAsync();
+        var caminhoWhisper = await CriarWhisperFakeTravadoAsync(caminhoMarcador);
+        var (caminhoCli, _) = await CriarCliFakeAsync();
+        var caminhoConfiguracao = Path.Combine(_diretorio, "config-timeout.json");
+        await new ArquivoConfiguracao(caminhoConfiguracao).SalvarAsync(
+            new ConfiguracaoAnamnesis
+            {
+                CaminhoBanco = caminhoBanco,
+                DiretorioArquivo = Path.Combine(_diretorio, "arquivo-timeout"),
+                CaminhoExecutavelFfmpeg = caminhoFfmpeg,
+                CaminhoExecutavelWhisper = caminhoWhisper,
+                CaminhoModeloWhisper = caminhoModelo,
+                CaminhoExecutavelCli = caminhoCli,
+                NomeCli = "CLI timeout"
+            },
+            CancellationToken.None);
+
+        var agora = DateTimeOffset.UtcNow;
+        var reuniao = new Reuniao(Guid.NewGuid(), "Worker timeout", agora);
+        reuniao.IniciarGravacao(agora);
+        reuniao.FinalizarGravacao(caminhoGravacao, agora);
+        await new SqliteReuniaoRepository(caminhoBanco).SalvarAsync(reuniao, CancellationToken.None);
+        await new SqliteJobQueue(caminhoBanco).EnfileirarAsync(reuniao.Id, agora, CancellationToken.None);
+
+        var excecao = await Assert.ThrowsAsync<TimeoutException>(() =>
+            ExecutarWorkerAsync(caminhoConfiguracao, limiteExecucao: TimeSpan.FromSeconds(5)));
+
+        Assert.Contains("excedeu o limite", excecao.Message, StringComparison.Ordinal);
+        Assert.True(File.Exists(caminhoMarcador));
+        using var instanciaDepoisDoKill = InstanciaUnicaWorker.TentarAdquirir(caminhoBanco);
+        Assert.NotNull(instanciaDepoisDoKill);
     }
 
     [Fact]
@@ -196,7 +319,8 @@ public sealed class WorkerBlackBoxE2ETests : IAsyncLifetime
 
     private static async Task<(int CodigoSaida, string Stdout, string Stderr)> ExecutarWorkerAsync(
         string caminhoConfiguracao,
-        IReadOnlyList<string>? argumentos = null)
+        IReadOnlyList<string>? argumentos = null,
+        TimeSpan? limiteExecucao = null)
     {
         using var processo = new Process
         {
@@ -229,7 +353,33 @@ public sealed class WorkerBlackBoxE2ETests : IAsyncLifetime
         processo.Start();
         var stdout = processo.StandardOutput.ReadToEndAsync();
         var stderr = processo.StandardError.ReadToEndAsync();
-        await processo.WaitForExitAsync();
+        using var limite = new CancellationTokenSource(limiteExecucao ?? LimiteExecucaoWorker);
+        try
+        {
+            await processo.WaitForExitAsync(limite.Token);
+        }
+        catch (OperationCanceledException) when (limite.IsCancellationRequested)
+        {
+            if (!processo.HasExited)
+            {
+                try
+                {
+                    processo.Kill(entireProcessTree: true);
+                }
+                catch (InvalidOperationException)
+                {
+                    // O processo encerrou entre HasExited e Kill; a condicao desejada ja foi atingida.
+                }
+            }
+
+            await processo.WaitForExitAsync().WaitAsync(LimiteEncerramentoForcado);
+            var stdoutParcial = await stdout.WaitAsync(LimiteEncerramentoForcado);
+            var stderrParcial = await stderr.WaitAsync(LimiteEncerramentoForcado);
+            throw new TimeoutException(
+                $"Worker excedeu o limite de {(limiteExecucao ?? LimiteExecucaoWorker).TotalSeconds:N0}s; "
+                + $"a árvore de processos foi encerrada. stdout: {stdoutParcial} stderr: {stderrParcial}");
+        }
+
         return (processo.ExitCode, await stdout, await stderr);
     }
 
@@ -265,6 +415,17 @@ public sealed class WorkerBlackBoxE2ETests : IAsyncLifetime
                 + $"echo invocacao>> \"{caminhoContador}\"\r\n"
                 + "ping -n 4 127.0.0.1 > nul\r\n"
                 + "echo Transcrição concorrente> \"%saida%.txt\"\r\n");
+        return caminho;
+    }
+
+    private async Task<string> CriarWhisperFakeTravadoAsync(string caminhoMarcador)
+    {
+        var caminho = Path.Combine(_diretorio, "whisper-fake-travado.cmd");
+        await File.WriteAllTextAsync(
+            caminho,
+            "@echo off\r\n"
+                + $"echo iniciado> \"{caminhoMarcador}\"\r\n"
+                + "ping -n 60 127.0.0.1 > nul\r\n");
         return caminho;
     }
 

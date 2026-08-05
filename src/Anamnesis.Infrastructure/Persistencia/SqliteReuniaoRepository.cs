@@ -131,7 +131,7 @@ public sealed class SqliteReuniaoRepository(string caminhoBanco) : IReuniaoRepos
         AdicionarValorOpcional(comando, nome, valor is null ? null : FormatarData(valor.Value));
 
     private static string FormatarData(DateTimeOffset valor) =>
-        valor.ToString("O", CultureInfo.InvariantCulture);
+        valor.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture);
 
     private static DateTimeOffset ParsearData(string valor) =>
         DateTimeOffset.Parse(valor, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);

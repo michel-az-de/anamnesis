@@ -31,6 +31,13 @@ public sealed class DesktopPocFormTests
             EncontrarBotao(form, "Observabilidade").PerformClick();
             System.Windows.Forms.Application.DoEvents();
             Assert.DoesNotContain(EncontrarLabels(form), label => label.Text == "TELEMETRIA SIMULADA");
+            Assert.Contains(EncontrarLabels(form), label => label.Text == "EVENTOS LOCAIS PERSISTIDOS");
+            Assert.Contains(EncontrarLabels(form), label => label.Text == "AO VIVO");
+            Assert.Contains(EncontrarLabels(form), label => label.Text.Contains("job.reservado", StringComparison.Ordinal));
+            Assert.Contains(
+                EncontrarControles(form).OfType<DesktopSelectField>(),
+                combo => combo.Text == "Últimas 24 horas");
+            CapturarQuandoSolicitado(form, "ANAMNESIS_REAL_OBSERVABILITY_SCREENSHOT");
         });
     }
 
@@ -307,6 +314,18 @@ public sealed class DesktopPocFormTests
         public EtapaDesktopPoc Etapa => EtapaDesktopPoc.Pronto;
         public TimeSpan DuracaoGravacao => TimeSpan.Zero;
         public IReadOnlyList<ReuniaoDesktopPoc> Reunioes => [];
+        public IReadOnlyList<EventoObservabilidadePoc> EventosOperacionais { get; } =
+        [
+            new EventoObservabilidadePoc(
+                DateTimeOffset.Now,
+                NivelEventoPoc.Info,
+                "Worker",
+                "job.reservado",
+                "Job real reservado.",
+                "r:01 j:02",
+                12)
+        ];
+        public int JobsNaFila => 1;
         public int Atualizacoes { get; private set; }
 
         public Task AtualizarAsync(CancellationToken cancellationToken)

@@ -6,7 +6,7 @@ using Microsoft.Data.Sqlite;
 
 namespace Anamnesis.Infrastructure.Fila;
 
-public sealed class SqliteJobQuery(string caminhoBanco) : IJobQuery
+public sealed class SqliteJobQuery(string caminhoBanco) : IJobQuery, IJobMetricasQuery
 {
     private readonly BancoLocal _banco = new(caminhoBanco, SqliteSchema.InicializarJobsAsync);
 
@@ -46,6 +46,16 @@ public sealed class SqliteJobQuery(string caminhoBanco) : IJobQuery
             concluidoEm,
             leitor.GetInt32(5),
             estado);
+    }
+
+    public async Task<int> ContarPendentesAsync(CancellationToken cancellationToken)
+    {
+        await using var conexao = await _banco.AbrirAsync(cancellationToken);
+        await using var consultar = conexao.CreateCommand();
+        consultar.CommandText = "SELECT COUNT(*) FROM jobs WHERE concluido_em IS NULL;";
+        return Convert.ToInt32(
+            await consultar.ExecuteScalarAsync(cancellationToken),
+            CultureInfo.InvariantCulture);
     }
 
     private static DateTimeOffset? LerDataOpcional(SqliteDataReader leitor, int indice) =>

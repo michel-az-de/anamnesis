@@ -1,5 +1,6 @@
 using Anamnesis.Application.Contracts;
 using Anamnesis.Application.Modelos;
+using Anamnesis.Application.Observabilidade;
 using Anamnesis.Application.UseCases;
 using Anamnesis.Domain.Entidades;
 using Anamnesis.Domain.Tipos;
@@ -54,6 +55,68 @@ public sealed class ProcessarReuniaoHandlerTests
         Assert.Equal(StatusReuniao.Arquivada, reuniao.Status);
     }
 
+    [Fact]
+    public async Task DeveCorrelacionarEtapasDeProcessamentoComJob()
+    {
+        var reuniao = new Reuniao(Guid.NewGuid(), "Observável", DateTimeOffset.UtcNow);
+        reuniao.IniciarGravacao(DateTimeOffset.UtcNow);
+        reuniao.FinalizarGravacao(@"C:\gravacoes\observavel.mkv", DateTimeOffset.UtcNow);
+        var jobId = Guid.NewGuid();
+        var sink = new EventoSinkFake();
+        var handler = new ProcessarReuniaoHandler(
+            new ReuniaoRepositoryFake(reuniao),
+            new TranscritorFake(),
+            new AtaRunnerFake(),
+            new ArquivadorFake(),
+            new ArtefatoRepositoryFake(),
+            TimeProvider.System,
+            new JornalOperacional(sink, TimeProvider.System));
+
+        await handler.ExecutarAsync(reuniao.Id, jobId, CancellationToken.None);
+
+        Assert.Equal(
+            [
+                CodigosEventoOperacional.TranscricaoIniciada,
+                CodigosEventoOperacional.TranscricaoConcluida,
+                CodigosEventoOperacional.AtaGerada,
+                CodigosEventoOperacional.ReuniaoArquivada
+            ],
+            sink.Eventos.Select(evento => evento.Codigo));
+        Assert.All(sink.Eventos, evento =>
+        {
+            Assert.Equal(reuniao.Id, evento.ReuniaoId);
+            Assert.Equal(jobId, evento.JobId);
+        });
+    }
+
+    [Fact]
+    public async Task FalhaDoWhisperDeveIdentificarAEtapaSemPersistirMensagemLivre()
+    {
+        var reuniao = new Reuniao(Guid.NewGuid(), "Falha observável", DateTimeOffset.UtcNow);
+        reuniao.IniciarGravacao(DateTimeOffset.UtcNow);
+        reuniao.FinalizarGravacao(@"C:\gravacoes\falha.mkv", DateTimeOffset.UtcNow);
+        var jobId = Guid.NewGuid();
+        var sink = new EventoSinkFake();
+        var handler = new ProcessarReuniaoHandler(
+            new ReuniaoRepositoryFake(reuniao),
+            new TranscritorComFalha(),
+            new AtaRunnerFake(),
+            new ArquivadorFake(),
+            new ArtefatoRepositoryFake(),
+            TimeProvider.System,
+            new JornalOperacional(sink, TimeProvider.System));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            handler.ExecutarAsync(reuniao.Id, jobId, CancellationToken.None));
+
+        var falha = sink.Eventos.Last();
+        Assert.Equal(CodigosEventoOperacional.OperacaoFalhou, falha.Codigo);
+        Assert.Equal("Whisper", falha.Componente);
+        Assert.Equal("transcrever", falha.Metadados.Operacao);
+        Assert.Equal(nameof(InvalidOperationException), falha.Metadados.MotivoCodigo);
+        Assert.DoesNotContain("conteúdo confidencial", falha.Mensagem, StringComparison.OrdinalIgnoreCase);
+    }
+
     private sealed class ReuniaoRepositoryFake(Reuniao reuniao) : IReuniaoRepository
     {
         public Task<Reuniao?> ObterAsync(Guid reuniaoId, CancellationToken cancellationToken) =>
@@ -101,5 +164,25 @@ public sealed class ProcessarReuniaoHandlerTests
 
         public Task<ArtefatosReuniao?> ObterAsync(Guid reuniaoId, CancellationToken cancellationToken) =>
             Task.FromResult(Salvos.SingleOrDefault(item => item.ReuniaoId == reuniaoId));
+    }
+
+    private sealed class TranscritorComFalha : ITranscritor
+    {
+        public Task<TranscricaoGerada> TranscreverAsync(string caminhoArquivo, CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("conteúdo confidencial retornado pelo Whisper");
+    }
+
+    private sealed class EventoSinkFake : IEventoOperacionalSink
+    {
+        public List<EventoOperacional> Eventos { get; } = [];
+
+        public Task RegistrarAsync(EventoOperacional evento, CancellationToken cancellationToken)
+        {
+            Eventos.Add(evento);
+            return Task.CompletedTask;
+        }
+
+        public Task RemoverAnterioresAsync(DateTimeOffset limiteUtc, CancellationToken cancellationToken) =>
+            Task.CompletedTask;
     }
 }

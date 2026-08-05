@@ -16,6 +16,10 @@ internal interface IDesktopSession
 
     IReadOnlyList<ReuniaoDesktopPoc> Reunioes { get; }
 
+    IReadOnlyList<EventoObservabilidadePoc> EventosOperacionais => [];
+
+    int JobsNaFila => 0;
+
     DesktopRuntimeInfo? Ambiente => null;
 
     Task AtualizarAsync(CancellationToken cancellationToken);
@@ -35,4 +39,10 @@ internal interface IDesktopSession
     Task AbrirArquivoAsync(string caminho, CancellationToken cancellationToken);
 
     Task MostrarNaPastaAsync(string caminho, CancellationToken cancellationToken);
+
+    Task RegistrarFalhaOperacionalAsync(
+        string operacao,
+        Exception exception,
+        CancellationToken cancellationToken) =>
+        Task.CompletedTask;
 }

@@ -1,11 +1,13 @@
 using System.Diagnostics;
 using Anamnesis.Application.Contracts;
 using Anamnesis.Application.Modelos;
+using Anamnesis.Infrastructure.Processos;
 
 namespace Anamnesis.Infrastructure.Whisper;
 
 public sealed class WhisperTranscritor : ITranscritor
 {
+    private static readonly TimeSpan TimeoutPadrao = TimeSpan.FromMinutes(60);
     private readonly WhisperOptions _options;
     private readonly IDockerPreflight? _dockerPreflight;
 
@@ -33,7 +35,9 @@ public sealed class WhisperTranscritor : ITranscritor
             await _dockerPreflight.PrepararAsync(cancellationToken);
         }
 
-        var caminhoAudio = await new AudioPreparadorFfmpeg(options.CaminhoExecutavelFfmpeg)
+        var caminhoAudio = await new AudioPreparadorFfmpeg(
+                options.CaminhoExecutavelFfmpeg,
+                options.TimeoutFfmpeg)
             .PrepararAsync(caminhoArquivo, cancellationToken);
         var diretorioTemporario = Path.Combine(Path.GetTempPath(), "anamnesis", "whisper");
         Directory.CreateDirectory(diretorioTemporario);
@@ -58,11 +62,24 @@ public sealed class WhisperTranscritor : ITranscritor
 
             using var processo = Process.Start(inicio)
                 ?? throw new InvalidOperationException("Não foi possível iniciar o Whisper local.");
-            var erro = await processo.StandardError.ReadToEndAsync(cancellationToken);
-            await processo.WaitForExitAsync(cancellationToken);
-            if (processo.ExitCode != 0)
+            var timeout = options.TimeoutWhisper ?? TimeoutPadrao;
+            using var deadline = ProcessoExterno.CriarDeadline(timeout, cancellationToken);
+            var erroPendente = processo.StandardError.ReadToEndAsync(deadline.Token);
+            try
             {
-                throw new InvalidOperationException($"Whisper falhou com código {processo.ExitCode}: {erro.Trim()}");
+                await processo.WaitForExitAsync(deadline.Token);
+                var erro = await erroPendente;
+                if (processo.ExitCode != 0)
+                {
+                    throw new InvalidOperationException($"Whisper falhou com código {processo.ExitCode}: {erro.Trim()}");
+                }
+            }
+            catch (OperationCanceledException excecao)
+            {
+                await ProcessoExterno.EncerrarAsync(processo);
+                await ProcessoExterno.ObservarSemSubstituirErroAsync(erroPendente);
+                cancellationToken.ThrowIfCancellationRequested();
+                throw ProcessoExterno.CriarTimeout("Whisper", timeout, excecao);
             }
 
             var texto = await File.ReadAllTextAsync(caminhoTexto, cancellationToken);

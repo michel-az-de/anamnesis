@@ -34,6 +34,7 @@ Alem disso, `AtualizarAsync` escrevia o estado da sessao fora do semaforo que pr
 ## Regras
 
 - Falha ao encerrar a gravacao registra `Falha` na reuniao e persiste antes de propagar a excecao.
+- Cancelamento durante `FinalizarAsync` segue a mesma compensacao com `CancellationToken.None` e reprojeta a `OperationCanceledException` original.
 - O job so e enfileirado depois de a gravacao ser finalizada e persistida com sucesso.
 - Registrada a falha, o indice de gravacao ativa libera e uma nova gravacao pode comecar sem reiniciar o Tray.
 - A sessao do Desktop reconcilia qualquer gravacao ativa que nao tenha sido iniciada por ela propria, em qualquer atualizacao, e nao apenas na primeira.
@@ -45,6 +46,7 @@ Alem disso, `AtualizarAsync` escrevia o estado da sessao fora do semaforo que pr
 ## Critérios de aceite
 
 - [x] Falha do gravador ao encerrar deixa a reuniao em `Falha`, com o motivo preservado, e nao enfileira job.
+- [x] Cancelamento durante o `StopRecord` deixa a reuniao em `Falha`, persiste mesmo com o token cancelado, nao enfileira job e preserva a excecao original.
 - [x] Depois dessa falha, uma nova gravacao pode ser iniciada no mesmo processo, contra banco SQLite real.
 - [x] Uma gravacao orfa que aparece depois da primeira atualizacao e reconciliada.
 - [x] O comportamento de reconciliacao na primeira atualizacao permanece.
@@ -55,14 +57,20 @@ Alem disso, `AtualizarAsync` escrevia o estado da sessao fora do semaforo que pr
 ## Testes associados
 
 - `ControlarGravacaoHandlerTests.DeveRegistrarFalhaQuandoGravadorNaoEncerra`.
+- `ControlarGravacaoHandlerTests.DeveCompensarCancelamentoAoEncerrarEPreservarExcecaoOriginal`.
 - `SqliteReuniaoRepositoryTests.DevePermitirNovaGravacaoAposFalhaAoEncerrar`, contra banco temporario real, que e o teste que prova o desbloqueio.
+- `SqliteReuniaoRepositoryTests.DevePermitirNovaGravacaoAposCancelamentoAoEncerrar`, contra banco temporario real.
 - `DesktopRealSessionTests.DeveReconciliarGravacaoOrfaEmAtualizacaoPosterior`.
 - `RetencaoGravacaoHandlerTests.DeveRelatarMotivoTipadoSemDependerDoTexto`.
 - Nenhum teste unitario chama OBS, rede ou CLI real.
 
 ## Execucao local
 
-- `dotnet test Anamnesis.sln`, 133 testes verdes e 0 avisos.
+- Red Application: a regressao retornou `Expected: Falha`, `Actual: Gravando`.
+- Red SQLite: a reuniao persistida continuou `Gravando` depois do cancelamento.
+- Green Application: 17 de 17 testes verdes em Release.
+- Green SQLite: regressao direcionada verde contra banco temporario real.
+- Na entrega isolada, a suite completa aguardou o Red paralelo da SPEK-031; a consolidacao posterior confirmou 177 de 177 testes verdes em Release.
 
 ## Decisoes pendentes
 

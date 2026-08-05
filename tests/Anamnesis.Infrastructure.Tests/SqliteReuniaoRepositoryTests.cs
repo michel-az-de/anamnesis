@@ -172,6 +172,32 @@ public sealed class SqliteReuniaoRepositoryTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task DevePermitirNovaGravacaoAposCancelamentoAoEncerrar()
+    {
+        using var cancelamento = new CancellationTokenSource();
+        var repository = new SqliteReuniaoRepository(_caminhoBanco);
+        var gravador = new GravadorQueCancelaStop(cancelamento);
+        var handler = new ControlarGravacaoHandler(
+            repository,
+            new JobQueueNula(),
+            gravador,
+            new WorkerLauncherNulo(),
+            new ObsPreflightContador(),
+            TimeProvider.System);
+        var primeiraId = await handler.IniciarAsync("Primeira", CancellationToken.None);
+
+        var excecao = await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            handler.FinalizarAsync(primeiraId, cancelamento.Token));
+
+        Assert.Same(gravador.Excecao, excecao);
+        var primeira = await repository.ObterAsync(primeiraId, CancellationToken.None);
+        Assert.Equal(StatusReuniao.Falha, primeira!.Status);
+
+        var segundaId = await handler.IniciarAsync("Segunda", CancellationToken.None);
+        Assert.NotEqual(primeiraId, segundaId);
+    }
+
+    [Fact]
     public async Task DeveReconciliarDuplicatasGravandoAntesDeCriarIndiceEmBancoLegado()
     {
         var repository = new SqliteReuniaoRepository(_caminhoBanco);
@@ -271,6 +297,22 @@ public sealed class SqliteReuniaoRepositoryTests : IAsyncLifetime
 
         public Task<string> FinalizarAsync(CancellationToken cancellationToken) =>
             throw new NotSupportedException();
+    }
+
+    private sealed class GravadorQueCancelaStop(CancellationTokenSource cancelamento) : IGravador
+    {
+        public OperationCanceledException Excecao { get; } =
+            new("StopRecord cancelado.", cancelamento.Token);
+
+        public Task IniciarAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public Task<bool> EstaGravandoAsync(CancellationToken cancellationToken) => Task.FromResult(true);
+
+        public Task<string> FinalizarAsync(CancellationToken cancellationToken)
+        {
+            cancelamento.Cancel();
+            return Task.FromException<string>(Excecao);
+        }
     }
 
     private sealed class ObsPreflightContador : IObsPreflight

@@ -1,5 +1,6 @@
 using Anamnesis.Application.Contracts;
 using Anamnesis.Application.Modelos;
+using Anamnesis.Application.Observabilidade;
 using Anamnesis.Application.UseCases;
 using Anamnesis.Domain.Entidades;
 using Anamnesis.Domain.Tipos;
@@ -82,6 +83,46 @@ public sealed class RetencaoGravacaoHandlerTests
         Assert.Equal("O prazo de retenção ainda não foi atingido.", resultado.Descricao);
     }
 
+    [Fact]
+    public async Task DeveRegistrarAvaliacaoEAplicacaoDaRetencao()
+    {
+        var reuniao = CriarReuniaoArquivada(Agora.AddDays(-7));
+        var sink = new EventoSinkFake();
+        var handler = new RetencaoGravacaoHandler(
+            new ReuniaoRepositoryFake(reuniao),
+            new LixeiraFake(existe: true),
+            new RelogioFixo(Agora),
+            new JornalOperacional(sink, new RelogioFixo(Agora)));
+
+        await handler.AplicarAsync(reuniao.Id, CancellationToken.None);
+
+        Assert.Equal(
+            [CodigosEventoOperacional.RetencaoAvaliada, CodigosEventoOperacional.RetencaoAplicada],
+            sink.Eventos.Select(evento => evento.Codigo));
+        Assert.All(sink.Eventos, evento => Assert.Equal(reuniao.Id, evento.ReuniaoId));
+    }
+
+    [Fact]
+    public async Task FalhaAoAvaliarArquivoDeveGerarEventoSeguroDaRetencao()
+    {
+        var reuniao = CriarReuniaoArquivada(Agora.AddDays(-7));
+        var sink = new EventoSinkFake();
+        var handler = new RetencaoGravacaoHandler(
+            new ReuniaoRepositoryFake(reuniao),
+            new LixeiraFake(existe: true, falharAoVerificar: true),
+            new RelogioFixo(Agora),
+            new JornalOperacional(sink, new RelogioFixo(Agora)));
+
+        await Assert.ThrowsAsync<IOException>(() =>
+            handler.SimularAsync(reuniao.Id, CancellationToken.None));
+
+        var evento = Assert.Single(sink.Eventos);
+        Assert.Equal(CodigosEventoOperacional.OperacaoFalhou, evento.Codigo);
+        Assert.Equal("Retencao", evento.Componente);
+        Assert.Equal("avaliar_retencao", evento.Metadados.Operacao);
+        Assert.Equal(reuniao.Id, evento.ReuniaoId);
+    }
+
     private static RetencaoGravacaoHandler CriarHandler(Reuniao reuniao, LixeiraFake lixeira) =>
         new(new ReuniaoRepositoryFake(reuniao), lixeira, new RelogioFixo(Agora));
 
@@ -111,11 +152,17 @@ public sealed class RetencaoGravacaoHandlerTests
         }
     }
 
-    private sealed class LixeiraFake(bool existe, bool falharAoMover = false) : IGravacaoLixeira
+    private sealed class LixeiraFake(
+        bool existe,
+        bool falharAoMover = false,
+        bool falharAoVerificar = false) : IGravacaoLixeira
     {
         public string? CaminhoMovido { get; private set; }
 
-        public Task<bool> ExisteAsync(string caminhoArquivo, CancellationToken cancellationToken) => Task.FromResult(existe);
+        public Task<bool> ExisteAsync(string caminhoArquivo, CancellationToken cancellationToken) =>
+            falharAoVerificar
+                ? throw new IOException("Falha ao consultar caminho confidencial.")
+                : Task.FromResult(existe);
 
         public Task MoverAsync(string caminhoArquivo, CancellationToken cancellationToken)
         {
@@ -132,5 +179,19 @@ public sealed class RetencaoGravacaoHandlerTests
     private sealed class RelogioFixo(DateTimeOffset agora) : TimeProvider
     {
         public override DateTimeOffset GetUtcNow() => agora;
+    }
+
+    private sealed class EventoSinkFake : IEventoOperacionalSink
+    {
+        public List<EventoOperacional> Eventos { get; } = [];
+
+        public Task RegistrarAsync(EventoOperacional evento, CancellationToken cancellationToken)
+        {
+            Eventos.Add(evento);
+            return Task.CompletedTask;
+        }
+
+        public Task RemoverAnterioresAsync(DateTimeOffset limiteUtc, CancellationToken cancellationToken) =>
+            Task.CompletedTask;
     }
 }

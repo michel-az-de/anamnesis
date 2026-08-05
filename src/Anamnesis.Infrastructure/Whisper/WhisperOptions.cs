@@ -5,4 +5,6 @@ public sealed record WhisperOptions(
     string CaminhoModelo,
     string Idioma,
     string CaminhoExecutavelFfmpeg = "",
-    string? ImagemDocker = null);
+    string? ImagemDocker = null,
+    TimeSpan? TimeoutWhisper = null,
+    TimeSpan? TimeoutFfmpeg = null);

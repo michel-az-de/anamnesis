@@ -2,6 +2,7 @@ using Anamnesis.Application.Modelos;
 using Anamnesis.Domain.Entidades;
 using Anamnesis.Domain.Tipos;
 using Anamnesis.Infrastructure.Persistencia;
+using Microsoft.Data.Sqlite;
 using Xunit;
 
 namespace Anamnesis.Infrastructure.Tests;
@@ -66,6 +67,33 @@ public sealed class SqliteReuniaoQueryTests : IAsyncLifetime
             CancellationToken.None);
 
         Assert.Equal([terceira.Id, segunda.Id], resultado.Select(item => item.Id));
+    }
+
+    [Fact]
+    public async Task DeveNormalizarUtcAntesDeOrdenarPorCriacao()
+    {
+        var repository = new SqliteReuniaoRepository(_caminhoBanco);
+        var maisRecente = CriarAguardandoProcessamento(
+            "Mais recente",
+            new DateTimeOffset(2026, 8, 5, 10, 0, 0, TimeSpan.Zero));
+        var maisAntigaComHoraLocalMaior = CriarAguardandoProcessamento(
+            "Mais antiga",
+            new DateTimeOffset(2026, 8, 5, 12, 0, 0, TimeSpan.FromHours(3)));
+        await repository.SalvarAsync(maisRecente, CancellationToken.None);
+        await repository.SalvarAsync(maisAntigaComHoraLocalMaior, CancellationToken.None);
+
+        var resultado = await new SqliteReuniaoQuery(_caminhoBanco).ListarAsync(
+            new ReuniaoQueryFiltro(null, null, 100),
+            CancellationToken.None);
+
+        Assert.Equal([maisRecente.Id, maisAntigaComHoraLocalMaior.Id], resultado.Select(item => item.Id));
+        await using var conexao = new SqliteConnection($"Data Source={_caminhoBanco};Pooling=False");
+        await conexao.OpenAsync();
+        await using var comando = conexao.CreateCommand();
+        comando.CommandText = "SELECT criada_em FROM reunioes WHERE id = $id;";
+        comando.Parameters.AddWithValue("$id", maisAntigaComHoraLocalMaior.Id.ToString("N"));
+        var instantePersistido = Assert.IsType<string>(await comando.ExecuteScalarAsync());
+        Assert.Equal("2026-08-05T09:00:00.0000000+00:00", instantePersistido);
     }
 
     [Fact]

@@ -1,5 +1,6 @@
 using Anamnesis.Application.Contracts;
 using Anamnesis.Application.Modelos;
+using Anamnesis.Application.Observabilidade;
 using Anamnesis.Application.UseCases;
 using Anamnesis.Domain.Entidades;
 using Anamnesis.Worker;
@@ -51,7 +52,36 @@ public sealed class ReuniaoConsumerTests
         Assert.Null(fila.JobConcluidoId);
     }
 
-    private static ReuniaoConsumer CriarConsumer(JobQueueFake fila, Reuniao reuniao, ITranscritor transcritor) =>
+    [Fact]
+    public async Task DeveRegistrarReservaEConclusaoComAmbasCorrelacoes()
+    {
+        var reuniao = CriarReuniao();
+        var job = CriarJob(reuniao.Id);
+        var fila = new JobQueueFake(job);
+        var sink = new EventoSinkFake();
+        var journal = new JornalOperacional(sink, TimeProvider.System);
+        var consumer = CriarConsumer(fila, reuniao, new TranscritorFake(), journal);
+
+        await consumer.ProcessarProximoAsync(CancellationToken.None);
+
+        var marcosWorker = sink.Eventos.Where(evento => evento.Codigo is
+            CodigosEventoOperacional.JobReservado or
+            CodigosEventoOperacional.JobConcluido).ToArray();
+        Assert.Equal(
+            [CodigosEventoOperacional.JobReservado, CodigosEventoOperacional.JobConcluido],
+            marcosWorker.Select(evento => evento.Codigo));
+        Assert.All(marcosWorker, evento =>
+        {
+            Assert.Equal(reuniao.Id, evento.ReuniaoId);
+            Assert.Equal(job.Id, evento.JobId);
+        });
+    }
+
+    private static ReuniaoConsumer CriarConsumer(
+        JobQueueFake fila,
+        Reuniao reuniao,
+        ITranscritor transcritor,
+        JornalOperacional? journal = null) =>
         new(
             fila,
             new ProcessarReuniaoHandler(
@@ -60,8 +90,10 @@ public sealed class ReuniaoConsumerTests
                 new AtaRunnerFake(),
                 new ArquivadorFake(),
                 new ArtefatoRepositoryFake(),
-                TimeProvider.System),
-            TimeProvider.System);
+                TimeProvider.System,
+                journal),
+            TimeProvider.System,
+            journal);
 
     private static Reuniao CriarReuniao()
     {
@@ -148,5 +180,19 @@ public sealed class ReuniaoConsumerTests
 
         public Task<ArtefatosReuniao?> ObterAsync(Guid reuniaoId, CancellationToken cancellationToken) =>
             Task.FromResult<ArtefatosReuniao?>(null);
+    }
+
+    private sealed class EventoSinkFake : IEventoOperacionalSink
+    {
+        public List<EventoOperacional> Eventos { get; } = [];
+
+        public Task RegistrarAsync(EventoOperacional evento, CancellationToken cancellationToken)
+        {
+            Eventos.Add(evento);
+            return Task.CompletedTask;
+        }
+
+        public Task RemoverAnterioresAsync(DateTimeOffset limiteUtc, CancellationToken cancellationToken) =>
+            Task.CompletedTask;
     }
 }

@@ -4,12 +4,15 @@ using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
 using Anamnesis.Application.Contracts;
+using Anamnesis.Application.Modelos;
+using Anamnesis.Application.Observabilidade;
 using Anamnesis.Application.UseCases;
 using Anamnesis.Domain.Tipos;
 using Anamnesis.Infrastructure.Arquivos;
 using Anamnesis.Infrastructure.Cli;
 using Anamnesis.Infrastructure.Fila;
 using Anamnesis.Infrastructure.Obs;
+using Anamnesis.Infrastructure.Observabilidade;
 using Anamnesis.Infrastructure.Persistencia;
 using Anamnesis.Infrastructure.Whisper;
 using Anamnesis.Worker;
@@ -19,6 +22,7 @@ namespace Anamnesis.Infrastructure.Tests;
 
 public sealed class FluxoAlphaE2ETests : IAsyncLifetime
 {
+    private static readonly JsonSerializerOptions OpcoesJsonEvidencia = new() { WriteIndented = true };
     private string _diretorio = null!;
     private bool _preservarEvidencias;
 
@@ -60,13 +64,16 @@ public sealed class FluxoAlphaE2ETests : IAsyncLifetime
         var caminhoBanco = Path.Combine(_diretorio, "anamnesis.db");
         var repository = new SqliteReuniaoRepository(caminhoBanco);
         var fila = new SqliteJobQueue(caminhoBanco);
+        var eventoRepository = new SqliteEventoOperacionalRepository(caminhoBanco);
+        var journal = new JornalOperacional(eventoRepository, relogio);
         var controlar = new ControlarGravacaoHandler(
             repository,
             fila,
             new ObsGravador(new ObsWebSocketOptions(obs.Endereco, null)),
             new WorkerLauncherNulo(),
             new ObsPreflightNulo(),
-            relogio);
+            relogio,
+            journal);
 
         var reuniaoId = await controlar.IniciarAsync("E2E da alpha", CancellationToken.None);
         await RegistrarAsync($"OBS recebeu StartRecord; reunião criada: {reuniaoId}.");
@@ -87,8 +94,9 @@ public sealed class FluxoAlphaE2ETests : IAsyncLifetime
             new CliAtaRunner(new CliAtaRunnerOptions("CLI E2E", caminhoCli, [])),
             new DiscoArquivador(Path.Combine(_diretorio, "arquivo")),
             new SqliteArtefatoRepository(caminhoBanco),
-            relogio);
-        var consumer = new ReuniaoConsumer(fila, processar, relogio);
+            relogio,
+            journal);
+        var consumer = new ReuniaoConsumer(fila, processar, relogio, journal);
 
         await consumer.RetomarAsync(CancellationToken.None);
         await RegistrarAsync("Worker retomou a reserva pendente.");
@@ -120,7 +128,7 @@ public sealed class FluxoAlphaE2ETests : IAsyncLifetime
 
         relogio.Avancar(TimeSpan.FromDays(7));
         var lixeira = new LixeiraFake();
-        var retencao = new RetencaoGravacaoHandler(repository, lixeira, relogio);
+        var retencao = new RetencaoGravacaoHandler(repository, lixeira, relogio, journal);
         var simulacao = await retencao.SimularAsync(reuniaoId, CancellationToken.None);
         Assert.True(simulacao.PodeMover);
         await retencao.AplicarAsync(reuniaoId, CancellationToken.None);
@@ -129,6 +137,38 @@ public sealed class FluxoAlphaE2ETests : IAsyncLifetime
         Assert.Equal(StatusReuniao.Excluida, excluida!.Status);
         Assert.Equal(caminhoGravacao, lixeira.CaminhoMovido);
         await RegistrarAsync("Retenção aplicada pela lixeira fake; estado final Excluída confirmado.");
+        const string senhaCanario = "senha-e2e-ultrassecreta";
+        const string tokenCanario = "token-e2e-ultrassecreto";
+        const string bearerCanario = "bearer-e2e-ultrassecreto";
+        await journal.RegistrarFalhaAsync(
+            "Canario",
+            "validar_redacao",
+            new InvalidOperationException(
+                $"senha={senhaCanario} token={tokenCanario} Bearer {bearerCanario} " +
+                @"C:\Users\felip\segredo.txt"),
+            reuniaoId,
+            null,
+            CancellationToken.None);
+        var eventos = await eventoRepository.ListarAsync(
+            new EventoOperacionalFiltro(ReuniaoId: reuniaoId),
+            CancellationToken.None);
+        Assert.All(CodigosEventoOperacional.Todos, codigo =>
+            Assert.Contains(eventos, evento => evento.Codigo == codigo));
+        var conteudoJournal = string.Concat(
+            Directory.GetFiles(_diretorio, "anamnesis.journal.db*")
+                .Select(caminho => Encoding.UTF8.GetString(File.ReadAllBytes(caminho))));
+        Assert.DoesNotContain(senhaCanario, conteudoJournal, StringComparison.Ordinal);
+        Assert.DoesNotContain(tokenCanario, conteudoJournal, StringComparison.Ordinal);
+        Assert.DoesNotContain(bearerCanario, conteudoJournal, StringComparison.Ordinal);
+        Assert.DoesNotContain(@"C:\Users\felip", conteudoJournal, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Transcrição E2E local", conteudoJournal, StringComparison.Ordinal);
+        Assert.DoesNotContain("Resumo E2E.", conteudoJournal, StringComparison.Ordinal);
+        Assert.DoesNotContain("Decisao E2E.", conteudoJournal, StringComparison.Ordinal);
+        Assert.DoesNotContain("Tarefa E2E.", conteudoJournal, StringComparison.Ordinal);
+        await File.WriteAllTextAsync(
+            Path.Combine(_diretorio, "eventos-operacionais.json"),
+            JsonSerializer.Serialize(eventos, OpcoesJsonEvidencia));
+        await RegistrarAsync("Journal persistiu os 12 códigos e passou no canário de conteúdo sensível.");
         await CriarResultadoAsync(reuniaoId, excluida.Status, caminhoBanco, caminhoGravacao, diretorioReuniao, caminhoEntradaCli);
         Assert.True(File.Exists(Path.Combine(_diretorio, "e2e.log")));
         Assert.True(File.Exists(Path.Combine(_diretorio, "resultado.md")));
@@ -160,6 +200,8 @@ public sealed class FluxoAlphaE2ETests : IAsyncLifetime
             ## Evidências
 
             - Banco SQLite: `{{caminhoBanco}}`
+            - Journal SQLite: `{{SqliteEventoOperacionalRepository.ResolverCaminhoJournal(caminhoBanco)}}`
+            - Eventos operacionais: `{{Path.Combine(_diretorio, "eventos-operacionais.json")}}`
             - Gravação de entrada: `{{caminhoGravacao}}`
             - Ata: `{{Path.Combine(diretorioArquivado, "ata.md")}}`
             - Transcrição: `{{Path.Combine(diretorioArquivado, "transcricao.md")}}`

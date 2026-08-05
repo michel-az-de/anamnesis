@@ -47,6 +47,7 @@ Por fim, a reserva atomica da fila usa `RETURNING`, que exige SQLite 3.35, mas o
 - [x] Tres operacoes seguidas na mesma instancia preparam o esquema uma unica vez.
 - [x] O banco fica em modo WAL apos a primeira operacao.
 - [x] O instante de arquivamento do manifesto vem do relogio injetado.
+- [x] Instantes com offsets diferentes sao persistidos em UTC e ordenados pelo momento real.
 - [x] A engine reporta versao 3.35 ou superior.
 - [x] O pacote publicado continua funcional, com o binario nativo na saida.
 - [x] A suite existente permanece verde e o build sem avisos.
@@ -55,6 +56,7 @@ Por fim, a reserva atomica da fila usa `RETURNING`, que exige SQLite 3.35, mas o
 
 - `SqliteReuniaoRepositoryTests.DevePrepararEsquemaUmaUnicaVezPorInstancia` e `DeveManterOBancoLocalEmModoWal`.
 - `SqliteArtefatoRepositoryTests.DeveUsarORelogioInjetadoParaOInstanteDeArquivamento`.
+- `SqliteReuniaoQueryTests.DeveNormalizarUtcAntesDeOrdenarPorCriacao`.
 - `SqliteJobQueueTests.DeveUsarEngineComSuporteARetorno`.
 - Os testes de persistencia e de fila ja existentes cobrem a regressao funcional da troca de engine.
 
@@ -62,6 +64,8 @@ Por fim, a reserva atomica da fila usa `RETURNING`, que exige SQLite 3.35, mas o
 
 - `dotnet test Anamnesis.sln`, 140 testes verdes e 0 avisos.
 - Publicacao real verificada com `--runtime win-x64 --self-contained`: `e_sqlite3.dll` de 1,9 MB na raiz da saida, total de 121 MB.
+- Red de robustez: a consulta ordenou `12:00 +03:00` antes de `10:00 +00:00`, embora o primeiro instante fosse uma hora mais antigo.
+- Green de robustez: todos os campos temporais do agregado passam por `ToUniversalTime()` antes da serializacao ISO.
 
 ## Decisoes pendentes
 

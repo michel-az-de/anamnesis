@@ -1,5 +1,6 @@
 using Anamnesis.Application.Contracts;
 using Anamnesis.Application.Modelos;
+using Anamnesis.Application.Observabilidade;
 using Anamnesis.Application.UseCases;
 using Anamnesis.Domain.Entidades;
 using Anamnesis.Domain.Tipos;
@@ -219,6 +220,90 @@ public sealed class DesktopRealSessionTests
         Assert.Equal(1, gravador.Inicios);
     }
 
+    [Fact]
+    public async Task DeveCarregarEventosEQuantidadeDeJobsDoArmazenamentoReal()
+    {
+        var reuniaoId = Guid.NewGuid();
+        var jobId = Guid.NewGuid();
+        var evento = new EventoOperacional(
+            Guid.NewGuid(),
+            new DateTimeOffset(2026, 8, 5, 18, 0, 0, TimeSpan.Zero),
+            NivelEventoOperacional.Aviso,
+            "job.reservado",
+            "Worker",
+            "Job reservado.",
+            reuniaoId,
+            jobId,
+            new MetadadosEventoOperacional(DuracaoMs: 12));
+        var sessao = new DesktopRealSession(
+            new ReuniaoQueryFake(null),
+            new JobQueryFake(null),
+            CriarHandlerNulo(),
+            new ArtefatoLauncherFake(),
+            TimeProvider.System,
+            eventoQuery: new EventoQueryFake([evento]),
+            jobMetricasQuery: new JobMetricasQueryFake(3));
+
+        await sessao.AtualizarAsync(CancellationToken.None);
+
+        var exibido = Assert.Single(sessao.EventosOperacionais);
+        Assert.Equal("job.reservado", exibido.Evento);
+        Assert.Contains(reuniaoId.ToString("N"), exibido.CorrelacaoId, StringComparison.Ordinal);
+        Assert.Contains(jobId.ToString("N"), exibido.CorrelacaoId, StringComparison.Ordinal);
+        Assert.Equal(3, sessao.JobsNaFila);
+    }
+
+    [Fact]
+    public async Task FalhaDaConsultaDoJournalNaoDeveAlterarResultadoDaGravacao()
+    {
+        var dados = new DadosEmMemoria();
+        var gravador = new GravadorFake();
+        var sessao = new DesktopRealSession(
+            dados,
+            dados,
+            new ControlarGravacaoHandler(
+                dados,
+                dados,
+                gravador,
+                new WorkerLauncherFake(),
+                new ObsPreflightFake(),
+                TimeProvider.System),
+            new ArtefatoLauncherFake(),
+            TimeProvider.System,
+            eventoQuery: new EventoQueryComFalha());
+
+        await sessao.IniciarGravacaoAsync("Journal corrompido", CancellationToken.None);
+
+        Assert.Equal(1, gravador.Inicios);
+        Assert.Equal(EtapaDesktopPoc.Gravando, sessao.Etapa);
+        Assert.Equal("Journal corrompido", Assert.Single(sessao.Reunioes).Titulo);
+        Assert.Empty(sessao.EventosOperacionais);
+    }
+
+    [Fact]
+    public async Task DevePersistirFalhaDaInterfacePeloCatalogoReal()
+    {
+        var sink = new EventoSinkFake();
+        var sessao = new DesktopRealSession(
+            new ReuniaoQueryFake(null),
+            new JobQueryFake(null),
+            CriarHandlerNulo(),
+            new ArtefatoLauncherFake(),
+            TimeProvider.System,
+            journal: new JornalOperacional(sink, TimeProvider.System));
+
+        await sessao.RegistrarFalhaOperacionalAsync(
+            "abrir_artefato",
+            new IOException(@"Falha em C:\Users\felip\ata.md"),
+            CancellationToken.None);
+
+        var evento = Assert.Single(sink.Eventos);
+        Assert.Equal(CodigosEventoOperacional.OperacaoFalhou, evento.Codigo);
+        Assert.Equal("Desktop", evento.Componente);
+        Assert.Equal("abrir_artefato", evento.Metadados.Operacao);
+        Assert.Equal("A operação local falhou.", evento.Mensagem);
+    }
+
     private static ControlarGravacaoHandler CriarHandlerNulo()
     {
         var dados = new DadosEmMemoria();
@@ -288,19 +373,66 @@ public sealed class DesktopRealSessionTests
             Task.FromResult(_jobs.LastOrDefault(job => job.ReuniaoId == reuniaoId));
     }
 
-    private sealed class ReuniaoQueryFake(ReuniaoDetalhe detalhe) : IReuniaoQuery
+    private sealed class ReuniaoQueryFake(ReuniaoDetalhe? detalhe) : IReuniaoQuery
     {
         public Task<IReadOnlyList<ReuniaoResumo>> ListarAsync(ReuniaoQueryFiltro filtro, CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyList<ReuniaoResumo>>([]);
 
         public Task<ReuniaoDetalhe?> ObterDetalheAsync(Guid reuniaoId, CancellationToken cancellationToken) =>
-            Task.FromResult<ReuniaoDetalhe?>(reuniaoId == detalhe.Id ? detalhe : null);
+            Task.FromResult<ReuniaoDetalhe?>(
+                detalhe is not null && reuniaoId == detalhe.Id ? detalhe : null);
     }
 
-    private sealed class JobQueryFake(JobResumo job) : IJobQuery
+    private sealed class JobQueryFake(JobResumo? job) : IJobQuery
     {
         public Task<JobResumo?> ObterMaisRecenteAsync(Guid reuniaoId, CancellationToken cancellationToken) =>
-            Task.FromResult<JobResumo?>(reuniaoId == job.ReuniaoId ? job : null);
+            Task.FromResult<JobResumo?>(job is not null && reuniaoId == job.ReuniaoId ? job : null);
+    }
+
+    private sealed class EventoQueryFake(IReadOnlyList<EventoOperacional> eventos) : IEventoOperacionalQuery
+    {
+        public Task<IReadOnlyList<EventoOperacional>> ListarAsync(
+            EventoOperacionalFiltro filtro,
+            CancellationToken cancellationToken) =>
+            Task.FromResult(eventos);
+
+        public Task<MetricasOperacionais> ObterMetricasAsync(
+            EventoOperacionalFiltro filtro,
+            CancellationToken cancellationToken) =>
+            Task.FromResult(new MetricasOperacionais(eventos.Count, 1, 12));
+    }
+
+    private sealed class EventoQueryComFalha : IEventoOperacionalQuery
+    {
+        public Task<IReadOnlyList<EventoOperacional>> ListarAsync(
+            EventoOperacionalFiltro filtro,
+            CancellationToken cancellationToken) =>
+            throw new InvalidDataException("Journal corrompido.");
+
+        public Task<MetricasOperacionais> ObterMetricasAsync(
+            EventoOperacionalFiltro filtro,
+            CancellationToken cancellationToken) =>
+            throw new InvalidDataException("Journal corrompido.");
+    }
+
+    private sealed class JobMetricasQueryFake(int pendentes) : IJobMetricasQuery
+    {
+        public Task<int> ContarPendentesAsync(CancellationToken cancellationToken) =>
+            Task.FromResult(pendentes);
+    }
+
+    private sealed class EventoSinkFake : IEventoOperacionalSink
+    {
+        public List<EventoOperacional> Eventos { get; } = [];
+
+        public Task RegistrarAsync(EventoOperacional evento, CancellationToken cancellationToken)
+        {
+            Eventos.Add(evento);
+            return Task.CompletedTask;
+        }
+
+        public Task RemoverAnterioresAsync(DateTimeOffset limiteUtc, CancellationToken cancellationToken) =>
+            Task.CompletedTask;
     }
 
     private sealed class GravadorFake(bool estaGravando = true) : IGravador

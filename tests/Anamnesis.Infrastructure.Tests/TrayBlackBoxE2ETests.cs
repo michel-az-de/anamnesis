@@ -5,8 +5,11 @@ using System.Net.Sockets;
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
+using Anamnesis.Application.Modelos;
+using Anamnesis.Application.Observabilidade;
 using Anamnesis.Domain.Tipos;
 using Anamnesis.Infrastructure.Configuracao;
+using Anamnesis.Infrastructure.Observabilidade;
 using Anamnesis.Infrastructure.Persistencia;
 using Xunit;
 
@@ -14,6 +17,8 @@ namespace Anamnesis.Infrastructure.Tests;
 
 public sealed class TrayBlackBoxE2ETests
 {
+    private static readonly JsonSerializerOptions OpcoesJsonEvidencia = new() { WriteIndented = true };
+
     [Fact]
     public async Task DeveGravarEAcionarWorkerEmProcessosSeparados()
     {
@@ -83,8 +88,34 @@ public sealed class TrayBlackBoxE2ETests
             Assert.Equal(diretorioReuniao, manifesto!.Diretorio);
             Assert.Equal(caminhoAta, manifesto.CaminhoAta);
             Assert.Equal(caminhoTranscricao, manifesto.CaminhoTranscricao);
+            var eventos = await AguardarEventosOperacionaisAsync(caminhoBanco, reuniaoId);
+            string[] marcosEsperados =
+            [
+                CodigosEventoOperacional.GravacaoIniciada,
+                CodigosEventoOperacional.GravacaoFinalizada,
+                CodigosEventoOperacional.JobEnfileirado,
+                CodigosEventoOperacional.JobReservado,
+                CodigosEventoOperacional.TranscricaoIniciada,
+                CodigosEventoOperacional.TranscricaoConcluida,
+                CodigosEventoOperacional.AtaGerada,
+                CodigosEventoOperacional.ReuniaoArquivada,
+                CodigosEventoOperacional.JobConcluido
+            ];
+            Assert.All(marcosEsperados, codigo =>
+                Assert.Contains(eventos, evento => evento.Codigo == codigo));
+            var jobId = eventos.Single(
+                evento => evento.Codigo == CodigosEventoOperacional.JobEnfileirado).JobId;
+            Assert.NotNull(jobId);
+            Assert.All(
+                eventos.Where(evento => evento.Codigo is not
+                    CodigosEventoOperacional.GravacaoIniciada and not
+                    CodigosEventoOperacional.GravacaoFinalizada),
+                evento => Assert.Equal(jobId, evento.JobId));
             await File.WriteAllTextAsync(Path.Combine(diretorio, "tray-worker.stdout.log"), resultado.Stdout);
             await File.WriteAllTextAsync(Path.Combine(diretorio, "tray-worker.stderr.log"), resultado.Stderr);
+            await File.WriteAllTextAsync(
+                Path.Combine(diretorio, "eventos-operacionais.json"),
+                JsonSerializer.Serialize(eventos, OpcoesJsonEvidencia));
             await File.WriteAllTextAsync(
                 Path.Combine(diretorio, "resultado.md"),
                 $$"""
@@ -98,6 +129,8 @@ public sealed class TrayBlackBoxE2ETests
                 - OBS: fake local
                 - Transcritor: fake local
                 - CLI: fake local
+                - Journal SQLite: `{{SqliteEventoOperacionalRepository.ResolverCaminhoJournal(caminhoBanco)}}`
+                - Eventos operacionais: `{{Path.Combine(diretorio, "eventos-operacionais.json")}}`
                 - Ata: `{{caminhoAta}}`
                 - Transcrição: `{{caminhoTranscricao}}`
                 """);
@@ -199,6 +232,28 @@ public sealed class TrayBlackBoxE2ETests
         }
 
         throw new TimeoutException("O Worker não arquivou a reunião em dez segundos.");
+    }
+
+    private static async Task<IReadOnlyList<EventoOperacional>> AguardarEventosOperacionaisAsync(
+        string caminhoBanco,
+        Guid reuniaoId)
+    {
+        var repository = new SqliteEventoOperacionalRepository(caminhoBanco);
+        var limite = DateTimeOffset.UtcNow.AddSeconds(10);
+        while (DateTimeOffset.UtcNow < limite)
+        {
+            var eventos = await repository.ListarAsync(
+                new EventoOperacionalFiltro(ReuniaoId: reuniaoId),
+                CancellationToken.None);
+            if (eventos.Any(evento => evento.Codigo == CodigosEventoOperacional.JobConcluido))
+            {
+                return eventos;
+            }
+
+            await Task.Delay(100);
+        }
+
+        throw new TimeoutException("O journal não recebeu job.concluido em dez segundos.");
     }
 
     private static string CaminhoWorker()

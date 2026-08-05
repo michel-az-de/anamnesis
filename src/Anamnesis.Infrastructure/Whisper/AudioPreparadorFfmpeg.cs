@@ -1,14 +1,25 @@
 using System.Diagnostics;
+using Anamnesis.Infrastructure.Processos;
 
 namespace Anamnesis.Infrastructure.Whisper;
 
-public sealed class AudioPreparadorFfmpeg(string caminhoExecutavel)
+public sealed class AudioPreparadorFfmpeg
 {
+    private static readonly TimeSpan TimeoutPadrao = TimeSpan.FromMinutes(10);
+    private readonly string _caminhoExecutavel;
+    private readonly TimeSpan _timeout;
+
+    public AudioPreparadorFfmpeg(string caminhoExecutavel, TimeSpan? timeout = null)
+    {
+        _caminhoExecutavel = caminhoExecutavel;
+        _timeout = timeout ?? TimeoutPadrao;
+    }
+
     public async Task<string> PrepararAsync(string caminhoGravacao, CancellationToken cancellationToken)
     {
-        if (!File.Exists(caminhoExecutavel))
+        if (!File.Exists(_caminhoExecutavel))
         {
-            throw new FileNotFoundException("O executável do FFmpeg não foi encontrado.", caminhoExecutavel);
+            throw new FileNotFoundException("O executável do FFmpeg não foi encontrado.", _caminhoExecutavel);
         }
 
         if (!File.Exists(caminhoGravacao))
@@ -19,7 +30,7 @@ public sealed class AudioPreparadorFfmpeg(string caminhoExecutavel)
         var diretorioTemporario = Path.Combine(Path.GetTempPath(), "anamnesis", "audio");
         Directory.CreateDirectory(diretorioTemporario);
         var caminhoAudio = Path.Combine(diretorioTemporario, $"{Guid.NewGuid():N}.wav");
-        var inicio = new ProcessStartInfo(caminhoExecutavel)
+        var inicio = new ProcessStartInfo(_caminhoExecutavel)
         {
             UseShellExecute = false,
             RedirectStandardError = true,
@@ -35,11 +46,23 @@ public sealed class AudioPreparadorFfmpeg(string caminhoExecutavel)
         {
             using var processo = Process.Start(inicio)
                 ?? throw new InvalidOperationException("Não foi possível iniciar o FFmpeg local.");
-            var erro = await processo.StandardError.ReadToEndAsync(cancellationToken);
-            await processo.WaitForExitAsync(cancellationToken);
-            if (processo.ExitCode != 0)
+            using var deadline = ProcessoExterno.CriarDeadline(_timeout, cancellationToken);
+            var erroPendente = processo.StandardError.ReadToEndAsync(deadline.Token);
+            try
             {
-                throw new InvalidOperationException($"FFmpeg falhou com código {processo.ExitCode}: {erro.Trim()}");
+                await processo.WaitForExitAsync(deadline.Token);
+                var erro = await erroPendente;
+                if (processo.ExitCode != 0)
+                {
+                    throw new InvalidOperationException($"FFmpeg falhou com código {processo.ExitCode}: {erro.Trim()}");
+                }
+            }
+            catch (OperationCanceledException excecao)
+            {
+                await ProcessoExterno.EncerrarAsync(processo);
+                await ProcessoExterno.ObservarSemSubstituirErroAsync(erroPendente);
+                cancellationToken.ThrowIfCancellationRequested();
+                throw ProcessoExterno.CriarTimeout("FFmpeg", _timeout, excecao);
             }
 
             if (!File.Exists(caminhoAudio))

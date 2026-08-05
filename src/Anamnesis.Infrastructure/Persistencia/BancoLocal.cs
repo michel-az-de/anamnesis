@@ -14,14 +14,12 @@ namespace Anamnesis.Infrastructure.Persistencia;
     Justification = "Os adaptadores SQLite e seu semáforo vivem durante todo o processo.")]
 internal sealed class BancoLocal(
     string caminhoBanco,
-    Func<SqliteConnection, CancellationToken, Task> aplicarEsquema)
+    Func<SqliteConnection, CancellationToken, Task> aplicarEsquema,
+    int? timeoutComandoSegundos = null)
 {
-    private readonly string _connectionString = new SqliteConnectionStringBuilder
-    {
-        DataSource = caminhoBanco,
-        Mode = SqliteOpenMode.ReadWriteCreate,
-        Pooling = false
-    }.ToString();
+    private readonly string _connectionString = CriarConnectionString(
+        caminhoBanco,
+        timeoutComandoSegundos);
 
     private readonly SemaphoreSlim _preparacao = new(1, 1);
     private int _preparacoes;
@@ -47,6 +45,22 @@ internal sealed class BancoLocal(
             await conexao.DisposeAsync();
             throw;
         }
+    }
+
+    private static string CriarConnectionString(string caminhoBanco, int? timeoutComandoSegundos)
+    {
+        var builder = new SqliteConnectionStringBuilder
+        {
+            DataSource = caminhoBanco,
+            Mode = SqliteOpenMode.ReadWriteCreate,
+            Pooling = false
+        };
+        if (timeoutComandoSegundos is not null)
+        {
+            builder.DefaultTimeout = timeoutComandoSegundos.Value;
+        }
+
+        return builder.ToString();
     }
 
     private async Task PrepararAsync(SqliteConnection conexao, CancellationToken cancellationToken)
