@@ -35,6 +35,7 @@ related: ["[[Especificacoes MOC]]", "[[Protocolo de Agentes]]"]
 | SPEK-019 | [[SPEK-019 Ata Markdown Estruturada]] | concluído | `Infrastructure` |
 | SPEK-020 | [[SPEK-020 Retencao Operacional pelo Worker]] | concluído | `Worker`, `Application`, `Infrastructure` |
 | SPEK-021 | [[SPEK-021 UTF-8 nas CLIs Locais]] | concluído | `Infrastructure` |
+| SPEK-022 | [[SPEK-022 Instalador da Beta em Windows Limpo]] | em validação | `Installer`, `Scripts`, `CI` |
 
 ## Fluxo obrigatório
 

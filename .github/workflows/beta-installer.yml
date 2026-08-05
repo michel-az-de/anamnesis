@@ -1,0 +1,98 @@
+name: Beta installer
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/beta-installer.yml'
+      - 'installer/**'
+      - 'scripts/**'
+      - 'src/**'
+      - 'tests/**'
+      - 'Anamnesis.sln'
+  pull_request:
+    paths:
+      - '.github/workflows/beta-installer.yml'
+      - 'installer/**'
+      - 'scripts/**'
+      - 'src/**'
+      - 'tests/**'
+      - 'Anamnesis.sln'
+
+permissions:
+  contents: read
+
+jobs:
+  validar-instalador:
+    runs-on: windows-2025
+    timeout-minutes: 30
+
+    steps:
+      - name: Obter codigo
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Preparar .NET 10
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restaurar dependencias
+        shell: pwsh
+        run: dotnet restore Anamnesis.sln --runtime win-x64 --verbosity minimal
+
+      - name: Executar testes Release
+        shell: pwsh
+        run: dotnet test Anamnesis.sln --configuration Release --no-restore --verbosity minimal
+
+      - name: Instalar Inno Setup verificado
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $url = 'https://github.com/jrsoftware/issrc/releases/download/is-6_7_3/innosetup-6.7.3.exe'
+          $shaEsperado = '9c73c3bae7ed48d44112a0f48e66742c00090bdb5bef71d9d3c056c66e97b732'
+          $instaladorInno = Join-Path $env:RUNNER_TEMP 'innosetup-6.7.3.exe'
+          $diretorioInno = Join-Path $env:RUNNER_TEMP 'inno-setup'
+          Invoke-WebRequest -Uri $url -OutFile $instaladorInno
+          $shaObtido = (Get-FileHash -LiteralPath $instaladorInno -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($shaObtido -ne $shaEsperado) {
+            throw "SHA-256 inesperado para Inno Setup: $shaObtido"
+          }
+          $processo = Start-Process -FilePath $instaladorInno -ArgumentList @(
+            '/VERYSILENT',
+            '/SUPPRESSMSGBOXES',
+            '/NORESTART',
+            '/SP-',
+            "/DIR=$diretorioInno"
+          ) -Wait -PassThru
+          if ($processo.ExitCode -ne 0) {
+            throw "Instalacao do Inno Setup falhou com codigo $($processo.ExitCode)."
+          }
+          if (-not (Test-Path -LiteralPath (Join-Path $diretorioInno 'ISCC.exe') -PathType Leaf)) {
+            throw 'ISCC.exe nao foi instalado no destino esperado.'
+          }
+
+      - name: Construir instalador da beta
+        shell: pwsh
+        run: |
+          .\scripts\Build-Installer.ps1 `
+            -OutputRoot (Join-Path $env:RUNNER_TEMP 'anamnesis-beta') `
+            -IsccPath (Join-Path $env:RUNNER_TEMP 'inno-setup\ISCC.exe')
+
+      - name: Validar instalacao e desinstalacao
+        shell: pwsh
+        run: |
+          .\scripts\Test-Installer.ps1 `
+            -InstallerPath (Join-Path $env:RUNNER_TEMP 'anamnesis-beta\installer\Anamnesis-0.1.0-beta.1-win-x64-setup.exe') `
+            -EvidenceRoot (Join-Path $env:RUNNER_TEMP 'installer-e2e')
+
+      - name: Publicar instalador e evidencias
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: anamnesis-0.1.0-beta.1-win-x64
+          path: |
+            ${{ runner.temp }}\anamnesis-beta\installer\*
+            ${{ runner.temp }}\installer-e2e\**
+          if-no-files-found: error
+          retention-days: 14
