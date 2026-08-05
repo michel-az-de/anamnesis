@@ -12,6 +12,7 @@ public sealed record ConfiguracaoAnamnesis
     public string CaminhoModeloWhisper { get; init; } = string.Empty;
     public string IdiomaWhisper { get; init; } = "pt";
     public string? ImagemDockerWhisper { get; init; }
+    public string? CaminhoExecutavelDockerDesktop { get; init; }
     public string NomeCli { get; init; } = "CLI configurada";
     public string CaminhoExecutavelCli { get; init; } = string.Empty;
     public IReadOnlyList<string> ArgumentosCli { get; init; } = [];

@@ -4,10 +4,20 @@ using Anamnesis.Application.Modelos;
 
 namespace Anamnesis.Infrastructure.Whisper;
 
-public sealed class WhisperTranscritor(WhisperOptions options) : ITranscritor
+public sealed class WhisperTranscritor : ITranscritor
 {
+    private readonly WhisperOptions _options;
+    private readonly IDockerPreflight? _dockerPreflight;
+
+    public WhisperTranscritor(WhisperOptions options, IDockerPreflight? dockerPreflight = null)
+    {
+        _options = options;
+        _dockerPreflight = dockerPreflight;
+    }
+
     public async Task<TranscricaoGerada> TranscreverAsync(string caminhoArquivo, CancellationToken cancellationToken)
     {
+        var options = _options;
         if (!File.Exists(options.CaminhoExecutavel))
         {
             throw new FileNotFoundException("O executável do Whisper não foi encontrado.", options.CaminhoExecutavel);
@@ -16,6 +26,11 @@ public sealed class WhisperTranscritor(WhisperOptions options) : ITranscritor
         if (!File.Exists(options.CaminhoModelo))
         {
             throw new FileNotFoundException("O modelo do Whisper não foi encontrado.", options.CaminhoModelo);
+        }
+
+        if (!string.IsNullOrWhiteSpace(options.ImagemDocker) && _dockerPreflight is not null)
+        {
+            await _dockerPreflight.PrepararAsync(cancellationToken);
         }
 
         var caminhoAudio = await new AudioPreparadorFfmpeg(options.CaminhoExecutavelFfmpeg)

@@ -100,7 +100,23 @@ public sealed class TrayBlackBoxE2ETests
         {
             if (!preservarEvidencias)
             {
+                await ExcluirDiretorioQuandoLiberadoAsync(diretorio);
+            }
+        }
+    }
+
+    private static async Task ExcluirDiretorioQuandoLiberadoAsync(string diretorio)
+    {
+        for (var tentativa = 0; ; tentativa++)
+        {
+            try
+            {
                 Directory.Delete(diretorio, recursive: true);
+                return;
+            }
+            catch (IOException) when (tentativa < 20)
+            {
+                await Task.Delay(250);
             }
         }
     }

@@ -23,7 +23,7 @@ O primeiro indicador reconhece a fundação já entregue. O segundo registra o f
 | Entrega para a alpha | Peso | Concluído | Avanço | Evidência atual |
 | --- | ---: | ---: | ---: | --- |
 | Especificações, ADRs e protocolo multi-LLM | 5% | 100% | 5% | SPEKs 001–004, ADRs 001–003 e protocolo versionados |
-| Solução .NET, qualidade e TDD inicial | 5% | 100% | 5% | Solução compilável e 62 testes automatizados verdes, incluindo OBS, Tray e Worker black box |
+| Solução .NET, qualidade e TDD inicial | 5% | 100% | 5% | Solução compilável e 66 testes automatizados verdes, incluindo OBS, Docker, Tray e Worker black box |
 | Ciclo de vida de reunião no domínio | 10% | 100% | 10% | Estados, falha, retentativa, arquivamento e retenção cobertos por testes e persistência |
 | Fila local durável | 10% | 100% | 10% | `SqliteJobQueue` com reserva atômica, liberação e conclusão testadas |
 | Persistência de reuniões | 10% | 100% | 10% | `SqliteReuniaoRepository` persiste e restaura o agregado com testes em banco temporário |
@@ -61,10 +61,11 @@ A alpha estará pronta quando, em uma máquina Windows limpa e com pré-requisit
 | Worker automático pelo Tray | SPEK 100% concluída | 53 testes e workflow `31020179379` verdes |
 | Captura universal de áudio | SPEK 100% concluída | OBS real capturou sistema e microfone; Whisper transcreveu e Codex gerou ata no E2E `20260805-real-04` |
 | Prontidão automática do OBS | SPEK 100% concluída | Tray iniciou OBS inicialmente fechado e concluiu o E2E real `obs-preflight-e2e/20260805-real-04` |
+| Prontidão automática do Docker | SPEK 100% concluída | Worker iniciou Docker parado, transcreveu e arquivou no E2E real `docker-preflight-e2e/20260805-real-02` |
 
 ## Próximo incremento
 
-**Próximo ciclo: prontidão automática do Docker.** Criar a SPEK-026 para o Worker iniciar Docker Desktop sob demanda e aguardar o engine antes do Whisper.
+**Próximo ciclo: estado visível do processamento.** Criar a SPEK-027 para o Tray mostrar fila, falhas, conclusão e abrir a ata sem terminal.
 
 ## Como atualizar esta medição
 

@@ -2,7 +2,8 @@
 param(
     [string]$CaminhoConfiguracao = (Join-Path $env:LOCALAPPDATA 'Anamnesis\config.json'),
     [string]$DiretorioEvidencias = (Join-Path $PSScriptRoot ("..\artifacts\obs-audio-e2e\" + (Get-Date -Format 'yyyyMMdd-HHmmss'))),
-    [int]$DuracaoSegundos = 12
+    [int]$DuracaoSegundos = 12,
+    [switch]$PararDockerAntesWorker
 )
 
 $ErrorActionPreference = 'Stop'
@@ -103,13 +104,27 @@ try {
     }
 
     $reuniaoId = [Guid]::Parse($linhaReuniao.Substring('ReuniaoId='.Length))
+    if ($PararDockerAntesWorker) {
+        $saidaParadaDocker = & $config.CaminhoExecutavelWhisper desktop stop --timeout 60 2>&1
+        $saidaParadaDocker | Set-Content -LiteralPath (Join-Path $evidencias 'docker-stop.log') -Encoding utf8
+        if ($LASTEXITCODE -ne 0) {
+            throw 'Não foi possível parar Docker Desktop antes do Worker.'
+        }
+
+        $null = & $config.CaminhoExecutavelWhisper info 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            throw 'O engine Docker continuou disponível depois da parada solicitada.'
+        }
+    }
+
     $processoWorker = Start-Process `
         -FilePath $worker `
         -WorkingDirectory (Split-Path -Parent $worker) `
         -RedirectStandardOutput (Join-Path $evidencias 'worker.stdout.log') `
         -RedirectStandardError (Join-Path $evidencias 'worker.stderr.log') `
-        -Wait `
         -PassThru
+    $processoWorker.WaitForExit()
+    $processoWorker.Refresh()
 
     if ($processoWorker.ExitCode -ne 0) {
         throw "Worker falhou com código $($processoWorker.ExitCode)."
@@ -162,6 +177,7 @@ try {
 - Worker: código ``$($processoWorker.ExitCode)``
 - OBS: cena gerenciada ``Anamnesis``
 - Whisper: Docker local
+- Docker inicialmente parado antes do Worker: ``$($PararDockerAntesWorker.IsPresent.ToString().ToLowerInvariant())``
 - LLM: ``$($config.NomeCli)``
 "@
     Set-Content -LiteralPath (Join-Path $evidencias 'resultado.md') -Value $resultado -Encoding utf8

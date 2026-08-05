@@ -39,6 +39,7 @@ related: ["[[Especificacoes MOC]]", "[[Protocolo de Agentes]]"]
 | SPEK-023 | [[SPEK-023 Orquestracao do Worker pelo Tray]] | concluído | `Application`, `Infrastructure`, `Tray`, `Worker` |
 | SPEK-024 | [[SPEK-024 Captura Universal de Audio pelo OBS]] | concluído | `Infrastructure`, `Tray` |
 | SPEK-025 | [[SPEK-025 Prontidao Automatica do OBS]] | concluído | `Application`, `Infrastructure`, `Tray` |
+| SPEK-026 | [[SPEK-026 Prontidao Automatica do Docker]] | concluído | `Infrastructure`, `Worker` |
 
 ## Fluxo obrigatório
 

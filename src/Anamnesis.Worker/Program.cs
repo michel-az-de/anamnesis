@@ -29,14 +29,20 @@ internal static class Program
             }
 
             var fila = new SqliteJobQueue(configuracao.CaminhoBanco);
+            var whisperOptions = new WhisperOptions(
+                configuracao.CaminhoExecutavelWhisper,
+                configuracao.CaminhoModeloWhisper,
+                configuracao.IdiomaWhisper,
+                configuracao.CaminhoExecutavelFfmpeg,
+                configuracao.ImagemDockerWhisper);
+            IDockerPreflight? dockerPreflight = string.IsNullOrWhiteSpace(configuracao.ImagemDockerWhisper)
+                ? null
+                : new DockerProcessPreflight(
+                    configuracao.CaminhoExecutavelWhisper,
+                    DockerProcessPreflight.ResolverCaminhoExecutavel(configuracao.CaminhoExecutavelDockerDesktop));
             var processarReuniao = new ProcessarReuniaoHandler(
                 reuniaoRepository,
-                new WhisperTranscritor(new WhisperOptions(
-                    configuracao.CaminhoExecutavelWhisper,
-                    configuracao.CaminhoModeloWhisper,
-                    configuracao.IdiomaWhisper,
-                    configuracao.CaminhoExecutavelFfmpeg,
-                    configuracao.ImagemDockerWhisper)),
+                new WhisperTranscritor(whisperOptions, dockerPreflight),
                 new CliAtaRunner(new CliAtaRunnerOptions(
                     configuracao.NomeCli,
                     configuracao.CaminhoExecutavelCli,
