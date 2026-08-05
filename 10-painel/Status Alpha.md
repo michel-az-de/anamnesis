@@ -50,11 +50,18 @@ A alpha estará pronta quando, em uma máquina Windows limpa e com pré-requisit
 
 ## Caminho crítico
 
-1. Alpha concluída nesta máquina; repetir o roteiro em uma instalação Windows limpa antes de distribuir uma beta.
+1. Alpha concluída nesta máquina.
+2. Instalador da beta validado em VM Windows limpa pelo GitHub Actions.
+
+## Entrega pós-alpha
+
+| Entrega | Estado | Evidência |
+| --- | --- | --- |
+| Instalador `0.1.0-beta.1` | SPEK 100% concluída | Workflow `31017790651`, EXE, SHA-256 e logs publicados |
 
 ## Próximo incremento
 
-**Próximo ciclo: instalador e validação em Windows limpo.** Abrir uma SPEK de beta antes de alterar o empacotamento.
+**Próximo ciclo: orquestrar o Worker pelo Tray.** Abrir a SPEK-023 para processar o job sem exigir que o usuário inicie dois executáveis manualmente.
 
 ## Como atualizar esta medição
 

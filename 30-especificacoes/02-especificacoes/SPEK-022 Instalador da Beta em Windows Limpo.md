@@ -5,7 +5,7 @@ tags: [especificacao, beta, instalador, windows, ci]
 type: spec
 created: 2026-08-05
 updated: 2026-08-05
-status: validating
+status: completed
 summary: Gera um instalador EXE por usuario e valida instalacao, execucao e desinstalacao em Windows descartavel.
 related: ["[[SPEK-011 Empacotamento e Validacao Manual]]", "[[ADR-008 Instalador por Usuario com Inno Setup]]"]
 ---
@@ -41,7 +41,7 @@ Distribuir Tray e Worker em um instalador Windows x64 reproduzivel e comprovar o
 - [x] A instalacao silenciosa cria Tray, Worker e desinstalador no destino isolado.
 - [x] Worker retorna sucesso com fila vazia e Tray permanece ativo no smoke sem chamar OBS.
 - [x] A desinstalacao remove o diretorio do programa e preserva dados do usuario.
-- [ ] O workflow conclui em uma VM Windows nova e publica instalador e logs como artefatos.
+- [x] O workflow conclui em uma VM Windows nova e publica instalador e logs como artefatos.
 
 ## Evidencias esperadas
 
@@ -56,8 +56,18 @@ Distribuir Tray e Worker em um instalador Windows x64 reproduzivel e comprovar o
 - Red: `Test-Installer.ps1` recusou o caminho sem instalador.
 - Red: Inno Setup recusou a versao de arquivo com sufixo de prerelease.
 - Green: build produziu o EXE unico e o smoke local terminou com codigos zero.
-- Evidencia: `artifacts\installer-e2e\20260805-local-02\resultado.md`.
+- Evidencia: `artifacts\installer-e2e\20260805-local-final\resultado.md`.
 - Testes: 49 testes Release aprovados.
+
+## Execucao em Windows limpo
+
+- Workflow: `https://github.com/michel-az-de/anamnesis/actions/runs/31017790651`.
+- Runner: Windows `10.0.26100`, cultura base `en-US`.
+- Duracao: 2 minutos e 45 segundos.
+- Instalacao, Worker, Tray e desinstalacao terminaram com codigo zero.
+- SHA-256 remoto: `fb47d5818cb2736d145fe2c4bc248010c6b83b267a3c6f6762ccbb2860fe2375`.
+- Artefato: `anamnesis-0.1.0-beta.1-win-x64`, retido por 14 dias no GitHub Actions.
+- Evidencia baixada: `artifacts\github-actions\31017790651\`.
 
 ## Decisoes pendentes
 

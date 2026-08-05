@@ -5,7 +5,7 @@ tags: [especificacao, cli, utf8, ata]
 type: spec
 created: 2026-08-05
 updated: 2026-08-05
-status: validating
+status: completed
 summary: Preserva caracteres PT-BR nas CLIs autenticadas e nos executaveis locais.
 related: ["[[SPEK-009 Ata Estruturada por CLI]]", "[[SPEK-019 Ata Markdown Estruturada]]", "[[SPEK-022 Instalador da Beta em Windows Limpo]]"]
 ---
@@ -26,13 +26,13 @@ Garantir que o texto enviado e recebido por `CliAtaRunner` preserve caracteres U
 
 - [x] Uma CLI fake em UTF-8 preserva acentos no resumo, decisões e tarefas.
 - [x] O ensaio real com Codex gera `ata.md` legível em PT-BR.
-- [ ] Os testes black box de Tray e Worker preservam acentos no runner Windows `en-US`.
+- [x] Os testes black box de Tray e Worker preservam acentos no runner Windows `en-US`.
 
 ## Testes e evidências
 
 - `CliAtaRunnerTests.DevePreservarCaracteresUtf8DaCliFake`.
 - `artifacts\real-e2e\20260805-final-8\ata.md`.
-- GitHub Actions da SPEK-022 em runner `windows-2025`.
+- GitHub Actions `31017790651` da SPEK-022 em runner `windows-2025`.
 
 ## Decisões pendentes
 
