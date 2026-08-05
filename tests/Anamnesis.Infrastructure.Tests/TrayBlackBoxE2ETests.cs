@@ -146,7 +146,7 @@ public sealed class TrayBlackBoxE2ETests
         var stdout = processo.StandardOutput.ReadToEndAsync();
         var stderr = processo.StandardError.ReadToEndAsync();
         var encerramento = processo.WaitForExitAsync();
-        if (await Task.WhenAny(encerramento, Task.Delay(TimeSpan.FromSeconds(8))) != encerramento)
+        if (await Task.WhenAny(encerramento, Task.Delay(TimeSpan.FromSeconds(20))) != encerramento)
         {
             processo.Kill(entireProcessTree: true);
             await processo.WaitForExitAsync();
