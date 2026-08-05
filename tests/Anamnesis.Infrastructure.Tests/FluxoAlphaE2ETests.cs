@@ -64,6 +64,7 @@ public sealed class FluxoAlphaE2ETests : IAsyncLifetime
             repository,
             fila,
             new ObsGravador(new ObsWebSocketOptions(obs.Endereco, null)),
+            new WorkerLauncherNulo(),
             relogio);
 
         var reuniaoId = await controlar.IniciarAsync("E2E da alpha", CancellationToken.None);
@@ -197,6 +198,11 @@ public sealed class FluxoAlphaE2ETests : IAsyncLifetime
             "echo {\"resumoExecutivo\":\"Resumo E2E.\",\"decisoes\":[\"Decisao E2E.\"],\"tarefas\":[{\"descricao\":\"Tarefa E2E.\",\"responsavel\":\"Ana\",\"prazo\":null}]}" +
             Environment.NewLine);
         return (caminho, caminhoEntrada);
+    }
+
+    private sealed class WorkerLauncherNulo : IWorkerLauncher
+    {
+        public Task IniciarAsync(CancellationToken cancellationToken) => Task.CompletedTask;
     }
 
     private sealed class LixeiraFake : IGravacaoLixeira

@@ -17,6 +17,16 @@ public sealed class ModoValidacaoTrayOptionsTests
         var options = ModoValidacaoTrayOptions.Obter(["--gravar-teste-segundos", "3"]);
 
         Assert.Equal(TimeSpan.FromSeconds(3), options!.Duracao);
+        Assert.False(options.IniciarWorker);
+    }
+
+    [Fact]
+    public void DeveHabilitarWorkerSomenteQuandoSolicitado()
+    {
+        var options = ModoValidacaoTrayOptions.Obter([
+            "--gravar-teste-segundos", "3", "--iniciar-worker"]);
+
+        Assert.True(options!.IniciarWorker);
     }
 
     [Theory]

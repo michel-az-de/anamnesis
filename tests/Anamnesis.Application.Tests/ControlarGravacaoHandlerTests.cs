@@ -28,8 +28,10 @@ public sealed class ControlarGravacaoHandlerTests
     public async Task DeveFinalizarGravacaoEPersistirJob()
     {
         var repository = new ReuniaoRepositoryFake();
-        var fila = new JobQueueFake();
-        var handler = CriarHandler(repository, fila, new GravadorFake(@"C:\gravacoes\teste.mkv"));
+        var eventos = new List<string>();
+        var fila = new JobQueueFake(eventos);
+        var worker = new WorkerLauncherFake(eventos);
+        var handler = CriarHandler(repository, fila, new GravadorFake(@"C:\gravacoes\teste.mkv"), worker);
         var reuniaoId = await handler.IniciarAsync("Teste", CancellationToken.None);
 
         await handler.FinalizarAsync(reuniaoId, CancellationToken.None);
@@ -38,6 +40,26 @@ public sealed class ControlarGravacaoHandlerTests
         Assert.Equal(StatusReuniao.AguardandoProcessamento, reuniao.Status);
         Assert.Equal(@"C:\gravacoes\teste.mkv", reuniao.Gravacao!.CaminhoArquivo);
         Assert.Equal(reuniaoId, fila.ReuniaoEnfileiradaId);
+        Assert.True(worker.Iniciou);
+        Assert.Equal(["job", "worker"], eventos);
+    }
+
+    [Fact]
+    public async Task DevePreservarJobQuandoWorkerNaoInicia()
+    {
+        var repository = new ReuniaoRepositoryFake();
+        var fila = new JobQueueFake();
+        var worker = new WorkerLauncherFake(falhar: true);
+        var handler = CriarHandler(repository, fila, new GravadorFake(@"C:\gravacoes\segura.mkv"), worker);
+        var reuniaoId = await handler.IniciarAsync("Teste", CancellationToken.None);
+
+        var excecao = await Assert.ThrowsAsync<WorkerNaoIniciadoException>(() =>
+            handler.FinalizarAsync(reuniaoId, CancellationToken.None));
+
+        Assert.Equal("A gravação foi salva, mas o Worker não iniciou: Worker indisponível.", excecao.Message);
+        Assert.Equal("Worker indisponível.", excecao.InnerException!.Message);
+        Assert.Equal(reuniaoId, fila.ReuniaoEnfileiradaId);
+        Assert.Equal(StatusReuniao.AguardandoProcessamento, Assert.Single(repository.Salvas).Status);
     }
 
     [Fact]
@@ -55,8 +77,12 @@ public sealed class ControlarGravacaoHandlerTests
         Assert.Null(fila.ReuniaoEnfileiradaId);
     }
 
-    private static ControlarGravacaoHandler CriarHandler(ReuniaoRepositoryFake repository, JobQueueFake fila, IGravador gravador) =>
-        new(repository, fila, gravador, TimeProvider.System);
+    private static ControlarGravacaoHandler CriarHandler(
+        ReuniaoRepositoryFake repository,
+        JobQueueFake fila,
+        IGravador gravador,
+        IWorkerLauncher? workerLauncher = null) =>
+        new(repository, fila, gravador, workerLauncher ?? new WorkerLauncherFake(), TimeProvider.System);
 
     private sealed class ReuniaoRepositoryFake : IReuniaoRepository
     {
@@ -78,13 +104,14 @@ public sealed class ControlarGravacaoHandlerTests
         }
     }
 
-    private sealed class JobQueueFake : IJobQueue
+    private sealed class JobQueueFake(List<string>? eventos = null) : IJobQueue
     {
         public Guid? ReuniaoEnfileiradaId { get; private set; }
 
         public Task<JobProcessamento> EnfileirarAsync(Guid reuniaoId, DateTimeOffset criadoEm, CancellationToken cancellationToken)
         {
             ReuniaoEnfileiradaId = reuniaoId;
+            eventos?.Add("job");
             return Task.FromResult(new JobProcessamento(Guid.NewGuid(), reuniaoId, criadoEm, null, 0));
         }
 
@@ -112,5 +139,19 @@ public sealed class ControlarGravacaoHandlerTests
     {
         public Task IniciarAsync(CancellationToken cancellationToken) => throw new InvalidOperationException("OBS indisponível.");
         public Task<string> FinalizarAsync(CancellationToken cancellationToken) => throw new NotSupportedException();
+    }
+
+    private sealed class WorkerLauncherFake(List<string>? eventos = null, bool falhar = false) : IWorkerLauncher
+    {
+        public bool Iniciou { get; private set; }
+
+        public Task IniciarAsync(CancellationToken cancellationToken)
+        {
+            Iniciou = true;
+            eventos?.Add("worker");
+            return falhar
+                ? Task.FromException(new InvalidOperationException("Worker indisponível."))
+                : Task.CompletedTask;
+        }
     }
 }

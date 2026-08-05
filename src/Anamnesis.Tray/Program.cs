@@ -1,10 +1,12 @@
 using System.Diagnostics;
 using System.Text;
+using Anamnesis.Application.Contracts;
 using Anamnesis.Application.UseCases;
 using Anamnesis.Infrastructure.Configuracao;
 using Anamnesis.Infrastructure.Fila;
 using Anamnesis.Infrastructure.Obs;
 using Anamnesis.Infrastructure.Persistencia;
+using Anamnesis.Infrastructure.Processos;
 
 namespace Anamnesis.Tray;
 
@@ -31,6 +33,7 @@ internal static class Program
         var caminhoConfiguracao = ObterCaminhoConfiguracao();
         var arquivoConfiguracao = new ArquivoConfiguracao(caminhoConfiguracao);
         var configuracao = arquivoConfiguracao.CarregarAsync(CancellationToken.None).GetAwaiter().GetResult();
+        var workerLauncher = CriarWorkerLauncher(modoValidacao, caminhoConfiguracao);
         var enderecoObs = Uri.TryCreate(configuracao.EnderecoObs, UriKind.Absolute, out var endereco) && endereco is not null
             ? endereco!
             : ObsWebSocketOptions.Padrao.Endereco;
@@ -38,6 +41,7 @@ internal static class Program
             new SqliteReuniaoRepository(configuracao.CaminhoBanco),
             new SqliteJobQueue(configuracao.CaminhoBanco),
             new ObsGravador(new ObsWebSocketOptions(enderecoObs, configuracao.SenhaObs)),
+            workerLauncher,
             TimeProvider.System);
 
         if (modoValidacao is not null)
@@ -57,6 +61,7 @@ internal static class Program
         };
         var iniciar = new ToolStripMenuItem("Iniciar gravação de teste");
         var encerrar = new ToolStripMenuItem("Encerrar gravação de teste") { Enabled = false };
+        var processarPendencias = new ToolStripMenuItem("Processar pendências");
         Guid? reuniaoEmGravacao = null;
 
         icone.ContextMenuStrip.Items.Add("Diagnósticos", null, (_, _) =>
@@ -76,6 +81,7 @@ internal static class Program
         icone.ContextMenuStrip.Items.Add(new ToolStripSeparator());
         icone.ContextMenuStrip.Items.Add(iniciar);
         icone.ContextMenuStrip.Items.Add(encerrar);
+        icone.ContextMenuStrip.Items.Add(processarPendencias);
         icone.ContextMenuStrip.Items.Add(new ToolStripSeparator());
         icone.ContextMenuStrip.Items.Add("Sair", null, (_, _) => System.Windows.Forms.Application.Exit());
 
@@ -108,11 +114,44 @@ internal static class Program
                 encerrar.Enabled = false;
                 icone.ShowBalloonTip(3000, "Anamnesis", "Gravação enviada para processamento.", ToolTipIcon.Info);
             }
+            catch (WorkerNaoIniciadoException exception)
+            {
+                reuniaoEmGravacao = null;
+                iniciar.Enabled = true;
+                encerrar.Enabled = false;
+                MessageBox.Show(
+                    $"{exception.Message}{Environment.NewLine}O job permanece salvo. Use 'Processar pendências' para tentar novamente.",
+                    "Processamento pendente",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+            }
             catch (Exception exception)
             {
                 MostrarErro(exception);
             }
         };
+
+        processarPendencias.Click += async (_, _) =>
+        {
+            try
+            {
+                await workerLauncher.IniciarAsync(CancellationToken.None);
+                icone.ShowBalloonTip(3000, "Anamnesis", "Worker iniciado para processar pendências.", ToolTipIcon.Info);
+            }
+            catch (Exception exception)
+            {
+                MostrarErro(exception);
+            }
+        };
+
+        try
+        {
+            workerLauncher.IniciarAsync(CancellationToken.None).GetAwaiter().GetResult();
+        }
+        catch (Exception exception)
+        {
+            icone.ShowBalloonTip(5000, "Anamnesis", $"Worker não iniciado: {exception.Message}", ToolTipIcon.Warning);
+        }
 
         System.Windows.Forms.Application.Run();
         return 0;
@@ -131,6 +170,21 @@ internal static class Program
         return 0;
     }
 
+    private static IWorkerLauncher CriarWorkerLauncher(
+        ModoValidacaoTrayOptions? modoValidacao,
+        string caminhoConfiguracao)
+    {
+        if (modoValidacao is { IniciarWorker: false })
+        {
+            return new WorkerLauncherNulo();
+        }
+
+        var caminhoWorker = WorkerProcessLauncher.ResolverCaminhoExecutavel(
+            AppContext.BaseDirectory,
+            Environment.GetEnvironmentVariable("ANAMNESIS_WORKER_EXECUTAVEL"));
+        return new WorkerProcessLauncher(caminhoWorker, caminhoConfiguracao);
+    }
+
     private static string ObterCaminhoConfiguracao()
     {
         var caminhoDefinido = Environment.GetEnvironmentVariable("ANAMNESIS_CONFIGURACAO");
@@ -147,4 +201,9 @@ internal static class Program
 
     private static void MostrarErro(Exception exception) =>
         MessageBox.Show(exception.Message, "Anamnesis", MessageBoxButtons.OK, MessageBoxIcon.Error);
+
+    private sealed class WorkerLauncherNulo : IWorkerLauncher
+    {
+        public Task IniciarAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    }
 }

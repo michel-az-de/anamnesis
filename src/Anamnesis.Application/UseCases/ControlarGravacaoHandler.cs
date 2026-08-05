@@ -7,6 +7,7 @@ public sealed class ControlarGravacaoHandler(
     IReuniaoRepository reuniaoRepository,
     IJobQueue jobQueue,
     IGravador gravador,
+    IWorkerLauncher workerLauncher,
     TimeProvider relogio)
 {
     public async Task<Guid> IniciarAsync(string titulo, CancellationToken cancellationToken)
@@ -37,5 +38,15 @@ public sealed class ControlarGravacaoHandler(
         reuniao.FinalizarGravacao(caminhoArquivo, relogio.GetUtcNow());
         await reuniaoRepository.SalvarAsync(reuniao, cancellationToken);
         await jobQueue.EnfileirarAsync(reuniao.Id, relogio.GetUtcNow(), cancellationToken);
+        try
+        {
+            await workerLauncher.IniciarAsync(CancellationToken.None);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            throw new WorkerNaoIniciadoException(
+                $"A gravação foi salva, mas o Worker não iniciou: {exception.Message}",
+                exception);
+        }
     }
 }
