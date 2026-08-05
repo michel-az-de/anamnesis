@@ -1,4 +1,6 @@
+using Anamnesis.Application.Modelos;
 using Anamnesis.Infrastructure.Fila;
+using Microsoft.Data.Sqlite;
 using Xunit;
 
 namespace Anamnesis.Infrastructure.Tests;
@@ -17,6 +19,20 @@ public sealed class SqliteJobQueueTests : IAsyncLifetime
         }
 
         return Task.CompletedTask;
+    }
+
+    [Fact]
+    public async Task DeveUsarEngineComSuporteARetorno()
+    {
+        await using var conexao = new SqliteConnection($"Data Source={_caminhoBanco};Pooling=False");
+        await conexao.OpenAsync();
+        await using var comando = conexao.CreateCommand();
+        comando.CommandText = "SELECT sqlite_version();";
+        var versao = new Version((string)(await comando.ExecuteScalarAsync())!);
+
+        // A reserva atômica usa RETURNING, que exige 3.35 ou superior. Com a engine do sistema
+        // isto dependia do build do Windows; com a engine embarcada é uma garantia do pacote.
+        Assert.True(versao >= new Version(3, 35), $"Engine SQLite {versao} não suporta RETURNING.");
     }
 
     [Fact]
@@ -91,5 +107,55 @@ public sealed class SqliteJobQueueTests : IAsyncLifetime
 
         Assert.NotNull(retomado);
         Assert.Equal(2, retomado!.Tentativas);
+    }
+
+    [Fact]
+    public async Task DeveOrdenarAFilaPeloInstanteUtcENaoPeloTextoDaData()
+    {
+        var fila = new SqliteJobQueue(_caminhoBanco);
+        var primeiraReuniao = Guid.NewGuid();
+        var segundaReuniao = Guid.NewGuid();
+
+        // 08:00 em -03:00 é 11:00 UTC, anterior a 10:00 UTC? Não: é posterior.
+        // Sem normalização, "08" ordena antes de "10" e a fila sairia invertida.
+        await fila.EnfileirarAsync(
+            segundaReuniao,
+            new DateTimeOffset(2026, 8, 4, 8, 0, 0, TimeSpan.FromHours(-3)),
+            CancellationToken.None);
+        await fila.EnfileirarAsync(
+            primeiraReuniao,
+            new DateTimeOffset(2026, 8, 4, 10, 0, 0, TimeSpan.Zero),
+            CancellationToken.None);
+
+        var reservado = await fila.ReservarProximoAsync(
+            new DateTimeOffset(2026, 8, 4, 12, 0, 0, TimeSpan.Zero),
+            CancellationToken.None);
+
+        Assert.NotNull(reservado);
+        Assert.Equal(primeiraReuniao, reservado!.ReuniaoId);
+    }
+
+    [Fact]
+    public async Task DeveEnfileirarUmaUnicaVezSobConcorrencia()
+    {
+        var fila = new SqliteJobQueue(_caminhoBanco);
+        var reuniaoId = Guid.NewGuid();
+        var criadoEm = new DateTimeOffset(2026, 8, 4, 14, 0, 0, TimeSpan.Zero);
+        var sinal = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        async Task<JobProcessamento> EnfileirarAsync(int indice)
+        {
+            await sinal.Task;
+            return await fila.EnfileirarAsync(
+                reuniaoId,
+                criadoEm.AddSeconds(indice),
+                CancellationToken.None);
+        }
+
+        var tentativas = Enumerable.Range(0, 4).Select(EnfileirarAsync).ToArray();
+        sinal.SetResult();
+        var jobs = await Task.WhenAll(tentativas);
+
+        Assert.Single(jobs.Select(job => job.Id).Distinct());
     }
 }

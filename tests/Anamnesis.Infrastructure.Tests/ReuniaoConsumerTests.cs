@@ -59,6 +59,7 @@ public sealed class ReuniaoConsumerTests
                 transcritor,
                 new AtaRunnerFake(),
                 new ArquivadorFake(),
+                new ArtefatoRepositoryFake(),
                 TimeProvider.System),
             TimeProvider.System);
 
@@ -132,6 +133,20 @@ public sealed class ReuniaoConsumerTests
 
     private sealed class ArquivadorFake : IArquivador
     {
-        public Task ArquivarAsync(Reuniao reuniao, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task<ArtefatosReuniao> ArquivarAsync(Reuniao reuniao, CancellationToken cancellationToken) =>
+            Task.FromResult(new ArtefatosReuniao(
+                reuniao.Id,
+                @"C:\arquivo\reuniao",
+                @"C:\arquivo\reuniao\ata.md",
+                @"C:\arquivo\reuniao\transcricao.md"));
+    }
+
+    private sealed class ArtefatoRepositoryFake : IArtefatoRepository
+    {
+        public Task SalvarAsync(ArtefatosReuniao artefatos, CancellationToken cancellationToken) =>
+            Task.CompletedTask;
+
+        public Task<ArtefatosReuniao?> ObterAsync(Guid reuniaoId, CancellationToken cancellationToken) =>
+            Task.FromResult<ArtefatosReuniao?>(null);
     }
 }

@@ -96,6 +96,66 @@ public sealed class WorkerBlackBoxE2ETests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task DeveProcessarUmaUnicaVezQuandoDoisWorkersIniciamJuntos()
+    {
+        var caminhoBanco = Path.Combine(_diretorio, "concorrencia.db");
+        var caminhoGravacao = Path.Combine(_diretorio, "gravacao-concorrencia.mkv");
+        var caminhoModelo = Path.Combine(_diretorio, "modelo-concorrencia.bin");
+        var caminhoContador = Path.Combine(_diretorio, "whisper-invocacoes.log");
+        await File.WriteAllTextAsync(caminhoGravacao, "gravação concorrente");
+        await File.WriteAllTextAsync(caminhoModelo, "modelo de teste");
+        var caminhoFfmpeg = await CriarFfmpegFakeAsync();
+        var caminhoWhisper = await CriarWhisperFakeLentoAsync(caminhoContador);
+        var (caminhoCli, _) = await CriarCliFakeAsync();
+        var caminhoConfiguracao = Path.Combine(_diretorio, "config-concorrencia.json");
+        await new ArquivoConfiguracao(caminhoConfiguracao).SalvarAsync(
+            new ConfiguracaoAnamnesis
+            {
+                CaminhoBanco = caminhoBanco,
+                DiretorioArquivo = Path.Combine(_diretorio, "arquivo-concorrencia"),
+                CaminhoExecutavelFfmpeg = caminhoFfmpeg,
+                CaminhoExecutavelWhisper = caminhoWhisper,
+                CaminhoModeloWhisper = caminhoModelo,
+                CaminhoExecutavelCli = caminhoCli,
+                NomeCli = "CLI concorrência"
+            },
+            CancellationToken.None);
+
+        var agora = DateTimeOffset.UtcNow;
+        var reuniao = new Reuniao(Guid.NewGuid(), "Worker concorrente", agora);
+        reuniao.IniciarGravacao(agora);
+        reuniao.FinalizarGravacao(caminhoGravacao, agora);
+        var repository = new SqliteReuniaoRepository(caminhoBanco);
+        await repository.SalvarAsync(reuniao, CancellationToken.None);
+        await new SqliteJobQueue(caminhoBanco).EnfileirarAsync(reuniao.Id, agora, CancellationToken.None);
+
+        // O primeiro Worker fica preso no Whisper lento; o segundo sobe no meio disso.
+        var primeiro = ExecutarWorkerAsync(caminhoConfiguracao);
+        await Task.Delay(TimeSpan.FromSeconds(1.5));
+        var segundo = ExecutarWorkerAsync(caminhoConfiguracao);
+        var resultados = await Task.WhenAll(primeiro, segundo);
+
+        await File.WriteAllTextAsync(
+            Path.Combine(_diretorio, "concorrencia.stdout.log"),
+            string.Join(Environment.NewLine + "---" + Environment.NewLine, resultados.Select(r => r.Stdout)));
+
+        Assert.All(resultados, resultado => Assert.Equal(0, resultado.CodigoSaida));
+        Assert.Equal(1, resultados.Count(resultado =>
+            resultado.Stdout.Contains("Job processado", StringComparison.Ordinal)));
+        Assert.Equal(1, resultados.Count(resultado =>
+            resultado.Stdout.Contains("Outro Worker já está processando esta fila", StringComparison.Ordinal)));
+
+        var invocacoesWhisper = (await File.ReadAllLinesAsync(caminhoContador))
+            .Count(linha => !string.IsNullOrWhiteSpace(linha));
+        Assert.Equal(1, invocacoesWhisper);
+
+        var arquivada = await repository.ObterAsync(reuniao.Id, CancellationToken.None);
+        Assert.NotNull(arquivada);
+        Assert.Equal(StatusReuniao.Arquivada, arquivada!.Status);
+        Assert.Null(arquivada.MotivoFalha);
+    }
+
+    [Fact]
     public async Task DeveSimularRetencaoEmProcessoSeparadoSemMoverArquivo()
     {
         var caminhoBanco = Path.Combine(_diretorio, "retencao.db");
@@ -188,6 +248,23 @@ public sealed class WorkerBlackBoxE2ETests : IAsyncLifetime
     {
         var caminho = Path.Combine(_diretorio, "whisper-fake.cmd");
         await File.WriteAllTextAsync(caminho, "@echo off\r\nset \"saida=\"\r\n:argumento\r\nif \"%~1\"==\"\" goto fim\r\nif \"%~1\"==\"-of\" (set \"saida=%~2\" & shift)\r\nshift\r\ngoto argumento\r\n:fim\r\necho Transcrição black box> \"%saida%.txt\"\r\n");
+        return caminho;
+    }
+
+    /// <summary>
+    /// Além de gerar a transcrição, conta as invocações e demora o bastante para que o
+    /// segundo Worker suba enquanto o primeiro ainda está processando. O atraso usa `ping`
+    /// porque `timeout` falha quando a entrada padrão do processo está redirecionada.
+    /// </summary>
+    private async Task<string> CriarWhisperFakeLentoAsync(string caminhoContador)
+    {
+        var caminho = Path.Combine(_diretorio, "whisper-fake-lento.cmd");
+        await File.WriteAllTextAsync(
+            caminho,
+            "@echo off\r\nset \"saida=\"\r\n:argumento\r\nif \"%~1\"==\"\" goto fim\r\nif \"%~1\"==\"-of\" (set \"saida=%~2\" & shift)\r\nshift\r\ngoto argumento\r\n:fim\r\n"
+                + $"echo invocacao>> \"{caminhoContador}\"\r\n"
+                + "ping -n 4 127.0.0.1 > nul\r\n"
+                + "echo Transcrição concorrente> \"%saida%.txt\"\r\n");
         return caminho;
     }
 

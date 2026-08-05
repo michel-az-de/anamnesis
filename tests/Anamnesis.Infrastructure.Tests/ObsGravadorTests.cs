@@ -10,6 +10,49 @@ namespace Anamnesis.Infrastructure.Tests;
 public sealed class ObsGravadorTests
 {
     [Fact]
+    public async Task DeveConsultarSeObsPossuiGravacaoAtiva()
+    {
+        await using var servidor = new ServidorObsFake([
+            [new(new { outputActive = true })]
+        ]);
+        var gravador = new ObsGravador(new ObsWebSocketOptions(servidor.Endereco, null));
+
+        var estaGravando = await gravador.EstaGravandoAsync(CancellationToken.None);
+
+        Assert.True(estaGravando);
+        Assert.Equal(["GetRecordStatus"], servidor.TiposSolicitados);
+    }
+
+    [Fact]
+    public async Task DeveEncerrarMesmoQuandoRestauracaoDeCenaNaoResponde()
+    {
+        var caminhoGravacao = Path.Combine(Path.GetTempPath(), $"anamnesis-{Guid.NewGuid():N}.mkv");
+        await using var servidor = new ServidorObsFake([
+            [
+                new(new { currentProgramSceneName = "Cena pessoal", scenes = new[] { new { sceneName = "Cena pessoal" } } }),
+                new(new { inputs = Array.Empty<object>() }),
+                new(new { }),
+                new(new { inputUuid = Guid.NewGuid(), sceneItemId = 1 }),
+                new(new { inputUuid = Guid.NewGuid(), sceneItemId = 2 }),
+                new(new { }),
+                new(new { })
+            ],
+            [
+                new(new { outputPath = caminhoGravacao }),
+                new(new { }, Silenciosa: true)
+            ]
+        ]);
+        var gravador = new ObsGravador(new ObsWebSocketOptions(servidor.Endereco, null));
+        await gravador.IniciarAsync(CancellationToken.None);
+
+        var finalizacao = gravador.FinalizarAsync(CancellationToken.None);
+        var concluiu = await Task.WhenAny(finalizacao, Task.Delay(TimeSpan.FromSeconds(30))) == finalizacao;
+
+        Assert.True(concluiu, "FinalizarAsync ficou preso restaurando a cena de um OBS que parou de responder.");
+        Assert.Equal(caminhoGravacao, await finalizacao);
+    }
+
+    [Fact]
     public async Task DevePrepararCenaEFontesAntesDeGravarERestaurarDepois()
     {
         var caminhoGravacao = Path.Combine(Path.GetTempPath(), $"anamnesis-{Guid.NewGuid():N}.mkv");
@@ -164,7 +207,11 @@ public sealed class ObsGravadorTests
         Assert.Equal(8, servidor.TiposSolicitados.Length);
     }
 
-    private sealed record Resposta(object Dados, bool Sucesso = true, bool EmitirEventoAntes = false);
+    private sealed record Resposta(
+        object Dados,
+        bool Sucesso = true,
+        bool EmitirEventoAntes = false,
+        bool Silenciosa = false);
 
     private sealed class ServidorObsFake : IAsyncDisposable
     {
@@ -237,6 +284,12 @@ public sealed class ObsGravadorTests
                     Solicitacoes.Add(solicitacao);
                     var dados = solicitacao.GetProperty("d");
                     var resposta = respostas[indiceResposta++];
+                    if (resposta.Silenciosa)
+                    {
+                        // O OBS recebeu a solicitação e travou: nunca responde.
+                        continue;
+                    }
+
                     if (resposta.EmitirEventoAntes)
                     {
                         await EnviarAsync(socket, new

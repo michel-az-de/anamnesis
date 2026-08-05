@@ -75,8 +75,8 @@ public sealed class WhisperTranscritor : ITranscritor
         }
         finally
         {
-            File.Delete(caminhoAudio);
-            File.Delete(caminhoTexto);
+            ArquivoTemporario.ExcluirSilenciosamente(caminhoAudio);
+            ArquivoTemporario.ExcluirSilenciosamente(caminhoTexto);
         }
     }
 }

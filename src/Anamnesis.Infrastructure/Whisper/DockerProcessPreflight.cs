@@ -58,7 +58,8 @@ public sealed class DockerProcessPreflight : IDockerPreflight
         }
 
         throw new InvalidOperationException(
-            "O engine do Docker não ficou disponível após 120 segundos. " +
+            $"O engine do Docker não ficou disponível após {_maximoTentativas} tentativas " +
+            $"({(_intervalo * _maximoTentativas).TotalSeconds:0} segundos). " +
             "Abra Docker Desktop e confirme licença, atualização ou erro de inicialização.");
     }
 

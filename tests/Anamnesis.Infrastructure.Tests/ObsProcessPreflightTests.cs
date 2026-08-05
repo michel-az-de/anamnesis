@@ -77,7 +77,8 @@ public sealed class ObsProcessPreflightTests
                 preflight.PrepararAsync(CancellationToken.None));
 
             Assert.Contains("websocket", excecao.Message, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("30 segundos", excecao.Message, StringComparison.Ordinal);
+            // A mensagem reflete os parâmetros reais da espera, e não um texto fixo.
+            Assert.Contains("2 tentativas", excecao.Message, StringComparison.Ordinal);
         }
         finally
         {

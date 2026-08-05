@@ -1,4 +1,5 @@
 using Anamnesis.Application.Contracts;
+using Anamnesis.Application.Modelos;
 using Anamnesis.Application.UseCases;
 using Anamnesis.Domain.Entidades;
 using Anamnesis.Domain.Tipos;
@@ -66,6 +67,19 @@ public sealed class RetencaoGravacaoHandlerTests
 
         Assert.Equal(StatusReuniao.Arquivada, reuniao.Status);
         Assert.Equal([StatusReuniao.PendenteExclusao, StatusReuniao.Arquivada], repository.StatusSalvos);
+    }
+
+    [Fact]
+    public async Task DeveRelatarMotivoTipadoSemDependerDoTexto()
+    {
+        var reuniao = CriarReuniaoArquivada(Agora.AddDays(-1));
+        var handler = CriarHandler(reuniao, new LixeiraFake(existe: true));
+
+        var resultado = await handler.SimularAsync(reuniao.Id, CancellationToken.None);
+
+        Assert.Equal(MotivoRetencao.PrazoNaoAtingido, resultado.Motivo);
+        Assert.False(resultado.PodeMover);
+        Assert.Equal("O prazo de retenção ainda não foi atingido.", resultado.Descricao);
     }
 
     private static RetencaoGravacaoHandler CriarHandler(Reuniao reuniao, LixeiraFake lixeira) =>

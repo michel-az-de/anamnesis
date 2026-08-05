@@ -1,5 +1,6 @@
 using Anamnesis.Application.Contracts;
 using Anamnesis.Domain.Entidades;
+using Anamnesis.Domain.Tipos;
 
 namespace Anamnesis.Application.UseCases;
 
@@ -24,7 +25,7 @@ public sealed class ControlarGravacaoHandler(
             await gravador.IniciarAsync(cancellationToken);
             return reuniao.Id;
         }
-        catch (Exception exception) when (exception is not OperationCanceledException)
+        catch (Exception exception)
         {
             reuniao.RegistrarFalha(exception.Message);
             await reuniaoRepository.SalvarAsync(reuniao, CancellationToken.None);
@@ -32,13 +33,47 @@ public sealed class ControlarGravacaoHandler(
         }
     }
 
+    public async Task ReconciliarGravacaoAsync(
+        Guid reuniaoId,
+        CancellationToken cancellationToken)
+    {
+        var reuniao = await reuniaoRepository.ObterAsync(reuniaoId, cancellationToken)
+            ?? throw new InvalidOperationException($"A reunião '{reuniaoId}' não foi encontrada.");
+        if (reuniao.Status != StatusReuniao.Gravando)
+        {
+            return;
+        }
+
+        await obsPreflight.PrepararAsync(cancellationToken);
+        if (await gravador.EstaGravandoAsync(cancellationToken))
+        {
+            return;
+        }
+
+        reuniao.RegistrarFalha(
+            "A gravação foi interrompida antes da confirmação do OBS e pode ser iniciada novamente.");
+        await reuniaoRepository.SalvarAsync(reuniao, cancellationToken);
+    }
+
     public async Task FinalizarAsync(Guid reuniaoId, CancellationToken cancellationToken)
     {
         var reuniao = await reuniaoRepository.ObterAsync(reuniaoId, cancellationToken)
             ?? throw new InvalidOperationException($"A reunião '{reuniaoId}' não foi encontrada.");
-        var caminhoArquivo = await gravador.FinalizarAsync(cancellationToken);
-        reuniao.FinalizarGravacao(caminhoArquivo, relogio.GetUtcNow());
-        await reuniaoRepository.SalvarAsync(reuniao, cancellationToken);
+        try
+        {
+            var caminhoArquivo = await gravador.FinalizarAsync(cancellationToken);
+            reuniao.FinalizarGravacao(caminhoArquivo, relogio.GetUtcNow());
+            await reuniaoRepository.SalvarAsync(reuniao, cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            // Sem registrar a falha, a reunião fica presa em 'Gravando' e o índice único de
+            // gravação ativa bloqueia toda nova gravação até o Tray ser reiniciado.
+            reuniao.RegistrarFalha(exception.Message);
+            await reuniaoRepository.SalvarAsync(reuniao, CancellationToken.None);
+            throw;
+        }
+
         await jobQueue.EnfileirarAsync(reuniao.Id, relogio.GetUtcNow(), cancellationToken);
         try
         {

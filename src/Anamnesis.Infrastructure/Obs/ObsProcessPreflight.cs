@@ -61,7 +61,8 @@ public sealed class ObsProcessPreflight : IObsPreflight
         }
 
         throw new InvalidOperationException(
-            $"O websocket do OBS não ficou disponível em {_endereco} após 30 segundos. " +
+            $"O websocket do OBS não ficou disponível em {_endereco} após {_maximoTentativas} tentativas " +
+            $"({(_intervalo * _maximoTentativas).TotalSeconds:0} segundos). " +
             "Confirme se o servidor WebSocket está ativado no OBS.");
     }
 

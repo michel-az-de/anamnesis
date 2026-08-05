@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 using Anamnesis.Application.Contracts;
+using Anamnesis.Application.UseCases;
 using Anamnesis.Domain.Entidades;
 using Anamnesis.Domain.Tipos;
 using Microsoft.Data.Sqlite;
@@ -9,17 +10,13 @@ namespace Anamnesis.Infrastructure.Persistencia;
 
 public sealed class SqliteReuniaoRepository(string caminhoBanco) : IReuniaoRepository
 {
-    private readonly string _connectionString = new SqliteConnectionStringBuilder
-    {
-        DataSource = caminhoBanco,
-        Mode = SqliteOpenMode.ReadWriteCreate,
-        Pooling = false
-    }.ToString();
+    private readonly BancoLocal _banco = new(caminhoBanco, SqliteSchema.InicializarReunioesAsync);
+
+    internal int PreparacoesDeEsquema => _banco.Preparacoes;
 
     public async Task<Reuniao?> ObterAsync(Guid reuniaoId, CancellationToken cancellationToken)
     {
-        await InicializarAsync(cancellationToken);
-        await using var conexao = await AbrirConexaoAsync(cancellationToken);
+        await using var conexao = await _banco.AbrirAsync(cancellationToken);
         await using var consultar = conexao.CreateCommand();
         consultar.CommandText = """
             SELECT id, titulo, criada_em, status, motivo_falha,
@@ -38,8 +35,7 @@ public sealed class SqliteReuniaoRepository(string caminhoBanco) : IReuniaoRepos
 
     public async Task SalvarAsync(Reuniao reuniao, CancellationToken cancellationToken)
     {
-        await InicializarAsync(cancellationToken);
-        await using var conexao = await AbrirConexaoAsync(cancellationToken);
+        await using var conexao = await _banco.AbrirAsync(cancellationToken);
         await using var salvar = conexao.CreateCommand();
         salvar.CommandText = """
             INSERT INTO reunioes (
@@ -88,51 +84,16 @@ public sealed class SqliteReuniaoRepository(string caminhoBanco) : IReuniaoRepos
         AdicionarValorOpcional(salvar, "$ataTarefasJson", reuniao.Ata is null ? null : JsonSerializer.Serialize(reuniao.Ata.Tarefas));
         AdicionarDataOpcional(salvar, "$ataGeradaEm", reuniao.Ata?.GeradaEm);
         AdicionarDataOpcional(salvar, "$arquivadaEm", reuniao.ArquivadaEm);
-        await salvar.ExecuteNonQueryAsync(cancellationToken);
-    }
-
-    private async Task InicializarAsync(CancellationToken cancellationToken)
-    {
-        await using var conexao = await AbrirConexaoAsync(cancellationToken);
-        await using var comando = conexao.CreateCommand();
-        comando.CommandText = """
-            CREATE TABLE IF NOT EXISTS reunioes (
-                id TEXT NOT NULL PRIMARY KEY,
-                titulo TEXT NOT NULL,
-                criada_em TEXT NOT NULL,
-                status TEXT NOT NULL,
-                motivo_falha TEXT NULL,
-                gravacao_caminho TEXT NULL,
-                gravacao_iniciada_em TEXT NULL,
-                gravacao_finalizada_em TEXT NULL,
-                transcricao_texto TEXT NULL,
-                transcricao_idioma TEXT NULL,
-                transcricao_gerada_em TEXT NULL,
-                ata_resumo_executivo TEXT NULL,
-                ata_decisoes_json TEXT NULL,
-                ata_tarefas_json TEXT NULL,
-                ata_gerada_em TEXT NULL,
-                arquivada_em TEXT NULL
-            );
-            """;
-        await comando.ExecuteNonQueryAsync(cancellationToken);
-
-        await using var verificarColuna = conexao.CreateCommand();
-        verificarColuna.CommandText = "SELECT COUNT(*) FROM pragma_table_info('reunioes') WHERE name = 'arquivada_em';";
-        var colunaExiste = Convert.ToInt32(await verificarColuna.ExecuteScalarAsync(cancellationToken), CultureInfo.InvariantCulture) > 0;
-        if (!colunaExiste)
+        try
         {
-            await using var adicionarColuna = conexao.CreateCommand();
-            adicionarColuna.CommandText = "ALTER TABLE reunioes ADD COLUMN arquivada_em TEXT NULL;";
-            await adicionarColuna.ExecuteNonQueryAsync(cancellationToken);
+            await salvar.ExecuteNonQueryAsync(cancellationToken);
         }
-    }
-
-    private async Task<SqliteConnection> AbrirConexaoAsync(CancellationToken cancellationToken)
-    {
-        var conexao = new SqliteConnection(_connectionString);
-        await conexao.OpenAsync(cancellationToken);
-        return conexao;
+        catch (SqliteException exception) when (
+            exception.SqliteErrorCode == 19 &&
+            exception.SqliteExtendedErrorCode == 2067)
+        {
+            throw new GravacaoJaAtivaException(exception);
+        }
     }
 
     private static Reuniao LerReuniao(SqliteDataReader leitor)

@@ -1,6 +1,10 @@
+using Anamnesis.Application.Contracts;
+using Anamnesis.Application.Modelos;
+using Anamnesis.Application.UseCases;
 using Anamnesis.Domain.Entidades;
 using Anamnesis.Domain.Tipos;
 using Anamnesis.Infrastructure.Persistencia;
+using Microsoft.Data.Sqlite;
 using Xunit;
 
 namespace Anamnesis.Infrastructure.Tests;
@@ -102,6 +106,132 @@ public sealed class SqliteReuniaoRepositoryTests : IAsyncLifetime
         Assert.Equal("Whisper indisponível.", recuperada.MotivoFalha);
     }
 
+    [Fact]
+    public async Task DevePermitirUmaUnicaGravacaoEmInicializacoesConcorrentes()
+    {
+        var repository = new SqliteReuniaoRepository(_caminhoBanco);
+        var gravador = new GravadorContador();
+        var preflight = new ObsPreflightContador();
+        var sinal = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var handlers = Enumerable.Range(0, 2)
+            .Select(_ => new ControlarGravacaoHandler(
+                repository,
+                new JobQueueNula(),
+                gravador,
+                new WorkerLauncherNulo(),
+                preflight,
+                TimeProvider.System))
+            .ToArray();
+
+        async Task<(Guid? ReuniaoId, Exception? Falha)> TentarAsync(ControlarGravacaoHandler handler)
+        {
+            await sinal.Task;
+            try
+            {
+                return (await handler.IniciarAsync("Concorrente", CancellationToken.None), null);
+            }
+            catch (Exception exception)
+            {
+                return (null, exception);
+            }
+        }
+
+        var tentativas = handlers.Select(TentarAsync).ToArray();
+        sinal.SetResult();
+        var resultados = await Task.WhenAll(tentativas);
+
+        Assert.Single(resultados, resultado => resultado.ReuniaoId.HasValue);
+        Assert.Single(resultados, resultado => resultado.Falha is GravacaoJaAtivaException);
+        Assert.Equal(1, gravador.Inicios);
+        Assert.Equal(1, preflight.Preparacoes);
+    }
+
+    [Fact]
+    public async Task DevePermitirNovaGravacaoAposFalhaAoEncerrar()
+    {
+        var repository = new SqliteReuniaoRepository(_caminhoBanco);
+        var handler = new ControlarGravacaoHandler(
+            repository,
+            new JobQueueNula(),
+            new GravadorContador(),
+            new WorkerLauncherNulo(),
+            new ObsPreflightContador(),
+            TimeProvider.System);
+        var primeiraId = await handler.IniciarAsync("Primeira", CancellationToken.None);
+
+        await Assert.ThrowsAsync<NotSupportedException>(() =>
+            handler.FinalizarAsync(primeiraId, CancellationToken.None));
+
+        // O índice único de gravação ativa só libera se a reunião sair de 'Gravando'.
+        // Sem isso o app fica sem gravar até o Tray ser reiniciado.
+        var segundaId = await handler.IniciarAsync("Segunda", CancellationToken.None);
+
+        Assert.NotEqual(primeiraId, segundaId);
+        var primeira = await repository.ObterAsync(primeiraId, CancellationToken.None);
+        Assert.Equal(StatusReuniao.Falha, primeira!.Status);
+    }
+
+    [Fact]
+    public async Task DeveReconciliarDuplicatasGravandoAntesDeCriarIndiceEmBancoLegado()
+    {
+        var repository = new SqliteReuniaoRepository(_caminhoBanco);
+        await repository.ObterAsync(Guid.NewGuid(), CancellationToken.None);
+        var antigaId = Guid.NewGuid();
+        var recenteId = Guid.NewGuid();
+        await using (var conexao = new SqliteConnection($"Data Source={_caminhoBanco};Pooling=False"))
+        {
+            await conexao.OpenAsync();
+            await using var comando = conexao.CreateCommand();
+            comando.CommandText = """
+                DROP INDEX ux_reunioes_gravando;
+                INSERT INTO reunioes (id, titulo, criada_em, status)
+                VALUES ($antiga_id, 'Antiga', '2026-08-05T10:00:00.0000000+00:00', 'Gravando');
+                INSERT INTO reunioes (id, titulo, criada_em, status)
+                VALUES ($recente_id, 'Recente', '2026-08-05T11:00:00.0000000+00:00', 'Gravando');
+                """;
+            comando.Parameters.AddWithValue("$antiga_id", antigaId.ToString("N"));
+            comando.Parameters.AddWithValue("$recente_id", recenteId.ToString("N"));
+            await comando.ExecuteNonQueryAsync();
+        }
+
+        var reunioes = await new SqliteReuniaoQuery(_caminhoBanco).ListarAsync(
+            new ReuniaoQueryFiltro(null, null, 100),
+            CancellationToken.None);
+
+        Assert.Equal(recenteId, Assert.Single(reunioes, item => item.Status == StatusReuniao.Gravando).Id);
+        var antiga = Assert.Single(reunioes, item => item.Id == antigaId);
+        Assert.Equal(StatusReuniao.Falha, antiga.Status);
+        Assert.Contains("legado", antiga.MotivoFalha, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task DevePrepararEsquemaUmaUnicaVezPorInstancia()
+    {
+        var repository = new SqliteReuniaoRepository(_caminhoBanco);
+
+        await repository.ObterAsync(Guid.NewGuid(), CancellationToken.None);
+        await repository.SalvarAsync(CriarReuniaoArquivada(), CancellationToken.None);
+        await repository.ObterAsync(Guid.NewGuid(), CancellationToken.None);
+
+        // Antes, cada operação repetia DDL, consulta a pragma_table_info, um UPDATE sobre a
+        // tabela inteira e um CREATE INDEX — e ainda abria uma segunda conexão só para isso.
+        Assert.Equal(1, repository.PreparacoesDeEsquema);
+    }
+
+    [Fact]
+    public async Task DeveManterOBancoLocalEmModoWal()
+    {
+        var repository = new SqliteReuniaoRepository(_caminhoBanco);
+        await repository.ObterAsync(Guid.NewGuid(), CancellationToken.None);
+
+        await using var conexao = new SqliteConnection($"Data Source={_caminhoBanco};Pooling=False");
+        await conexao.OpenAsync();
+        await using var comando = conexao.CreateCommand();
+        comando.CommandText = "PRAGMA journal_mode;";
+
+        Assert.Equal("wal", (string)(await comando.ExecuteScalarAsync())!, ignoreCase: true);
+    }
+
     private static Reuniao CriarReuniaoAguardandoProcessamento()
     {
         var criadaEm = new DateTimeOffset(2026, 8, 4, 14, 0, 0, TimeSpan.Zero);
@@ -123,5 +253,54 @@ public sealed class SqliteReuniaoRepositoryTests : IAsyncLifetime
             new DateTimeOffset(2026, 8, 4, 15, 15, 0, TimeSpan.Zero)));
         reuniao.MarcarArquivada(new DateTimeOffset(2026, 8, 4, 15, 20, 0, TimeSpan.Zero));
         return reuniao;
+    }
+
+    private sealed class GravadorContador : IGravador
+    {
+        private int _inicios;
+
+        public int Inicios => _inicios;
+
+        public Task IniciarAsync(CancellationToken cancellationToken)
+        {
+            Interlocked.Increment(ref _inicios);
+            return Task.CompletedTask;
+        }
+
+        public Task<bool> EstaGravandoAsync(CancellationToken cancellationToken) => Task.FromResult(true);
+
+        public Task<string> FinalizarAsync(CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+    }
+
+    private sealed class ObsPreflightContador : IObsPreflight
+    {
+        private int _preparacoes;
+
+        public int Preparacoes => _preparacoes;
+
+        public Task PrepararAsync(CancellationToken cancellationToken)
+        {
+            Interlocked.Increment(ref _preparacoes);
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class JobQueueNula : IJobQueue
+    {
+        public Task<JobProcessamento> EnfileirarAsync(Guid reuniaoId, DateTimeOffset criadoEm, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        public Task<JobProcessamento?> ReservarProximoAsync(DateTimeOffset reservadoEm, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        public Task LiberarAsync(Guid jobId, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task LiberarReservasAtivasAsync(CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task ConcluirAsync(Guid jobId, DateTimeOffset concluidoEm, CancellationToken cancellationToken) => throw new NotSupportedException();
+    }
+
+    private sealed class WorkerLauncherNulo : IWorkerLauncher
+    {
+        public Task IniciarAsync(CancellationToken cancellationToken) => Task.CompletedTask;
     }
 }

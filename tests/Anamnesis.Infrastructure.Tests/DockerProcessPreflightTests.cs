@@ -68,7 +68,8 @@ public sealed class DockerProcessPreflightTests
                 maximoTentativas: 2);
             var excecaoTimeout = await Assert.ThrowsAsync<InvalidOperationException>(() =>
                 timeout.PrepararAsync(CancellationToken.None));
-            Assert.Contains("120 segundos", excecaoTimeout.Message, StringComparison.Ordinal);
+            // A mensagem reflete os parâmetros reais da espera, e não um texto fixo.
+            Assert.Contains("2 tentativas", excecaoTimeout.Message, StringComparison.Ordinal);
         }
         finally
         {

@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Text;
 using Anamnesis.Application.Contracts;
 using Anamnesis.Application.UseCases;
+using Anamnesis.Infrastructure.Arquivos;
 using Anamnesis.Infrastructure.Configuracao;
 using Anamnesis.Infrastructure.Fila;
 using Anamnesis.Infrastructure.Obs;
@@ -29,6 +30,14 @@ internal static class Program
 
     private static int Executar(IReadOnlyList<string> argumentos)
     {
+        if (DesktopPocOptions.EstaAtivo(argumentos))
+        {
+            ApplicationConfiguration.Initialize();
+            DesktopPocTheme.HerdarDoWindows();
+            System.Windows.Forms.Application.Run(new DesktopPocForm(DesktopPocTheme.ObterAtual()));
+            return 0;
+        }
+
         var modoValidacao = ModoValidacaoTrayOptions.Obter(argumentos);
         var caminhoConfiguracao = ObterCaminhoConfiguracao();
         var arquivoConfiguracao = new ArquivoConfiguracao(caminhoConfiguracao);
@@ -46,6 +55,17 @@ internal static class Program
                 enderecoObs,
                 ObsProcessPreflight.ResolverCaminhoExecutavel(configuracao.CaminhoExecutavelObs)),
             TimeProvider.System);
+        var sessaoDesktop = new DesktopRealSession(
+            new SqliteReuniaoQuery(configuracao.CaminhoBanco),
+            new SqliteJobQuery(configuracao.CaminhoBanco),
+            controlarGravacao,
+            new WindowsArtefatoLauncher(),
+            TimeProvider.System,
+            new DesktopRuntimeInfo(
+                caminhoConfiguracao,
+                configuracao.CaminhoBanco,
+                configuracao.DiretorioArquivo,
+                configuracao.NomeCli));
 
         if (modoValidacao is not null)
         {
@@ -55,6 +75,7 @@ internal static class Program
         }
 
         ApplicationConfiguration.Initialize();
+        DesktopPocTheme.HerdarDoWindows();
         using var icone = new NotifyIcon
         {
             Icon = SystemIcons.Application,
@@ -65,7 +86,30 @@ internal static class Program
         var iniciar = new ToolStripMenuItem("Iniciar gravação de teste");
         var encerrar = new ToolStripMenuItem("Encerrar gravação de teste") { Enabled = false };
         var processarPendencias = new ToolStripMenuItem("Processar pendências");
-        Guid? reuniaoEmGravacao = null;
+        DesktopPocForm? janela = null;
+
+        void AbrirJanela()
+        {
+            if (janela is null || janela.IsDisposed)
+            {
+                janela = new DesktopPocForm(
+                    DesktopPocTheme.ObterAtual(),
+                    DesktopPocSystemPreferences.Obter(),
+                    sessaoDesktop);
+                janela.FormClosed += (_, _) => janela = null;
+            }
+
+            if (janela.WindowState == FormWindowState.Minimized)
+            {
+                janela.WindowState = FormWindowState.Normal;
+            }
+
+            janela.Show();
+            janela.Activate();
+        }
+
+        icone.ContextMenuStrip.Items.Add("Abrir Anamnesis", null, (_, _) => AbrirJanela());
+        icone.DoubleClick += (_, _) => AbrirJanela();
 
         icone.ContextMenuStrip.Items.Add("Diagnósticos", null, (_, _) =>
         {
@@ -86,13 +130,17 @@ internal static class Program
         icone.ContextMenuStrip.Items.Add(encerrar);
         icone.ContextMenuStrip.Items.Add(processarPendencias);
         icone.ContextMenuStrip.Items.Add(new ToolStripSeparator());
-        icone.ContextMenuStrip.Items.Add("Sair", null, (_, _) => System.Windows.Forms.Application.Exit());
+        icone.ContextMenuStrip.Items.Add("Sair", null, (_, _) =>
+        {
+            janela?.Dispose();
+            System.Windows.Forms.Application.Exit();
+        });
 
         iniciar.Click += async (_, _) =>
         {
             try
             {
-                reuniaoEmGravacao = await controlarGravacao.IniciarAsync("Gravação de teste", CancellationToken.None);
+                await sessaoDesktop.IniciarGravacaoAsync("Gravação de teste", CancellationToken.None);
                 iniciar.Enabled = false;
                 encerrar.Enabled = true;
                 icone.ShowBalloonTip(3000, "Anamnesis", "Gravação de teste iniciada.", ToolTipIcon.Info);
@@ -104,22 +152,15 @@ internal static class Program
         };
         encerrar.Click += async (_, _) =>
         {
-            if (reuniaoEmGravacao is null)
-            {
-                return;
-            }
-
             try
             {
-                await controlarGravacao.FinalizarAsync(reuniaoEmGravacao.Value, CancellationToken.None);
-                reuniaoEmGravacao = null;
+                await sessaoDesktop.EncerrarGravacaoAsync(CancellationToken.None);
                 iniciar.Enabled = true;
                 encerrar.Enabled = false;
                 icone.ShowBalloonTip(3000, "Anamnesis", "Gravação enviada para processamento.", ToolTipIcon.Info);
             }
             catch (WorkerNaoIniciadoException exception)
             {
-                reuniaoEmGravacao = null;
                 iniciar.Enabled = true;
                 encerrar.Enabled = false;
                 MessageBox.Show(
@@ -156,6 +197,14 @@ internal static class Program
             icone.ShowBalloonTip(5000, "Anamnesis", $"Worker não iniciado: {exception.Message}", ToolTipIcon.Warning);
         }
 
+        using var sincronizarMenu = new System.Windows.Forms.Timer { Interval = 2000 };
+        sincronizarMenu.Tick += (_, _) =>
+        {
+            iniciar.Enabled = sessaoDesktop.Etapa != EtapaDesktopPoc.Gravando;
+            encerrar.Enabled = sessaoDesktop.Etapa == EtapaDesktopPoc.Gravando;
+        };
+        sincronizarMenu.Start();
+        AbrirJanela();
         System.Windows.Forms.Application.Run();
         return 0;
     }

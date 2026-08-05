@@ -77,6 +77,12 @@ public sealed class TrayBlackBoxE2ETests
             var caminhoTranscricao = Path.Combine(diretorioReuniao, "transcricao.md");
             Assert.True(File.Exists(caminhoAta));
             Assert.True(File.Exists(caminhoTranscricao));
+            var manifesto = await new SqliteArtefatoRepository(caminhoBanco)
+                .ObterAsync(reuniaoId, CancellationToken.None);
+            Assert.NotNull(manifesto);
+            Assert.Equal(diretorioReuniao, manifesto!.Diretorio);
+            Assert.Equal(caminhoAta, manifesto.CaminhoAta);
+            Assert.Equal(caminhoTranscricao, manifesto.CaminhoTranscricao);
             await File.WriteAllTextAsync(Path.Combine(diretorio, "tray-worker.stdout.log"), resultado.Stdout);
             await File.WriteAllTextAsync(Path.Combine(diretorio, "tray-worker.stderr.log"), resultado.Stderr);
             await File.WriteAllTextAsync(
@@ -87,8 +93,8 @@ public sealed class TrayBlackBoxE2ETests
                 - Reunião: `{{reuniao.Id}}`
                 - Estado final: `{{reuniao.Status}}`
                 - Gravação: `{{caminhoGravacao}}`
-                - Processo Tray: `Anamnesis.Tray.dll`
-                - Processo Worker: `Anamnesis.Worker.exe`
+                - Processo Tray: `{{CaminhoTrayEmTeste()}}`
+                - Processo Worker: `{{CaminhoWorker()}}`
                 - OBS: fake local
                 - Transcritor: fake local
                 - CLI: fake local
@@ -125,13 +131,19 @@ public sealed class TrayBlackBoxE2ETests
         string caminhoConfiguracao,
         string caminhoWorker)
     {
+        var caminhoTray = CaminhoTrayEmTeste();
+        var publicado = !string.IsNullOrWhiteSpace(
+            Environment.GetEnvironmentVariable("ANAMNESIS_TRAY_EXECUTAVEL_E2E"));
         using var processo = new Process
         {
             StartInfo = new ProcessStartInfo
             {
-                FileName = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "dotnet", "dotnet.exe"),
-                Arguments = $"\"{Path.Combine(EncontrarRaizRepositorio(), "src", "Anamnesis.Tray", "bin", "Release", "net10.0-windows", "Anamnesis.Tray.dll")}\" --gravar-teste-segundos 1 --iniciar-worker",
-                WorkingDirectory = EncontrarRaizRepositorio(),
+                FileName = publicado
+                    ? caminhoTray
+                    : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "dotnet", "dotnet.exe"),
+                WorkingDirectory = publicado
+                    ? Path.GetDirectoryName(caminhoTray)!
+                    : EncontrarRaizRepositorio(),
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
@@ -140,6 +152,14 @@ public sealed class TrayBlackBoxE2ETests
                 CreateNoWindow = true
             }
         };
+        if (!publicado)
+        {
+            processo.StartInfo.ArgumentList.Add(caminhoTray);
+        }
+
+        processo.StartInfo.ArgumentList.Add("--gravar-teste-segundos");
+        processo.StartInfo.ArgumentList.Add("1");
+        processo.StartInfo.ArgumentList.Add("--iniciar-worker");
         processo.StartInfo.Environment["ANAMNESIS_CONFIGURACAO"] = caminhoConfiguracao;
         processo.StartInfo.Environment["ANAMNESIS_WORKER_EXECUTAVEL"] = caminhoWorker;
         processo.Start();
@@ -181,14 +201,35 @@ public sealed class TrayBlackBoxE2ETests
         throw new TimeoutException("O Worker não arquivou a reunião em dez segundos.");
     }
 
-    private static string CaminhoWorker() => Path.Combine(
-        EncontrarRaizRepositorio(),
-        "src",
-        "Anamnesis.Worker",
-        "bin",
-        "Release",
-        "net10.0-windows",
-        "Anamnesis.Worker.exe");
+    private static string CaminhoWorker()
+    {
+        var sobrescrito = Environment.GetEnvironmentVariable("ANAMNESIS_WORKER_EXECUTAVEL_E2E");
+        return string.IsNullOrWhiteSpace(sobrescrito)
+            ? Path.Combine(
+                EncontrarRaizRepositorio(),
+                "src",
+                "Anamnesis.Worker",
+                "bin",
+                "Release",
+                "net10.0-windows",
+                "Anamnesis.Worker.exe")
+            : Path.GetFullPath(sobrescrito);
+    }
+
+    private static string CaminhoTrayEmTeste()
+    {
+        var sobrescrito = Environment.GetEnvironmentVariable("ANAMNESIS_TRAY_EXECUTAVEL_E2E");
+        return string.IsNullOrWhiteSpace(sobrescrito)
+            ? Path.Combine(
+                EncontrarRaizRepositorio(),
+                "src",
+                "Anamnesis.Tray",
+                "bin",
+                "Release",
+                "net10.0-windows",
+                "Anamnesis.Tray.dll")
+            : Path.GetFullPath(sobrescrito);
+    }
 
     private static Task<string> CriarFfmpegFakeAsync(string diretorio)
     {

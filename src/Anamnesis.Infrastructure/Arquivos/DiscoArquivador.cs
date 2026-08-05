@@ -1,4 +1,5 @@
 using Anamnesis.Application.Contracts;
+using Anamnesis.Application.Modelos;
 using Anamnesis.Domain.Entidades;
 using System.Globalization;
 using System.Text;
@@ -7,10 +8,14 @@ namespace Anamnesis.Infrastructure.Arquivos;
 
 public sealed class DiscoArquivador(string diretorioRaiz) : IArquivador
 {
-    public async Task ArquivarAsync(Reuniao reuniao, CancellationToken cancellationToken)
+    private readonly string _diretorioRaiz = Path.GetFullPath(diretorioRaiz);
+
+    public async Task<ArtefatosReuniao> ArquivarAsync(
+        Reuniao reuniao,
+        CancellationToken cancellationToken)
     {
         var diretorioReuniao = Path.Combine(
-            diretorioRaiz,
+            _diretorioRaiz,
             reuniao.CriadaEm.ToString("yyyy", CultureInfo.InvariantCulture),
             reuniao.CriadaEm.ToString("MM", CultureInfo.InvariantCulture),
             reuniao.Id.ToString("N"));
@@ -19,15 +24,23 @@ public sealed class DiscoArquivador(string diretorioRaiz) : IArquivador
 
         var conteudoAta = RenderizarAta(reuniao);
 
+        var caminhoAta = Path.Combine(diretorioReuniao, "ata.md");
+        var caminhoTranscricao = Path.Combine(diretorioReuniao, "transcricao.md");
         await File.WriteAllTextAsync(
-            Path.Combine(diretorioReuniao, "ata.md"),
+            caminhoAta,
             conteudoAta,
             cancellationToken);
 
         await File.WriteAllTextAsync(
-            Path.Combine(diretorioReuniao, "transcricao.md"),
+            caminhoTranscricao,
             reuniao.Transcricao!.Texto,
             cancellationToken);
+
+        return new ArtefatosReuniao(
+            reuniao.Id,
+            diretorioReuniao,
+            caminhoAta,
+            caminhoTranscricao);
     }
 
     private static string RenderizarAta(Reuniao reuniao)

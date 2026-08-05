@@ -9,6 +9,7 @@ public sealed class ProcessarReuniaoHandler(
     ITranscritor transcritor,
     IAtaRunner ataRunner,
     IArquivador arquivador,
+    IArtefatoRepository artefatoRepository,
     TimeProvider relogio)
 {
     public async Task ExecutarAsync(Guid reuniaoId, CancellationToken cancellationToken)
@@ -43,7 +44,8 @@ public sealed class ProcessarReuniaoHandler(
                 ataGerada.Tarefas,
                 relogio.GetUtcNow()));
 
-            await arquivador.ArquivarAsync(reuniao, cancellationToken);
+            var artefatos = await arquivador.ArquivarAsync(reuniao, cancellationToken);
+            await artefatoRepository.SalvarAsync(artefatos, cancellationToken);
             reuniao.MarcarArquivada(relogio.GetUtcNow());
             await reuniaoRepository.SalvarAsync(reuniao, cancellationToken);
         }

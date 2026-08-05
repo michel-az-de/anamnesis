@@ -35,4 +35,56 @@ public sealed class ArquivoConfiguracaoTests : IAsyncLifetime
         Assert.Equal("pt", carregada.IdiomaWhisper);
         Assert.Empty(carregada.ArgumentosCli);
     }
+
+    [Fact]
+    public async Task NaoDeveGravarASenhaDoObsEmTextoClaro()
+    {
+        var caminhoArquivo = Path.Combine(_diretorio, "config.json");
+        await new ArquivoConfiguracao(caminhoArquivo).SalvarAsync(
+            ConfiguracaoAnamnesis.CriarPadrao() with { SenhaObs = "senha-secreta-do-obs" },
+            CancellationToken.None);
+
+        var conteudo = await File.ReadAllTextAsync(caminhoArquivo);
+
+        Assert.DoesNotContain("senha-secreta-do-obs", conteudo, StringComparison.Ordinal);
+        Assert.Contains("dpapi:", conteudo, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task DeveRecuperarASenhaDoObsProtegida()
+    {
+        var caminhoArquivo = Path.Combine(_diretorio, "config.json");
+        var arquivo = new ArquivoConfiguracao(caminhoArquivo);
+        await arquivo.SalvarAsync(
+            ConfiguracaoAnamnesis.CriarPadrao() with { SenhaObs = "senha-secreta-do-obs" },
+            CancellationToken.None);
+
+        var carregada = await arquivo.CarregarAsync(CancellationToken.None);
+
+        Assert.Equal("senha-secreta-do-obs", carregada.SenhaObs);
+    }
+
+    [Fact]
+    public async Task DeveMigrarSenhaLegadaEmTextoClaro()
+    {
+        var caminhoArquivo = Path.Combine(_diretorio, "config.json");
+        Directory.CreateDirectory(_diretorio);
+        await File.WriteAllTextAsync(
+            caminhoArquivo,
+            """{"CaminhoBanco":"C:\\a.db","DiretorioArquivo":"C:\\a","SenhaObs":"senha-legada"}""");
+        var arquivo = new ArquivoConfiguracao(caminhoArquivo);
+
+        // Uma configuração anterior à proteção continua carregando.
+        var legada = await arquivo.CarregarAsync(CancellationToken.None);
+        Assert.Equal("senha-legada", legada.SenhaObs);
+
+        // E é reescrita protegida no salvamento seguinte, sem intervenção do usuário.
+        await arquivo.SalvarAsync(legada, CancellationToken.None);
+
+        Assert.DoesNotContain(
+            "senha-legada",
+            await File.ReadAllTextAsync(caminhoArquivo),
+            StringComparison.Ordinal);
+        Assert.Equal("senha-legada", (await arquivo.CarregarAsync(CancellationToken.None)).SenhaObs);
+    }
 }

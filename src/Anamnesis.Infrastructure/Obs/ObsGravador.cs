@@ -8,6 +8,8 @@ namespace Anamnesis.Infrastructure.Obs;
 
 public sealed class ObsGravador(ObsWebSocketOptions options) : IGravador
 {
+    private static readonly TimeSpan TempoLimiteRestauracao = TimeSpan.FromSeconds(5);
+    private const int MaximoMensagensIgnoradas = 100;
     private const string CenaAnamnesis = "Anamnesis";
     private const string AudioSistema = "Anamnesis | Audio do sistema";
     private const string Microfone = "Anamnesis | Microfone";
@@ -88,13 +90,28 @@ public sealed class ObsGravador(ObsWebSocketOptions options) : IGravador
         {
             try
             {
-                await RestaurarCenaAsync(cliente, CancellationToken.None);
+                // A restauração é cosmética e não pode segurar o encerramento: sem limite de
+                // tempo, um OBS que parou de responder prenderia o Tray para sempre.
+                using var limite = new CancellationTokenSource(TempoLimiteRestauracao);
+                await RestaurarCenaAsync(cliente, limite.Token);
             }
             catch
             {
                 // A gravação encerrada e seu caminho têm prioridade sobre a restauração visual do OBS.
             }
         }
+    }
+
+    public async Task<bool> EstaGravandoAsync(CancellationToken cancellationToken)
+    {
+        using var cliente = await ConectarAsync(cancellationToken);
+        var resposta = await EnviarSolicitacaoAsync(
+            cliente,
+            "GetRecordStatus",
+            null,
+            cancellationToken);
+        var dados = resposta.GetProperty("responseData");
+        return dados.TryGetProperty("outputActive", out var ativo) && ativo.GetBoolean();
     }
 
     private static Task<JsonElement> CriarEntradaAsync(
@@ -196,6 +213,7 @@ public sealed class ObsGravador(ObsWebSocketOptions options) : IGravador
 
         await EnviarAsync(cliente, new { op = 6, d = envelopeSolicitacao }, cancellationToken);
         JsonElement dados;
+        var ignoradas = 0;
         while (true)
         {
             var resposta = await ReceberAsync(cliente, cancellationToken);
@@ -204,6 +222,12 @@ public sealed class ObsGravador(ObsWebSocketOptions options) : IGravador
                 !dados.TryGetProperty("requestId", out var idResposta) ||
                 !string.Equals(idResposta.GetString(), id, StringComparison.Ordinal))
             {
+                if (++ignoradas > MaximoMensagensIgnoradas)
+                {
+                    throw new InvalidOperationException(
+                        $"OBS não respondeu à solicitação '{tipo}' entre as mensagens recebidas.");
+                }
+
                 continue;
             }
 

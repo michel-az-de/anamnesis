@@ -34,6 +34,12 @@ public sealed class CliAtaRunner(CliAtaRunnerOptions options) : IAtaRunner
 
         using var processo = Process.Start(inicio)
             ?? throw new InvalidOperationException($"Não foi possível iniciar a CLI '{Nome}'.");
+
+        // Drenar saída e erro antes de escrever a entrada: uma transcrição grande não cabe no
+        // buffer do pipe, e uma CLI que emite algo antes de consumir tudo travaria com o runner.
+        var saidaPendente = processo.StandardOutput.ReadToEndAsync(cancellationToken);
+        var erroPendente = processo.StandardError.ReadToEndAsync(cancellationToken);
+
         var entrada = JsonSerializer.Serialize(new
         {
             reuniao = new { reuniao.Id, reuniao.Titulo, reuniao.CriadaEm },
@@ -43,14 +49,14 @@ public sealed class CliAtaRunner(CliAtaRunnerOptions options) : IAtaRunner
         await processo.StandardInput.WriteAsync(entrada.AsMemory(), cancellationToken);
         processo.StandardInput.Close();
 
-        var saidaPendente = processo.StandardOutput.ReadToEndAsync(cancellationToken);
-        var erroPendente = processo.StandardError.ReadToEndAsync(cancellationToken);
         await processo.WaitForExitAsync(cancellationToken);
         var saida = await saidaPendente;
-        await erroPendente;
+        var erro = (await erroPendente).Trim();
         if (processo.ExitCode != 0)
         {
-            throw new InvalidOperationException($"A CLI '{Nome}' falhou com código {processo.ExitCode}.");
+            throw new InvalidOperationException(erro.Length == 0
+                ? $"A CLI '{Nome}' falhou com código {processo.ExitCode}."
+                : $"A CLI '{Nome}' falhou com código {processo.ExitCode}: {erro}");
         }
 
         return AtaEstruturadaJson.Converter(saida);

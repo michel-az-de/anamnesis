@@ -86,6 +86,7 @@ public sealed class FluxoAlphaE2ETests : IAsyncLifetime
             new WhisperTranscritor(new WhisperOptions(caminhoWhisper, caminhoModelo, "pt", caminhoFfmpeg)),
             new CliAtaRunner(new CliAtaRunnerOptions("CLI E2E", caminhoCli, [])),
             new DiscoArquivador(Path.Combine(_diretorio, "arquivo")),
+            new SqliteArtefatoRepository(caminhoBanco),
             relogio);
         var consumer = new ReuniaoConsumer(fila, processar, relogio);
 
@@ -102,6 +103,11 @@ public sealed class FluxoAlphaE2ETests : IAsyncLifetime
         var caminhoAta = Path.Combine(diretorioReuniao, "ata.md");
         Assert.True(File.Exists(caminhoAta));
         Assert.True(File.Exists(Path.Combine(diretorioReuniao, "transcricao.md")));
+        var manifesto = await new SqliteArtefatoRepository(caminhoBanco)
+            .ObterAsync(reuniaoId, CancellationToken.None);
+        Assert.NotNull(manifesto);
+        Assert.Equal(diretorioReuniao, manifesto!.Diretorio);
+        Assert.Equal(caminhoAta, manifesto.CaminhoAta);
         var ataMarkdown = await File.ReadAllTextAsync(caminhoAta);
         Assert.Contains("## Decisões", ataMarkdown);
         Assert.Contains("Decisao E2E.", ataMarkdown);

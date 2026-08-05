@@ -6,5 +6,6 @@ obj/
 TestResults/
 data/
 artifacts/
+output/
 *.user
 *.suo

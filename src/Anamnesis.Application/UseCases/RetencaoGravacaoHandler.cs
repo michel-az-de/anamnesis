@@ -24,12 +24,13 @@ public sealed class RetencaoGravacaoHandler(
         var resultado = await AvaliarAsync(reuniao, cancellationToken);
         if (!resultado.PodeMover)
         {
-            if (resultado.CaminhoArquivo is not null && resultado.Motivo == "A gravação não foi encontrada.")
+            if (resultado.Motivo is MotivoRetencao.GravacaoNaoEncontrada &&
+                resultado.CaminhoArquivo is not null)
             {
-                throw new FileNotFoundException(resultado.Motivo, resultado.CaminhoArquivo);
+                throw new FileNotFoundException(resultado.Descricao, resultado.CaminhoArquivo);
             }
 
-            throw new InvalidOperationException(resultado.Motivo);
+            throw new InvalidOperationException(resultado.Descricao);
         }
 
         reuniao.MarcarPendenteExclusao();
@@ -57,20 +58,20 @@ public sealed class RetencaoGravacaoHandler(
     {
         if (reuniao.Status != StatusReuniao.Arquivada)
         {
-            return new ResultadoRetencao(false, reuniao.Gravacao?.CaminhoArquivo, "A reunião não está arquivada.");
+            return new ResultadoRetencao(MotivoRetencao.ReuniaoNaoArquivada, reuniao.Gravacao?.CaminhoArquivo);
         }
 
         if (reuniao.ArquivadaEm is null || relogio.GetUtcNow() - reuniao.ArquivadaEm < PrazoPadrao)
         {
-            return new ResultadoRetencao(false, reuniao.Gravacao?.CaminhoArquivo, "O prazo de retenção ainda não foi atingido.");
+            return new ResultadoRetencao(MotivoRetencao.PrazoNaoAtingido, reuniao.Gravacao?.CaminhoArquivo);
         }
 
         var caminhoArquivo = reuniao.Gravacao?.CaminhoArquivo;
         if (string.IsNullOrWhiteSpace(caminhoArquivo) || !await lixeira.ExisteAsync(caminhoArquivo, cancellationToken))
         {
-            return new ResultadoRetencao(false, caminhoArquivo, "A gravação não foi encontrada.");
+            return new ResultadoRetencao(MotivoRetencao.GravacaoNaoEncontrada, caminhoArquivo);
         }
 
-        return new ResultadoRetencao(true, caminhoArquivo, null);
+        return new ResultadoRetencao(MotivoRetencao.Elegivel, caminhoArquivo);
     }
 }

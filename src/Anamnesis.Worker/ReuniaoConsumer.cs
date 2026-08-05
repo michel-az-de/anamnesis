@@ -8,6 +8,11 @@ public sealed class ReuniaoConsumer(
     ProcessarReuniaoHandler processarReuniaoHandler,
     TimeProvider relogio)
 {
+    /// <summary>
+    /// Libera reservas deixadas por uma execução anterior. Só é seguro em um processo que detém
+    /// a exclusividade da instância do Worker (ver ADR-012): é ela que garante que nenhuma
+    /// reserva liberada aqui pertence a um Worker vivo.
+    /// </summary>
     public Task RetomarAsync(CancellationToken cancellationToken) =>
         fila.LiberarReservasAtivasAsync(cancellationToken);
 

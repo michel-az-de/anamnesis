@@ -1,7 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
     <PackageReference Include="Microsoft.Data.Sqlite.Core" Version="10.0.10" />
-    <PackageReference Include="SQLitePCLRaw.bundle_winsqlite3" Version="2.1.11" />
+    <!-- Engine embarcada (ADR-013): winsqlite3 usa a versão do SO, que varia por build do
+         Windows e pode não suportar RETURNING, exigido pela reserva atômica da fila. -->
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.5" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.10" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Anamnesis.Application\Anamnesis.Application.csproj" />

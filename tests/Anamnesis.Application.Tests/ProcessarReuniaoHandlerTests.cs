@@ -17,11 +17,13 @@ public sealed class ProcessarReuniaoHandlerTests
         reuniao.FinalizarGravacao("C:\\gravacoes\\planejamento.mkv", DateTimeOffset.UtcNow);
 
         var repository = new ReuniaoRepositoryFake(reuniao);
+        var artefatoRepository = new ArtefatoRepositoryFake();
         var handler = new ProcessarReuniaoHandler(
             repository,
             new TranscritorFake(),
             new AtaRunnerFake(),
             new ArquivadorFake(),
+            artefatoRepository,
             TimeProvider.System);
 
         await handler.ExecutarAsync(reuniao.Id, CancellationToken.None);
@@ -29,6 +31,7 @@ public sealed class ProcessarReuniaoHandlerTests
         Assert.Equal(StatusReuniao.Arquivada, reuniao.Status);
         Assert.NotNull(reuniao.Ata);
         Assert.Equal("Resumo da reunião.", reuniao.Ata!.ResumoExecutivo);
+        Assert.Equal(reuniao.Id, Assert.Single(artefatoRepository.Salvos).ReuniaoId);
     }
 
     [Fact]
@@ -43,6 +46,7 @@ public sealed class ProcessarReuniaoHandlerTests
             new TranscritorFake(),
             new AtaRunnerFake(),
             new ArquivadorFake(),
+            new ArtefatoRepositoryFake(),
             TimeProvider.System);
 
         await handler.ExecutarAsync(reuniao.Id, CancellationToken.None);
@@ -77,6 +81,25 @@ public sealed class ProcessarReuniaoHandlerTests
 
     private sealed class ArquivadorFake : IArquivador
     {
-        public Task ArquivarAsync(Reuniao reuniao, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task<ArtefatosReuniao> ArquivarAsync(Reuniao reuniao, CancellationToken cancellationToken) =>
+            Task.FromResult(new ArtefatosReuniao(
+                reuniao.Id,
+                @"C:\arquivo\reuniao",
+                @"C:\arquivo\reuniao\ata.md",
+                @"C:\arquivo\reuniao\transcricao.md"));
+    }
+
+    private sealed class ArtefatoRepositoryFake : IArtefatoRepository
+    {
+        public List<ArtefatosReuniao> Salvos { get; } = [];
+
+        public Task SalvarAsync(ArtefatosReuniao artefatos, CancellationToken cancellationToken)
+        {
+            Salvos.Add(artefatos);
+            return Task.CompletedTask;
+        }
+
+        public Task<ArtefatosReuniao?> ObterAsync(Guid reuniaoId, CancellationToken cancellationToken) =>
+            Task.FromResult(Salvos.SingleOrDefault(item => item.ReuniaoId == reuniaoId));
     }
 }

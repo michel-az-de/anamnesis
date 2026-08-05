@@ -51,7 +51,7 @@ public sealed class AudioPreparadorFfmpeg(string caminhoExecutavel)
         }
         catch
         {
-            File.Delete(caminhoAudio);
+            ArquivoTemporario.ExcluirSilenciosamente(caminhoAudio);
             throw;
         }
     }

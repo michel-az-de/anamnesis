@@ -1,0 +1,110 @@
+using System.Globalization;
+using Microsoft.Data.Sqlite;
+
+namespace Anamnesis.Infrastructure.Persistencia;
+
+internal static class SqliteSchema
+{
+    public static async Task InicializarReunioesAsync(
+        SqliteConnection conexao,
+        CancellationToken cancellationToken)
+    {
+        await using var comando = conexao.CreateCommand();
+        comando.CommandText = """
+            CREATE TABLE IF NOT EXISTS reunioes (
+                id TEXT NOT NULL PRIMARY KEY,
+                titulo TEXT NOT NULL,
+                criada_em TEXT NOT NULL,
+                status TEXT NOT NULL,
+                motivo_falha TEXT NULL,
+                gravacao_caminho TEXT NULL,
+                gravacao_iniciada_em TEXT NULL,
+                gravacao_finalizada_em TEXT NULL,
+                transcricao_texto TEXT NULL,
+                transcricao_idioma TEXT NULL,
+                transcricao_gerada_em TEXT NULL,
+                ata_resumo_executivo TEXT NULL,
+                ata_decisoes_json TEXT NULL,
+                ata_tarefas_json TEXT NULL,
+                ata_gerada_em TEXT NULL,
+                arquivada_em TEXT NULL
+            );
+            """;
+        await comando.ExecuteNonQueryAsync(cancellationToken);
+
+        await using var verificarColuna = conexao.CreateCommand();
+        verificarColuna.CommandText = "SELECT COUNT(*) FROM pragma_table_info('reunioes') WHERE name = 'arquivada_em';";
+        var colunaExiste = Convert.ToInt32(
+            await verificarColuna.ExecuteScalarAsync(cancellationToken),
+            CultureInfo.InvariantCulture) > 0;
+        if (!colunaExiste)
+        {
+            await using var adicionarColuna = conexao.CreateCommand();
+            adicionarColuna.CommandText = "ALTER TABLE reunioes ADD COLUMN arquivada_em TEXT NULL;";
+            await adicionarColuna.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        await using var reconciliarDuplicatas = conexao.CreateCommand();
+        reconciliarDuplicatas.CommandText = """
+            UPDATE reunioes
+            SET status = 'Falha',
+                motivo_falha = 'Gravação ativa duplicada reconciliada durante migração de banco legado.'
+            WHERE status = 'Gravando'
+              AND id <> (
+                  SELECT id
+                  FROM reunioes
+                  WHERE status = 'Gravando'
+                  ORDER BY criada_em DESC, id DESC
+                  LIMIT 1
+              );
+            """;
+        await reconciliarDuplicatas.ExecuteNonQueryAsync(cancellationToken);
+
+        await using var indice = conexao.CreateCommand();
+        indice.CommandText = """
+            CREATE UNIQUE INDEX IF NOT EXISTS ux_reunioes_gravando
+            ON reunioes(status)
+            WHERE status = 'Gravando';
+            """;
+        await indice.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    public static async Task InicializarJobsAsync(
+        SqliteConnection conexao,
+        CancellationToken cancellationToken)
+    {
+        await using var comando = conexao.CreateCommand();
+        comando.CommandText = """
+            CREATE TABLE IF NOT EXISTS jobs (
+                id TEXT NOT NULL PRIMARY KEY,
+                reuniao_id TEXT NOT NULL,
+                criado_em TEXT NOT NULL,
+                reservado_em TEXT NULL,
+                concluido_em TEXT NULL,
+                tentativas INTEGER NOT NULL
+            );
+
+            CREATE UNIQUE INDEX IF NOT EXISTS ux_jobs_reuniao_ativa
+            ON jobs(reuniao_id)
+            WHERE concluido_em IS NULL;
+            """;
+        await comando.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    public static async Task InicializarArtefatosAsync(
+        SqliteConnection conexao,
+        CancellationToken cancellationToken)
+    {
+        await using var comando = conexao.CreateCommand();
+        comando.CommandText = """
+            CREATE TABLE IF NOT EXISTS reuniao_artefatos (
+                reuniao_id TEXT NOT NULL PRIMARY KEY,
+                diretorio TEXT NOT NULL,
+                caminho_ata TEXT NOT NULL,
+                caminho_transcricao TEXT NOT NULL,
+                arquivado_em TEXT NOT NULL
+            );
+            """;
+        await comando.ExecuteNonQueryAsync(cancellationToken);
+    }
+}

@@ -26,9 +26,15 @@ public sealed class DiscoArquivadorTests
                 [new Tarefa("Validar proposta.", "Ana", new DateOnly(2026, 8, 6))],
                 reuniao.CriadaEm.AddMinutes(12)));
 
-            await new DiscoArquivador(diretorio).ArquivarAsync(reuniao, CancellationToken.None);
+            var artefatos = await new DiscoArquivador(diretorio)
+                .ArquivarAsync(reuniao, CancellationToken.None);
 
             var caminhoAta = Path.Combine(diretorio, "2026", "08", reuniao.Id.ToString("N"), "ata.md");
+            var caminhoTranscricao = Path.Combine(diretorio, "2026", "08", reuniao.Id.ToString("N"), "transcricao.md");
+            Assert.Equal(reuniao.Id, artefatos.ReuniaoId);
+            Assert.Equal(Path.GetDirectoryName(caminhoAta), artefatos.Diretorio);
+            Assert.Equal(caminhoAta, artefatos.CaminhoAta);
+            Assert.Equal(caminhoTranscricao, artefatos.CaminhoTranscricao);
             var markdown = await File.ReadAllTextAsync(caminhoAta);
             Assert.Contains("## Resumo executivo", markdown);
             Assert.Contains("Resumo validado.", markdown);
