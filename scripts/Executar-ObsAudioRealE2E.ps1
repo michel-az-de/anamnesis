@@ -25,46 +25,79 @@ if (Test-Path -LiteralPath $evidencias) {
 
 New-Item -ItemType Directory -Path $evidencias | Out-Null
 $config = Get-Content -Raw -LiteralPath $configuracao | ConvertFrom-Json
+$ffplay = Join-Path (Split-Path -Parent $config.CaminhoExecutavelFfmpeg) 'ffplay.exe'
+if (-not (Test-Path -LiteralPath $ffplay -PathType Leaf)) {
+    throw "Pré-requisito ausente: $ffplay"
+}
 $inicio = Get-Date
 $frase = 'Anamnesis está gravando o áudio desta reunião com sucesso.'
 $configuracaoAnterior = $env:ANAMNESIS_CONFIGURACAO
 $workerAnterior = $env:ANAMNESIS_WORKER_EXECUTAVEL
 $env:ANAMNESIS_CONFIGURACAO = $configuracao
 $env:ANAMNESIS_WORKER_EXECUTAVEL = $worker
+$caminhoTts = Join-Path $evidencias 'tts.wav'
+
+Add-Type -AssemblyName System.Speech
+$voz = [System.Speech.Synthesis.SpeechSynthesizer]::new()
+try {
+    $voz.Volume = 100
+    $voz.Rate = -1
+    $voz.SetOutputToWaveFile($caminhoTts)
+    $voz.Speak($frase)
+}
+finally {
+    $voz.Dispose()
+}
 
 try {
-    $tts = Start-Job -ScriptBlock {
-        param($texto)
-        Start-Sleep -Seconds 3
-        Add-Type -AssemblyName System.Speech
-        $voz = [System.Speech.Synthesis.SpeechSynthesizer]::new()
-        try {
-            $voz.Volume = 100
-            $voz.Rate = -1
-            $voz.Speak($texto)
-        }
-        finally {
-            $voz.Dispose()
-        }
-    } -ArgumentList $frase
-
     $processoTray = Start-Process `
         -FilePath $dotnet `
         -ArgumentList @($tray, '--gravar-teste-segundos', $DuracaoSegundos) `
         -WorkingDirectory $repositorio `
         -RedirectStandardOutput (Join-Path $evidencias 'tray.stdout.log') `
         -RedirectStandardError (Join-Path $evidencias 'tray.stderr.log') `
+        -PassThru
+
+    $limiteInicio = (Get-Date).AddSeconds(60)
+    $gravacaoDetectada = $null
+    while ((Get-Date) -lt $limiteInicio -and -not $gravacaoDetectada) {
+        Start-Sleep -Milliseconds 250
+        $gravacaoDetectada = Get-ChildItem (Join-Path $env:USERPROFILE 'Videos') -File |
+            Where-Object { $_.LastWriteTime -ge $inicio } |
+            Sort-Object LastWriteTime -Descending |
+            Select-Object -First 1
+        if ($processoTray.HasExited -and -not $gravacaoDetectada) {
+            throw "O Tray encerrou antes de iniciar a gravação. Código: $($processoTray.ExitCode)."
+        }
+    }
+    if (-not $gravacaoDetectada) {
+        Stop-Process -Id $processoTray.Id -Force
+        throw 'O OBS não criou o arquivo de gravação em 60 segundos.'
+    }
+
+    Start-Sleep -Seconds 2
+    $reprodutor = Start-Process `
+        -FilePath $ffplay `
+        -ArgumentList @('-nodisp', '-autoexit', '-loglevel', 'error', $caminhoTts) `
         -Wait `
         -PassThru
-    Wait-Job $tts -Timeout 30 | Out-Null
-    Receive-Job $tts | Out-Null
-    Remove-Job $tts -Force
+    if ($reprodutor.ExitCode -ne 0) {
+        throw "A reprodução da frase de teste falhou com código $($reprodutor.ExitCode)."
+    }
+
+    if (-not $processoTray.WaitForExit(90000)) {
+        Stop-Process -Id $processoTray.Id -Force
+        throw 'O Tray não encerrou a gravação em 90 segundos.'
+    }
+    $processoTray.WaitForExit()
     if ($processoTray.ExitCode -ne 0) {
         throw "Tray falhou com código $($processoTray.ExitCode)."
     }
 
     $saidaTray = Get-Content -Raw -LiteralPath (Join-Path $evidencias 'tray.stdout.log')
-    $linhaReuniao = ($saidaTray -split "`r?`n") | Where-Object { $_ -like 'ReuniaoId=*' } | Select-Object -First 1
+    $linhaReuniao = ($saidaTray -split "`r?`n") |
+        Where-Object { $_ -like 'ReuniaoId=*' } |
+        Select-Object -First 1
     if (-not $linhaReuniao) {
         throw 'O Tray não informou o identificador da reunião.'
     }

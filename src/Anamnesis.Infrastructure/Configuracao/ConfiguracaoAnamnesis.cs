@@ -6,6 +6,7 @@ public sealed record ConfiguracaoAnamnesis
     public string DiretorioArquivo { get; init; } = string.Empty;
     public string EnderecoObs { get; init; } = "ws://127.0.0.1:4455";
     public string? SenhaObs { get; init; }
+    public string? CaminhoExecutavelObs { get; init; }
     public string CaminhoExecutavelFfmpeg { get; init; } = string.Empty;
     public string CaminhoExecutavelWhisper { get; init; } = string.Empty;
     public string CaminhoModeloWhisper { get; init; } = string.Empty;

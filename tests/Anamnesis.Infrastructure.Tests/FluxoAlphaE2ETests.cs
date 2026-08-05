@@ -65,6 +65,7 @@ public sealed class FluxoAlphaE2ETests : IAsyncLifetime
             fila,
             new ObsGravador(new ObsWebSocketOptions(obs.Endereco, null)),
             new WorkerLauncherNulo(),
+            new ObsPreflightNulo(),
             relogio);
 
         var reuniaoId = await controlar.IniciarAsync("E2E da alpha", CancellationToken.None);
@@ -203,6 +204,11 @@ public sealed class FluxoAlphaE2ETests : IAsyncLifetime
     private sealed class WorkerLauncherNulo : IWorkerLauncher
     {
         public Task IniciarAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    }
+
+    private sealed class ObsPreflightNulo : IObsPreflight
+    {
+        public Task PrepararAsync(CancellationToken cancellationToken) => Task.CompletedTask;
     }
 
     private sealed class LixeiraFake : IGravacaoLixeira

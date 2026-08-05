@@ -8,6 +8,7 @@ public sealed class ControlarGravacaoHandler(
     IJobQueue jobQueue,
     IGravador gravador,
     IWorkerLauncher workerLauncher,
+    IObsPreflight obsPreflight,
     TimeProvider relogio)
 {
     public async Task<Guid> IniciarAsync(string titulo, CancellationToken cancellationToken)
@@ -19,6 +20,7 @@ public sealed class ControlarGravacaoHandler(
 
         try
         {
+            await obsPreflight.PrepararAsync(cancellationToken);
             await gravador.IniciarAsync(cancellationToken);
             return reuniao.Id;
         }

@@ -42,6 +42,9 @@ internal static class Program
             new SqliteJobQueue(configuracao.CaminhoBanco),
             new ObsGravador(new ObsWebSocketOptions(enderecoObs, configuracao.SenhaObs)),
             workerLauncher,
+            new ObsProcessPreflight(
+                enderecoObs,
+                ObsProcessPreflight.ResolverCaminhoExecutavel(configuracao.CaminhoExecutavelObs)),
             TimeProvider.System);
 
         if (modoValidacao is not null)

@@ -13,8 +13,13 @@ public sealed class ControlarGravacaoHandlerTests
     public async Task DevePersistirReuniaoEIniciarGravacao()
     {
         var repository = new ReuniaoRepositoryFake();
-        var gravador = new GravadorFake();
-        var handler = CriarHandler(repository, new JobQueueFake(), gravador);
+        var eventos = new List<string>();
+        var gravador = new GravadorFake(eventos: eventos);
+        var handler = CriarHandler(
+            repository,
+            new JobQueueFake(),
+            gravador,
+            obsPreflight: new ObsPreflightFake(eventos));
 
         var reuniaoId = await handler.IniciarAsync("Teste", CancellationToken.None);
 
@@ -22,6 +27,7 @@ public sealed class ControlarGravacaoHandlerTests
         Assert.Equal(reuniaoId, reuniao.Id);
         Assert.Equal(StatusReuniao.Gravando, reuniao.Status);
         Assert.True(gravador.Iniciou);
+        Assert.Equal(["obs-preflight", "gravador"], eventos);
     }
 
     [Fact]
@@ -77,12 +83,40 @@ public sealed class ControlarGravacaoHandlerTests
         Assert.Null(fila.ReuniaoEnfileiradaId);
     }
 
+    [Fact]
+    public async Task DeveRegistrarFalhaDoPreflightSemChamarGravador()
+    {
+        var repository = new ReuniaoRepositoryFake();
+        var fila = new JobQueueFake();
+        var gravador = new GravadorFake();
+        var handler = CriarHandler(
+            repository,
+            fila,
+            gravador,
+            obsPreflight: new ObsPreflightFake(falhar: true));
+
+        var excecao = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            handler.IniciarAsync("Teste", CancellationToken.None));
+
+        Assert.Equal("OBS não ficou disponível.", excecao.Message);
+        Assert.False(gravador.Iniciou);
+        Assert.Equal(StatusReuniao.Falha, Assert.Single(repository.Salvas).Status);
+        Assert.Null(fila.ReuniaoEnfileiradaId);
+    }
+
     private static ControlarGravacaoHandler CriarHandler(
         ReuniaoRepositoryFake repository,
         JobQueueFake fila,
         IGravador gravador,
-        IWorkerLauncher? workerLauncher = null) =>
-        new(repository, fila, gravador, workerLauncher ?? new WorkerLauncherFake(), TimeProvider.System);
+        IWorkerLauncher? workerLauncher = null,
+        IObsPreflight? obsPreflight = null) =>
+        new(
+            repository,
+            fila,
+            gravador,
+            workerLauncher ?? new WorkerLauncherFake(),
+            obsPreflight ?? new ObsPreflightFake(),
+            TimeProvider.System);
 
     private sealed class ReuniaoRepositoryFake : IReuniaoRepository
     {
@@ -123,16 +157,28 @@ public sealed class ControlarGravacaoHandlerTests
         public Task ConcluirAsync(Guid jobId, DateTimeOffset concluidoEm, CancellationToken cancellationToken) => throw new NotSupportedException();
     }
 
-    private sealed class GravadorFake(string caminhoArquivo = "") : IGravador
+    private sealed class GravadorFake(string caminhoArquivo = "", List<string>? eventos = null) : IGravador
     {
         public bool Iniciou { get; private set; }
         public Task IniciarAsync(CancellationToken cancellationToken)
         {
             Iniciou = true;
+            eventos?.Add("gravador");
             return Task.CompletedTask;
         }
 
         public Task<string> FinalizarAsync(CancellationToken cancellationToken) => Task.FromResult(caminhoArquivo);
+    }
+
+    private sealed class ObsPreflightFake(List<string>? eventos = null, bool falhar = false) : IObsPreflight
+    {
+        public Task PrepararAsync(CancellationToken cancellationToken)
+        {
+            eventos?.Add("obs-preflight");
+            return falhar
+                ? Task.FromException(new InvalidOperationException("OBS não ficou disponível."))
+                : Task.CompletedTask;
+        }
     }
 
     private sealed class GravadorComFalha : IGravador
