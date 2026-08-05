@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 using System.Net.WebSockets;
+using System.Text;
 using System.Text.Json;
 using Anamnesis.Infrastructure.Configuracao;
 using Anamnesis.Infrastructure.Fila;
@@ -65,6 +66,8 @@ public sealed class TrayBlackBoxE2ETests
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
+                StandardOutputEncoding = Encoding.UTF8,
+                StandardErrorEncoding = Encoding.UTF8,
                 CreateNoWindow = true
             }
         };

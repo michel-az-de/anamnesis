@@ -1,3 +1,4 @@
+using System.Text;
 using Anamnesis.Application.UseCases;
 using Anamnesis.Infrastructure.Arquivos;
 using Anamnesis.Infrastructure.Cli;
@@ -13,6 +14,7 @@ internal static class Program
 {
     private static async Task<int> Main(string[] args)
     {
+        Console.OutputEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
         try
         {
             var modoRetencao = ModoRetencaoWorkerOptions.Interpretar(args);

@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text;
 using Anamnesis.Application.UseCases;
 using Anamnesis.Infrastructure.Configuracao;
 using Anamnesis.Infrastructure.Fila;
@@ -12,6 +13,7 @@ internal static class Program
     [STAThread]
     private static int Main(string[] args)
     {
+        Console.OutputEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
         try
         {
             return Executar(args);

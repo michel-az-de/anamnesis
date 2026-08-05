@@ -147,16 +147,6 @@ if (-not (Test-Path -LiteralPath $sentinela -PathType Leaf)) {
     throw "A desinstalacao removeu dados do usuario."
 }
 
-$utf8SemBom = [Text.UTF8Encoding]::new($false)
-$codificacaoOem = [Text.Encoding]::GetEncoding(
-    [Globalization.CultureInfo]::CurrentCulture.TextInfo.OEMCodePage)
-foreach ($logWorker in @($caminhoWorkerStdout, $caminhoWorkerStderr)) {
-    if (Test-Path -LiteralPath $logWorker -PathType Leaf) {
-        $conteudo = [IO.File]::ReadAllText($logWorker, $codificacaoOem)
-        [IO.File]::WriteAllText($logWorker, $conteudo, $utf8SemBom)
-    }
-}
-
 $hashInstalador = (Get-FileHash -LiteralPath $instalador -Algorithm SHA256).Hash.ToLowerInvariant()
 $inicioValidacao = Get-Date -Format "yyyy-MM-ddTHH:mm:ssK"
 

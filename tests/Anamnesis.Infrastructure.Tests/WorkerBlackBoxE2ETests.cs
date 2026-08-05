@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.Text;
 using Anamnesis.Domain.Entidades;
 using Anamnesis.Domain.Tipos;
 using Anamnesis.Infrastructure.Configuracao;
@@ -146,6 +147,8 @@ public sealed class WorkerBlackBoxE2ETests : IAsyncLifetime
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
+                StandardOutputEncoding = Encoding.UTF8,
+                StandardErrorEncoding = Encoding.UTF8,
                 CreateNoWindow = true
             }
         };
