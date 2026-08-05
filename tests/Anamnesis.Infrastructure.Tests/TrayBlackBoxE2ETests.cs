@@ -260,22 +260,43 @@ public sealed class TrayBlackBoxE2ETests
                 await EnviarAsync(socket, new { op = 0, d = new { rpcVersion = 1 } });
                 await ReceberAsync(socket);
                 await EnviarAsync(socket, new { op = 2, d = new { negotiatedRpcVersion = 1 } });
-                var solicitacao = await ReceberAsync(socket);
-                var dados = solicitacao.GetProperty("d");
-                var tipo = dados.GetProperty("requestType").GetString();
-                var id = dados.GetProperty("requestId").GetString();
-                object respostaDados = tipo == "StopRecord" ? new { outputPath = _caminhoGravacao } : new { };
-                await EnviarAsync(socket, new
+                var quantidadeSolicitacoes = conexao == 0 ? 4 : 2;
+                for (var indice = 0; indice < quantidadeSolicitacoes; indice++)
                 {
-                    op = 7,
-                    d = new
+                    var solicitacao = await ReceberAsync(socket);
+                    var dados = solicitacao.GetProperty("d");
+                    var tipo = dados.GetProperty("requestType").GetString();
+                    var id = dados.GetProperty("requestId").GetString();
+                    object respostaDados = tipo switch
                     {
-                        requestType = tipo,
-                        requestId = id,
-                        requestStatus = new { result = true, code = 100 },
-                        responseData = respostaDados
-                    }
-                });
+                        "GetSceneList" => new
+                        {
+                            currentProgramSceneName = "Cena",
+                            scenes = new[] { new { sceneName = "Cena" }, new { sceneName = "Anamnesis" } }
+                        },
+                        "GetInputList" => new
+                        {
+                            inputs = new[]
+                            {
+                                new { inputName = "Anamnesis | Audio do sistema" },
+                                new { inputName = "Anamnesis | Microfone" }
+                            }
+                        },
+                        "StopRecord" => new { outputPath = _caminhoGravacao },
+                        _ => new { }
+                    };
+                    await EnviarAsync(socket, new
+                    {
+                        op = 7,
+                        d = new
+                        {
+                            requestType = tipo,
+                            requestId = id,
+                            requestStatus = new { result = true, code = 100 },
+                            responseData = respostaDados
+                        }
+                    });
+                }
             }
         }
 

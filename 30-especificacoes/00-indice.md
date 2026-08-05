@@ -4,7 +4,7 @@ aliases: [Índice de Especificações, Indice de SPEKs]
 tags: [especificacao, indice]
 type: moc
 created: 2026-08-04
-updated: 2026-08-04
+updated: 2026-08-05
 status: evergreen
 summary: Fonte de verdade para a ordem de leitura e estado das especificações.
 related: ["[[Especificacoes MOC]]", "[[Protocolo de Agentes]]"]
@@ -37,6 +37,7 @@ related: ["[[Especificacoes MOC]]", "[[Protocolo de Agentes]]"]
 | SPEK-021 | [[SPEK-021 UTF-8 nas CLIs Locais]] | concluído | `Infrastructure`, `Tray`, `Worker` |
 | SPEK-022 | [[SPEK-022 Instalador da Beta em Windows Limpo]] | concluído | `Installer`, `Scripts`, `CI` |
 | SPEK-023 | [[SPEK-023 Orquestracao do Worker pelo Tray]] | concluído | `Application`, `Infrastructure`, `Tray`, `Worker` |
+| SPEK-024 | [[SPEK-024 Captura Universal de Audio pelo OBS]] | concluído | `Infrastructure`, `Tray` |
 
 ## Fluxo obrigatório
 

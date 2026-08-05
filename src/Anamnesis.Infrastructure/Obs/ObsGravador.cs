@@ -8,23 +8,128 @@ namespace Anamnesis.Infrastructure.Obs;
 
 public sealed class ObsGravador(ObsWebSocketOptions options) : IGravador
 {
-    public Task IniciarAsync(CancellationToken cancellationToken) =>
-        ExecutarSolicitacaoAsync("StartRecord", cancellationToken);
+    private const string CenaAnamnesis = "Anamnesis";
+    private const string AudioSistema = "Anamnesis | Audio do sistema";
+    private const string Microfone = "Anamnesis | Microfone";
+    private string? _cenaAnterior;
+
+    public async Task IniciarAsync(CancellationToken cancellationToken)
+    {
+        using var cliente = await ConectarAsync(cancellationToken);
+        var cenas = await EnviarSolicitacaoAsync(cliente, "GetSceneList", null, cancellationToken);
+        var dadosCenas = cenas.GetProperty("responseData");
+        _cenaAnterior = dadosCenas.GetProperty("currentProgramSceneName").GetString();
+        var cenaExiste = dadosCenas.GetProperty("scenes").EnumerateArray().Any(cena =>
+            string.Equals(cena.GetProperty("sceneName").GetString(), CenaAnamnesis, StringComparison.Ordinal));
+
+        var entradas = await EnviarSolicitacaoAsync(cliente, "GetInputList", null, cancellationToken);
+        var nomesEntradas = entradas.GetProperty("responseData").GetProperty("inputs")
+            .EnumerateArray()
+            .Select(entrada => entrada.GetProperty("inputName").GetString())
+            .Where(nome => nome is not null)
+            .ToHashSet(StringComparer.Ordinal);
+
+        if (!cenaExiste)
+        {
+            await EnviarSolicitacaoAsync(
+                cliente,
+                "CreateScene",
+                new { sceneName = CenaAnamnesis },
+                cancellationToken);
+        }
+
+        if (!nomesEntradas.Contains(AudioSistema))
+        {
+            await CriarEntradaAsync(cliente, AudioSistema, "wasapi_output_capture", cancellationToken);
+        }
+
+        if (!nomesEntradas.Contains(Microfone))
+        {
+            await CriarEntradaAsync(cliente, Microfone, "wasapi_input_capture", cancellationToken);
+        }
+
+        var deveRestaurar = !string.Equals(_cenaAnterior, CenaAnamnesis, StringComparison.Ordinal);
+        try
+        {
+            if (deveRestaurar)
+            {
+                await EnviarSolicitacaoAsync(
+                    cliente,
+                    "SetCurrentProgramScene",
+                    new { sceneName = CenaAnamnesis },
+                    cancellationToken);
+            }
+
+            await EnviarSolicitacaoAsync(cliente, "StartRecord", null, cancellationToken);
+        }
+        catch
+        {
+            if (deveRestaurar)
+            {
+                await RestaurarCenaAsync(cliente, CancellationToken.None);
+            }
+
+            throw;
+        }
+    }
 
     public async Task<string> FinalizarAsync(CancellationToken cancellationToken)
     {
         using var cliente = await ConectarAsync(cancellationToken);
-        var resposta = await EnviarSolicitacaoAsync(cliente, "StopRecord", cancellationToken);
-        var caminhoArquivo = resposta.GetProperty("responseData").GetProperty("outputPath").GetString();
-        return !string.IsNullOrWhiteSpace(caminhoArquivo)
-            ? caminhoArquivo
-            : throw new InvalidOperationException("OBS não retornou o caminho da gravação encerrada.");
+        try
+        {
+            var resposta = await EnviarSolicitacaoAsync(cliente, "StopRecord", null, cancellationToken);
+            var caminhoArquivo = resposta.GetProperty("responseData").GetProperty("outputPath").GetString();
+            return !string.IsNullOrWhiteSpace(caminhoArquivo)
+                ? caminhoArquivo
+                : throw new InvalidOperationException("OBS não retornou o caminho da gravação encerrada.");
+        }
+        finally
+        {
+            try
+            {
+                await RestaurarCenaAsync(cliente, CancellationToken.None);
+            }
+            catch
+            {
+                // A gravação encerrada e seu caminho têm prioridade sobre a restauração visual do OBS.
+            }
+        }
     }
 
-    private async Task ExecutarSolicitacaoAsync(string tipo, CancellationToken cancellationToken)
+    private static Task<JsonElement> CriarEntradaAsync(
+        ClientWebSocket cliente,
+        string nome,
+        string tipo,
+        CancellationToken cancellationToken) =>
+        EnviarSolicitacaoAsync(
+            cliente,
+            "CreateInput",
+            new
+            {
+                sceneName = CenaAnamnesis,
+                inputName = nome,
+                inputKind = tipo,
+                inputSettings = new { device_id = "default" },
+                sceneItemEnabled = true
+            },
+            cancellationToken);
+
+    private async Task RestaurarCenaAsync(ClientWebSocket cliente, CancellationToken cancellationToken)
     {
-        using var cliente = await ConectarAsync(cancellationToken);
-        await EnviarSolicitacaoAsync(cliente, tipo, cancellationToken);
+        var cenaAnterior = _cenaAnterior;
+        _cenaAnterior = null;
+        if (string.IsNullOrWhiteSpace(cenaAnterior) ||
+            string.Equals(cenaAnterior, CenaAnamnesis, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        await EnviarSolicitacaoAsync(
+            cliente,
+            "SetCurrentProgramScene",
+            new { sceneName = cenaAnterior },
+            cancellationToken);
     }
 
     private async Task<ClientWebSocket> ConectarAsync(CancellationToken cancellationToken)
@@ -44,7 +149,8 @@ public sealed class ObsGravador(ObsWebSocketOptions options) : IGravador
             var dadosHello = hello.GetProperty("d");
             var identificacao = new Dictionary<string, object?>
             {
-                ["rpcVersion"] = dadosHello.GetProperty("rpcVersion").GetInt32()
+                ["rpcVersion"] = dadosHello.GetProperty("rpcVersion").GetInt32(),
+                ["eventSubscriptions"] = 0
             };
 
             if (dadosHello.TryGetProperty("authentication", out var autenticacao))
@@ -71,14 +177,41 @@ public sealed class ObsGravador(ObsWebSocketOptions options) : IGravador
         }
     }
 
-    private static async Task<JsonElement> EnviarSolicitacaoAsync(ClientWebSocket cliente, string tipo, CancellationToken cancellationToken)
+    private static async Task<JsonElement> EnviarSolicitacaoAsync(
+        ClientWebSocket cliente,
+        string tipo,
+        object? dadosSolicitacao,
+        CancellationToken cancellationToken)
     {
         var id = Guid.NewGuid().ToString("N");
-        await EnviarAsync(cliente, new { op = 6, d = new { requestType = tipo, requestId = id } }, cancellationToken);
-        var resposta = await ReceberAsync(cliente, cancellationToken);
-        var dados = resposta.GetProperty("d");
+        var envelopeSolicitacao = new Dictionary<string, object?>
+        {
+            ["requestType"] = tipo,
+            ["requestId"] = id
+        };
+        if (dadosSolicitacao is not null)
+        {
+            envelopeSolicitacao["requestData"] = dadosSolicitacao;
+        }
+
+        await EnviarAsync(cliente, new { op = 6, d = envelopeSolicitacao }, cancellationToken);
+        JsonElement dados;
+        while (true)
+        {
+            var resposta = await ReceberAsync(cliente, cancellationToken);
+            if (!resposta.TryGetProperty("op", out var operacao) || operacao.GetInt32() != 7 ||
+                !resposta.TryGetProperty("d", out dados) ||
+                !dados.TryGetProperty("requestId", out var idResposta) ||
+                !string.Equals(idResposta.GetString(), id, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            break;
+        }
+
         var status = dados.GetProperty("requestStatus");
-        if (resposta.GetProperty("op").GetInt32() != 7 || !status.GetProperty("result").GetBoolean())
+        if (!status.GetProperty("result").GetBoolean())
         {
             var codigo = status.TryGetProperty("code", out var valorCodigo) ? valorCodigo.GetInt32() : 0;
             throw new InvalidOperationException($"OBS recusou a solicitação '{tipo}' (código {codigo}).");
