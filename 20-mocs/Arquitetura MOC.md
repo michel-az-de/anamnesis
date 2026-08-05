@@ -4,14 +4,15 @@ aliases: [Mapa de Arquitetura]
 tags: [moc, arquitetura]
 type: moc
 created: 2026-08-04
-updated: 2026-08-04
+updated: 2026-08-05
 status: evergreen
 summary: Decisões e fronteiras arquiteturais do Anamnesis.
 related: ["[[Projeto MOC]]", "[[ADR-001 Arquitetura Modular]]", "[[ADR-002 Providers por CLI]]"]
 ---
 
-# Arquitetura — Map of Content
+# Arquitetura - Map of Content
 
+- [[Registro de Decisoes]]
 - [[ADR-001 Arquitetura Modular]]
 - [[ADR-002 Providers por CLI]]
 - [[ADR-003 SQLite do Windows]]

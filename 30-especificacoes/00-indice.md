@@ -7,7 +7,7 @@ created: 2026-08-04
 updated: 2026-08-05
 status: evergreen
 summary: Fonte de verdade para a ordem de leitura e estado das especificações.
-related: ["[[Especificacoes MOC]]", "[[Protocolo de Agentes]]"]
+related: ["[[Especificacoes MOC]]", "[[Protocolo de Agentes]]", "[[Roadmap de Produto]]"]
 ---
 
 # Índice de SPEKs
@@ -40,6 +40,24 @@ related: ["[[Especificacoes MOC]]", "[[Protocolo de Agentes]]"]
 | SPEK-024 | [[SPEK-024 Captura Universal de Audio pelo OBS]] | concluído | `Infrastructure`, `Tray` |
 | SPEK-025 | [[SPEK-025 Prontidao Automatica do OBS]] | concluído | `Application`, `Infrastructure`, `Tray` |
 | SPEK-026 | [[SPEK-026 Prontidao Automatica do Docker]] | concluído | `Infrastructure`, `Worker` |
+| SPEK-027 | [[SPEK-027 Desktop Windows para Estado Visivel]] | concluído | `Tray` |
+| SPEK-028 | [[SPEK-028 Console Local de Observabilidade]] | concluído | `Tray` |
+| SPEK-029 | [[SPEK-029 Polimento Visual e Motion Desktop]] | concluído | `Tray` |
+| SPEK-030 | [[SPEK-030 Desktop com Dados Reais]] | concluído | `Application`, `Infrastructure`, `Tray` |
+| SPEK-031 | [[SPEK-031 Observabilidade Operacional Real]] | rascunho | `Application`, `Infrastructure`, `Tray` |
+| SPEK-032 | [[SPEK-032 Captura Instantanea e Deteccao Local]] | rascunho | `Application`, `Infrastructure`, `Tray` |
+| SPEK-033 | [[SPEK-033 Agenda Conectada]] | rascunho | `Application`, `Infrastructure`, `Tray` |
+| SPEK-034 | [[SPEK-034 Google Calendar Adapter]] | rascunho | `Infrastructure`, `Tray` |
+| SPEK-035 | [[SPEK-035 Microsoft Graph Calendar Adapter]] | rascunho | `Infrastructure`, `Tray` |
+| SPEK-036 | [[SPEK-036 Publicacao Local no Obsidian]] | rascunho | `Application`, `Infrastructure`, `Tray` |
+| SPEK-037 | [[SPEK-037 Mapeamento de Tarefas Externas]] | rascunho | `Domain`, `Application`, `Infrastructure`, `Tray` |
+| SPEK-038 | [[SPEK-038 Trello Adapter]] | rascunho | `Infrastructure`, `Tray` |
+| SPEK-039 | [[SPEK-039 Azure DevOps Work Items Adapter]] | rascunho | `Infrastructure`, `Tray` |
+| SPEK-040 | [[SPEK-040 Concorrencia de Worker e Fila]] | concluído | `Infrastructure`, `Worker` |
+| SPEK-041 | [[SPEK-041 Resiliencia de Processos Externos]] | concluído | `Infrastructure` |
+| SPEK-042 | [[SPEK-042 Ciclo de Vida e Recuperacao da Reuniao]] | concluído | `Application`, `Tray` |
+| SPEK-043 | [[SPEK-043 Persistencia Local Deterministica]] | concluído | `Infrastructure` |
+| SPEK-044 | [[SPEK-044 Configuracao Local Protegida]] | concluído | `Infrastructure` |
 
 ## Fluxo obrigatório
 

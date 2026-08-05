@@ -7,7 +7,7 @@ created: 2026-08-04
 updated: 2026-08-05
 status: growing
 summary: Medição ponderada e auditável do caminho até uma alpha local testável.
-related: ["[[Anamnesis Home]]", "[[Projeto MOC]]", "[[Indice de SPEKs]]", "[[Protocolo de Agentes]]"]
+related: ["[[Anamnesis Home]]", "[[Projeto MOC]]", "[[Indice de SPEKs]]", "[[Protocolo de Agentes]]", "[[Roadmap de Produto]]"]
 ---
 
 # Status da versão alpha
@@ -15,15 +15,20 @@ related: ["[[Anamnesis Home]]", "[[Projeto MOC]]", "[[Indice de SPEKs]]", "[[Pro
 > **Progresso do escopo de engenharia: 100%**
 > **Fluxo ponta a ponta hermético testado: 100%**
 > **Fluxo ponta a ponta com pré-requisitos reais: 100%**
+> **Achados de robustez fechados: 13 de 13**
 
 O primeiro indicador reconhece a fundação já entregue. O segundo registra o fluxo integrado exercitado sem rede externa, com substitutos locais para os binários indisponíveis. O terceiro só avança quando for possível executar, na mesma máquina, o fluxo completo com OBS, Whisper e uma CLI autenticada configurados. Assim, evitamos confundir estrutura pronta com uma alpha utilizável.
+
+O quarto indicador nasceu de uma revisão de código de toda a base, que encontrou catorze achados: os três primeiros indicadores mediam funcionalidade entregue, não resiliência. Ele é deliberadamente uma contagem, e não um percentual de robustez: mede quantos achados **conhecidos** foram fechados com teste de regressão, e não a ausência de caminhos de falha ainda não descobertos. Treze foram corrigidos nas SPEKs 040 a 044; o décimo quarto, a concentração de 24% da base em dois arquivos de interface, segue aberto por decisão de escopo.
+
+Duas limitações continuam registradas: um Worker morto no meio da transcrição custa uma execução extra antes de recuperar, porque a recuperação vive na máquina de estados e exige SPEK própria; e a cena anterior do OBS não sobrevive a um Tray encerrado à força.
 
 ## Medição ponderada
 
 | Entrega para a alpha | Peso | Concluído | Avanço | Evidência atual |
 | --- | ---: | ---: | ---: | --- |
 | Especificações, ADRs e protocolo multi-LLM | 5% | 100% | 5% | SPEKs 001–004, ADRs 001–003 e protocolo versionados |
-| Solução .NET, qualidade e TDD inicial | 5% | 100% | 5% | Solução compilável e 66 testes automatizados verdes, incluindo OBS, Docker, Tray e Worker black box |
+| Solução .NET, qualidade e TDD inicial | 5% | 100% | 5% | Solução compilável e 121 testes automatizados verdes, incluindo OBS, Docker, Tray, Worker black box, Desktop real, observabilidade e motion |
 | Ciclo de vida de reunião no domínio | 10% | 100% | 10% | Estados, falha, retentativa, arquivamento e retenção cobertos por testes e persistência |
 | Fila local durável | 10% | 100% | 10% | `SqliteJobQueue` com reserva atômica, liberação e conclusão testadas |
 | Persistência de reuniões | 10% | 100% | 10% | `SqliteReuniaoRepository` persiste e restaura o agregado com testes em banco temporário |
@@ -62,10 +67,25 @@ A alpha estará pronta quando, em uma máquina Windows limpa e com pré-requisit
 | Captura universal de áudio | SPEK 100% concluída | OBS real capturou sistema e microfone; Whisper transcreveu e Codex gerou ata no E2E `20260805-real-04` |
 | Prontidão automática do OBS | SPEK 100% concluída | Tray iniciou OBS inicialmente fechado e concluiu o E2E real `obs-preflight-e2e/20260805-real-04` |
 | Prontidão automática do Docker | SPEK 100% concluída | Worker iniciou Docker parado, transcreveu e arquivou no E2E real `docker-preflight-e2e/20260805-real-02` |
+| POC desktop Windows | SPEK 100% concluída | Janela WinForms navegável, tema claro/escuro inclusive na moldura DWM, ciclo simulado coberto por teste STA e executável em `artifacts/poc-desktop/win-x64-system-theme-v2` |
+| Console local de observabilidade | SPEK 100% concluída | Eventos seguros, filtros, correlação, métricas e ciclo simulado cobertos por 83 testes; executável em `artifacts/poc-desktop/win-x64-observability-v1` |
+| Design System Desktop v3 | SPEK 100% concluída | Command Deck sólido, sem transparência, com ícones vetoriais, inputs próprios, motion contextual e 96 testes; executável em `artifacts/poc-desktop/win-x64-command-deck-v2` |
+| Desktop com dados reais | SPEK 100% concluída | Histórico e jobs no SQLite, comandos reais, manifesto, recuperação de gravação órfã, publicação e E2E controlado de Tray + Worker; 121 testes verdes |
+| Concorrência de Worker e fila | SPEK 100% concluída | Mutex por banco impede dois Workers no mesmo job; Red registrado com `A reunião está em 'EmTranscricao'` e saída 1, Green com E2E de dois processos reais ([[ADR-012 Instancia Unica do Worker]]) |
+| Ciclo de vida e recuperação da reunião | SPEK 100% concluída | Falha ao encerrar registra `Falha` e libera o índice de gravação ativa; nova gravação possível sem reiniciar o Tray, provado contra SQLite real |
+| Resiliência de processos externos | SPEK 100% concluída | Deadlock da CLI reproduzido em 30 s e corrigido para menos de 1 s; restauração de cena do OBS com limite de 5 s, verificado por teste |
+| Persistência local determinística | SPEK 100% concluída | Esquema preparado uma vez por instância, banco em WAL e engine SQLite embarcada com versão verificada; +1,9 MB em 121 MB publicados ([[ADR-013 Engine SQLite Embarcada]]) |
+| Configuração local protegida | SPEK 100% concluída | Senha do OBS protegida por DPAPI com migração transparente do formato em texto claro ([[ADR-014 Protecao de Segredos Locais]]) |
 
 ## Próximo incremento
 
-**Próximo ciclo: estado visível do processamento.** Criar a SPEK-027 para o Tray mostrar fila, falhas, conclusão e abrir a ata sem terminal.
+**Próximo ciclo: revisar e aprovar a [[SPEK-031 Observabilidade Operacional Real]].** O Desktop já opera com dados reais e os caminhos de falha estão cobertos; o próximo corte remove a lacuna do console apenas em memória.
+
+## Roadmap pós-alpha
+
+O planejamento pós-alpha está documentado em [[Roadmap de Produto]]. A SPEK-030 foi concluída; as SPEKs 031 a 039 permanecem em rascunho e cobrem observabilidade real, captura instantânea, agendas Google e Microsoft, Obsidian, Trello e Azure DevOps.
+
+Esse roadmap não altera os 100% da alpha. Novos percentuais só serão criados quando houver uma versão-alvo com pesos próprios, evitando misturar produto futuro com a medição já encerrada.
 
 ## Como atualizar esta medição
 

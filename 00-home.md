@@ -4,10 +4,10 @@ aliases: [Home, Início, Anamnesis Home]
 tags: [moc, projeto/anamnesis]
 type: moc
 created: 2026-08-04
-updated: 2026-08-04
+updated: 2026-08-05
 status: evergreen
 summary: Ponto de entrada do cofre Obsidian e do projeto Anamnesis.
-related: ["[[Projeto MOC]]", "[[Especificacoes MOC]]", "[[Arquitetura MOC]]", "[[Protocolo de Agentes]]", "[[Status Alpha]]"]
+related: ["[[Projeto MOC]]", "[[Especificacoes MOC]]", "[[Arquitetura MOC]]", "[[Protocolo de Agentes]]", "[[Status Alpha]]", "[[Roadmap de Produto]]"]
 ---
 
 # Anamnesis
@@ -23,6 +23,7 @@ Este cofre é a camada de conhecimento e especificação do Anamnesis. A pasta `
 - [[Arquitetura MOC]]
 - [[Protocolo de Agentes]]
 - [[Status Alpha]]
+- [[Roadmap de Produto]]
 - [[Resumo para Próxima Conversa]]
 
 ## Regra de trabalho
