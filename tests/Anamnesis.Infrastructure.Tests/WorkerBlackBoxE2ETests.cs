@@ -1,0 +1,236 @@
+using System.Diagnostics;
+using System.Globalization;
+using Anamnesis.Domain.Entidades;
+using Anamnesis.Domain.Tipos;
+using Anamnesis.Infrastructure.Configuracao;
+using Anamnesis.Infrastructure.Fila;
+using Anamnesis.Infrastructure.Persistencia;
+using Xunit;
+
+namespace Anamnesis.Infrastructure.Tests;
+
+public sealed class WorkerBlackBoxE2ETests : IAsyncLifetime
+{
+    private string _diretorio = null!;
+    private bool _preservarEvidencias;
+
+    public Task InitializeAsync()
+    {
+        var diretorioEvidencias = Environment.GetEnvironmentVariable("ANAMNESIS_WORKER_E2E_EVIDENCIAS");
+        _preservarEvidencias = !string.IsNullOrWhiteSpace(diretorioEvidencias);
+        _diretorio = _preservarEvidencias
+            ? Path.GetFullPath(diretorioEvidencias!)
+            : Path.Combine(Path.GetTempPath(), $"anamnesis-worker-e2e-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(_diretorio);
+        return Task.CompletedTask;
+    }
+
+    public Task DisposeAsync()
+    {
+        if (!_preservarEvidencias && Directory.Exists(_diretorio))
+        {
+            Directory.Delete(_diretorio, recursive: true);
+        }
+
+        return Task.CompletedTask;
+    }
+
+    [Fact]
+    public async Task DeveExecutarWorkerEmProcessoSeparadoComConfiguracaoIsolada()
+    {
+        var caminhoBanco = Path.Combine(_diretorio, "anamnesis.db");
+        var caminhoGravacao = Path.Combine(_diretorio, "gravacao.mkv");
+        var caminhoModelo = Path.Combine(_diretorio, "modelo.bin");
+        await File.WriteAllTextAsync(caminhoGravacao, "gravação black box");
+        await File.WriteAllTextAsync(caminhoModelo, "modelo de teste");
+        var caminhoFfmpeg = await CriarFfmpegFakeAsync();
+        var caminhoWhisper = await CriarWhisperFakeAsync();
+        var (caminhoCli, caminhoEntradaCli) = await CriarCliFakeAsync();
+        var caminhoConfiguracao = Path.Combine(_diretorio, "config.json");
+        await new ArquivoConfiguracao(caminhoConfiguracao).SalvarAsync(
+            new ConfiguracaoAnamnesis
+            {
+                CaminhoBanco = caminhoBanco,
+                DiretorioArquivo = Path.Combine(_diretorio, "arquivo"),
+                CaminhoExecutavelFfmpeg = caminhoFfmpeg,
+                CaminhoExecutavelWhisper = caminhoWhisper,
+                CaminhoModeloWhisper = caminhoModelo,
+                CaminhoExecutavelCli = caminhoCli,
+                NomeCli = "CLI black box"
+            },
+            CancellationToken.None);
+
+        var agora = DateTimeOffset.UtcNow;
+        var reuniao = new Reuniao(Guid.NewGuid(), "Worker black box", agora);
+        reuniao.IniciarGravacao(agora);
+        reuniao.FinalizarGravacao(caminhoGravacao, agora);
+        var repository = new SqliteReuniaoRepository(caminhoBanco);
+        var fila = new SqliteJobQueue(caminhoBanco);
+        await repository.SalvarAsync(reuniao, CancellationToken.None);
+        await fila.EnfileirarAsync(reuniao.Id, agora, CancellationToken.None);
+
+        var resultado = await ExecutarWorkerAsync(caminhoConfiguracao);
+        await File.WriteAllTextAsync(Path.Combine(_diretorio, "worker.stdout.log"), resultado.Stdout);
+        await File.WriteAllTextAsync(Path.Combine(_diretorio, "worker.stderr.log"), resultado.Stderr);
+
+        Assert.Equal(0, resultado.CodigoSaida);
+        Assert.Contains("Worker iniciado", resultado.Stdout, StringComparison.Ordinal);
+        Assert.Contains("Job processado", resultado.Stdout, StringComparison.Ordinal);
+        Assert.Contains("Fila vazia", resultado.Stdout, StringComparison.Ordinal);
+
+        var arquivada = await repository.ObterAsync(reuniao.Id, CancellationToken.None);
+        Assert.NotNull(arquivada);
+        Assert.Equal(StatusReuniao.Arquivada, arquivada!.Status);
+        Assert.Contains("transcricao", await File.ReadAllTextAsync(caminhoEntradaCli), StringComparison.OrdinalIgnoreCase);
+        var diretorioArquivado = Path.Combine(
+            _diretorio,
+            "arquivo",
+            agora.UtcDateTime.Year.ToString(CultureInfo.InvariantCulture),
+            agora.UtcDateTime.Month.ToString("00", CultureInfo.InvariantCulture),
+            reuniao.Id.ToString("N"));
+        Assert.True(File.Exists(Path.Combine(diretorioArquivado, "ata.md")));
+        Assert.True(File.Exists(Path.Combine(diretorioArquivado, "transcricao.md")));
+        await CriarResultadoAsync(reuniao.Id, arquivada.Status, resultado.CodigoSaida, caminhoConfiguracao, caminhoBanco, diretorioArquivado, caminhoEntradaCli);
+        Assert.True(File.Exists(Path.Combine(_diretorio, "resultado.md")));
+    }
+
+    [Fact]
+    public async Task DeveSimularRetencaoEmProcessoSeparadoSemMoverArquivo()
+    {
+        var caminhoBanco = Path.Combine(_diretorio, "retencao.db");
+        var caminhoGravacao = Path.Combine(_diretorio, "gravacao-retencao.mp4");
+        await File.WriteAllTextAsync(caminhoGravacao, "gravação para retenção");
+        var caminhoConfiguracao = Path.Combine(_diretorio, "config-retencao.json");
+        await new ArquivoConfiguracao(caminhoConfiguracao).SalvarAsync(
+            new ConfiguracaoAnamnesis
+            {
+                CaminhoBanco = caminhoBanco,
+                DiretorioArquivo = Path.Combine(_diretorio, "arquivo")
+            },
+            CancellationToken.None);
+        var arquivadaEm = new DateTimeOffset(2026, 8, 5, 12, 0, 0, TimeSpan.Zero);
+        var reuniao = new Reuniao(Guid.NewGuid(), "Retenção black box", arquivadaEm.AddHours(-1));
+        reuniao.IniciarGravacao(arquivadaEm.AddMinutes(-50));
+        reuniao.FinalizarGravacao(caminhoGravacao, arquivadaEm.AddMinutes(-40));
+        reuniao.IniciarTranscricao();
+        reuniao.RegistrarTranscricao(new Transcricao("Texto.", "pt", arquivadaEm.AddMinutes(-30)));
+        reuniao.RegistrarAta(new Ata("Resumo.", [], [], arquivadaEm.AddMinutes(-20)));
+        reuniao.MarcarArquivada(arquivadaEm);
+        var repository = new SqliteReuniaoRepository(caminhoBanco);
+        await repository.SalvarAsync(reuniao, CancellationToken.None);
+
+        var resultado = await ExecutarWorkerAsync(caminhoConfiguracao, [
+            "--retencao-simular",
+            "--reuniao", reuniao.Id.ToString(),
+            "--agora", "2026-08-12T12:00:00Z"
+        ]);
+
+        Assert.Equal(0, resultado.CodigoSaida);
+        Assert.Contains("Elegível: True", resultado.Stdout, StringComparison.Ordinal);
+        Assert.Contains("Simulação concluída", resultado.Stdout, StringComparison.Ordinal);
+        Assert.True(File.Exists(caminhoGravacao));
+        var preservada = await repository.ObterAsync(reuniao.Id, CancellationToken.None);
+        Assert.Equal(StatusReuniao.Arquivada, preservada!.Status);
+    }
+
+    private static async Task<(int CodigoSaida, string Stdout, string Stderr)> ExecutarWorkerAsync(
+        string caminhoConfiguracao,
+        IReadOnlyList<string>? argumentos = null)
+    {
+        using var processo = new Process
+        {
+            StartInfo = new ProcessStartInfo
+            {
+                FileName = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "dotnet", "dotnet.exe"),
+                WorkingDirectory = EncontrarRaizRepositorio(),
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            }
+        };
+        processo.StartInfo.ArgumentList.Add(Path.Combine(
+            EncontrarRaizRepositorio(),
+            "src",
+            "Anamnesis.Worker",
+            "bin",
+            "Release",
+            "net10.0-windows",
+            "Anamnesis.Worker.dll"));
+        foreach (var argumento in argumentos ?? [])
+        {
+            processo.StartInfo.ArgumentList.Add(argumento);
+        }
+
+        processo.StartInfo.Environment["ANAMNESIS_CONFIGURACAO"] = caminhoConfiguracao;
+        processo.Start();
+        var stdout = processo.StandardOutput.ReadToEndAsync();
+        var stderr = processo.StandardError.ReadToEndAsync();
+        await processo.WaitForExitAsync();
+        return (processo.ExitCode, await stdout, await stderr);
+    }
+
+    private static string EncontrarRaizRepositorio()
+    {
+        var diretorio = new DirectoryInfo(AppContext.BaseDirectory);
+        while (diretorio is not null && !File.Exists(Path.Combine(diretorio.FullName, "Anamnesis.sln")))
+        {
+            diretorio = diretorio.Parent;
+        }
+
+        return diretorio?.FullName ?? throw new DirectoryNotFoundException("Raiz do repositório não encontrada.");
+    }
+
+    private async Task<string> CriarWhisperFakeAsync()
+    {
+        var caminho = Path.Combine(_diretorio, "whisper-fake.cmd");
+        await File.WriteAllTextAsync(caminho, "@echo off\r\nset \"saida=\"\r\n:argumento\r\nif \"%~1\"==\"\" goto fim\r\nif \"%~1\"==\"-of\" (set \"saida=%~2\" & shift)\r\nshift\r\ngoto argumento\r\n:fim\r\necho Transcrição black box> \"%saida%.txt\"\r\n");
+        return caminho;
+    }
+
+    private async Task<string> CriarFfmpegFakeAsync()
+    {
+        var caminho = Path.Combine(_diretorio, "ffmpeg-fake.cmd");
+        await File.WriteAllTextAsync(caminho, "@echo off\r\nset \"saida=\"\r\n:argumento\r\nif \"%~1\"==\"\" goto fim\r\nset \"saida=%~1\"\r\nshift\r\ngoto argumento\r\n:fim\r\necho WAV black box> \"%saida%\"\r\n");
+        return caminho;
+    }
+
+    private async Task<(string CaminhoCli, string CaminhoEntrada)> CriarCliFakeAsync()
+    {
+        var caminhoEntrada = Path.Combine(_diretorio, "entrada-cli.json");
+        var caminho = Path.Combine(_diretorio, "cli-fake.cmd");
+        await File.WriteAllTextAsync(
+            caminho,
+            $"@echo off\r\nmore > \"{caminhoEntrada}\"\r\necho {{\"resumoExecutivo\":\"Resumo black box.\",\"decisoes\":[],\"tarefas\":[]}}\r\n");
+        return (caminho, caminhoEntrada);
+    }
+
+    private Task CriarResultadoAsync(
+        Guid reuniaoId,
+        StatusReuniao statusFinal,
+        int codigoSaida,
+        string caminhoConfiguracao,
+        string caminhoBanco,
+        string diretorioArquivado,
+        string caminhoEntradaCli) =>
+        File.WriteAllTextAsync(
+            Path.Combine(_diretorio, "resultado.md"),
+            $$"""
+            # Resultado do Worker black box
+
+            - Processo: `Anamnesis.Worker.dll` em processo separado
+            - Código de saída: `{{codigoSaida}}`
+            - Reunião: `{{reuniaoId}}`
+            - Estado final no SQLite: `{{statusFinal}}`
+
+            ## Evidências
+
+            - Configuração isolada: `{{caminhoConfiguracao}}`
+            - Banco SQLite: `{{caminhoBanco}}`
+            - stdout do Worker: `{{Path.Combine(_diretorio, "worker.stdout.log")}}`
+            - stderr do Worker: `{{Path.Combine(_diretorio, "worker.stderr.log")}}`
+            - JSON enviado à CLI: `{{caminhoEntradaCli}}`
+            - Ata: `{{Path.Combine(diretorioArquivado, "ata.md")}}`
+            - Transcrição: `{{Path.Combine(diretorioArquivado, "transcricao.md")}}`
+            """);
+}

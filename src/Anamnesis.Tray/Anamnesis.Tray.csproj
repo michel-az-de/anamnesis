@@ -2,8 +2,10 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\Anamnesis.Application\Anamnesis.Application.csproj" />
+    <ProjectReference Include="..\Anamnesis.Infrastructure\Anamnesis.Infrastructure.csproj" />
   </ItemGroup>
 </Project>

@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <IsPackable>false</IsPackable>
+    <TargetFramework>net10.0-windows</TargetFramework>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
@@ -12,5 +13,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Anamnesis.Application\Anamnesis.Application.csproj" />
     <ProjectReference Include="..\..\src\Anamnesis.Infrastructure\Anamnesis.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\Anamnesis.Worker\Anamnesis.Worker.csproj" />
+    <ProjectReference Include="..\..\src\Anamnesis.Tray\Anamnesis.Tray.csproj" />
   </ItemGroup>
 </Project>

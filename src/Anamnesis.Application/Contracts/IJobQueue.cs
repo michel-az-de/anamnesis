@@ -14,5 +14,6 @@ public interface IJobQueue
         CancellationToken cancellationToken);
 
     Task LiberarAsync(Guid jobId, CancellationToken cancellationToken);
+    Task LiberarReservasAtivasAsync(CancellationToken cancellationToken);
     Task ConcluirAsync(Guid jobId, DateTimeOffset concluidoEm, CancellationToken cancellationToken);
 }

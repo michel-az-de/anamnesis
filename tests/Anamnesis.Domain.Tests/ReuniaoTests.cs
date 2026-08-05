@@ -26,4 +26,24 @@ public sealed class ReuniaoTests
 
         Assert.Throws<InvalidOperationException>(reuniao.MarcarPendenteExclusao);
     }
+
+    [Fact]
+    public void DeveReiniciarProcessamentoAposFalhaPreservandoGravacao()
+    {
+        var agora = DateTimeOffset.UtcNow;
+        var reuniao = new Reuniao(Guid.NewGuid(), "Planejamento", agora);
+        reuniao.IniciarGravacao(agora);
+        reuniao.FinalizarGravacao("C:\\gravacoes\\planejamento.mkv", agora);
+        reuniao.IniciarTranscricao();
+        reuniao.RegistrarTranscricao(new Transcricao("Parcial", "pt", agora));
+        reuniao.RegistrarFalha("CLI indisponível");
+
+        reuniao.ReiniciarProcessamento();
+
+        Assert.Equal(StatusReuniao.AguardandoProcessamento, reuniao.Status);
+        Assert.Equal("C:\\gravacoes\\planejamento.mkv", reuniao.Gravacao!.CaminhoArquivo);
+        Assert.Null(reuniao.Transcricao);
+        Assert.Null(reuniao.Ata);
+        Assert.Null(reuniao.MotivoFalha);
+    }
 }

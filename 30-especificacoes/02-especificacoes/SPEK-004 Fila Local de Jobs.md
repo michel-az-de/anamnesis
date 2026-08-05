@@ -4,8 +4,8 @@ aliases: [Fila Local de Jobs]
 tags: [especificacao, persistencia, worker]
 type: spec
 created: 2026-08-04
-updated: 2026-08-04
-status: approved
+updated: 2026-08-05
+status: completed
 summary: Fila SQLite durável para desacoplar a captura de reunião do processamento.
 related: ["[[SPEK-001 Ciclo de Reuniao]]", "[[ADR-001 Arquitetura Modular]]"]
 ---

@@ -4,8 +4,8 @@ aliases: [Ciclo de Reunião]
 tags: [especificacao, reuniao, dominio]
 type: spec
 created: 2026-08-04
-updated: 2026-08-04
-status: approved
+updated: 2026-08-05
+status: completed
 summary: Estados válidos de uma reunião, da gravação ao arquivamento seguro.
 related: ["[[SPEK-003 Retencao de Gravacao]]", "[[ADR-001 Arquitetura Modular]]"]
 ---
@@ -37,3 +37,4 @@ Agendada → Gravando → AguardandoProcessamento → EmTranscricao
 
 - `ReuniaoTests.DevePrepararProcessamentoDepoisDeFinalizarGravacao`
 - `ReuniaoTests.NaoDevePermitirExcluirAntesDeArquivar`
+- `ReuniaoTests.DeveReiniciarProcessamentoAposFalhaPreservandoGravacao`

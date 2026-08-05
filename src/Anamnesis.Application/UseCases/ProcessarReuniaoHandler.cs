@@ -1,5 +1,6 @@
 using Anamnesis.Application.Contracts;
 using Anamnesis.Domain.Entidades;
+using Anamnesis.Domain.Tipos;
 
 namespace Anamnesis.Application.UseCases;
 
@@ -17,6 +18,11 @@ public sealed class ProcessarReuniaoHandler(
 
         try
         {
+            if (reuniao.Status == StatusReuniao.Falha)
+            {
+                reuniao.ReiniciarProcessamento();
+            }
+
             reuniao.IniciarTranscricao();
             await reuniaoRepository.SalvarAsync(reuniao, cancellationToken);
 
@@ -38,7 +44,7 @@ public sealed class ProcessarReuniaoHandler(
                 relogio.GetUtcNow()));
 
             await arquivador.ArquivarAsync(reuniao, cancellationToken);
-            reuniao.MarcarArquivada();
+            reuniao.MarcarArquivada(relogio.GetUtcNow());
             await reuniaoRepository.SalvarAsync(reuniao, cancellationToken);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)

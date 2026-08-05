@@ -2,7 +2,9 @@ bin/
 obj/
 .vs/
 .idea/
+.obsidian/
 TestResults/
 data/
+artifacts/
 *.user
 *.suo

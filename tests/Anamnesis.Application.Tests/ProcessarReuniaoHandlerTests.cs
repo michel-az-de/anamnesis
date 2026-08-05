@@ -31,6 +31,25 @@ public sealed class ProcessarReuniaoHandlerTests
         Assert.Equal("Resumo da reunião.", reuniao.Ata!.ResumoExecutivo);
     }
 
+    [Fact]
+    public async Task DeveReprocessarReuniaoEmFalha()
+    {
+        var reuniao = new Reuniao(Guid.NewGuid(), "Retentativa", DateTimeOffset.UtcNow);
+        reuniao.IniciarGravacao(DateTimeOffset.UtcNow);
+        reuniao.FinalizarGravacao("C:\\gravacoes\\retentativa.mkv", DateTimeOffset.UtcNow);
+        reuniao.RegistrarFalha("Whisper indisponível");
+        var handler = new ProcessarReuniaoHandler(
+            new ReuniaoRepositoryFake(reuniao),
+            new TranscritorFake(),
+            new AtaRunnerFake(),
+            new ArquivadorFake(),
+            TimeProvider.System);
+
+        await handler.ExecutarAsync(reuniao.Id, CancellationToken.None);
+
+        Assert.Equal(StatusReuniao.Arquivada, reuniao.Status);
+    }
+
     private sealed class ReuniaoRepositoryFake(Reuniao reuniao) : IReuniaoRepository
     {
         public Task<Reuniao?> ObterAsync(Guid reuniaoId, CancellationToken cancellationToken) =>

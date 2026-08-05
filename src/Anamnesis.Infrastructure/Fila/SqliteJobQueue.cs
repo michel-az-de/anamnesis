@@ -93,6 +93,19 @@ public sealed class SqliteJobQueue(string caminhoBanco) : IJobQueue
         await liberar.ExecuteNonQueryAsync(cancellationToken);
     }
 
+    public async Task LiberarReservasAtivasAsync(CancellationToken cancellationToken)
+    {
+        await InicializarAsync(cancellationToken);
+        await using var conexao = await AbrirConexaoAsync(cancellationToken);
+        await using var liberar = conexao.CreateCommand();
+        liberar.CommandText = """
+            UPDATE jobs
+            SET reservado_em = NULL
+            WHERE reservado_em IS NOT NULL AND concluido_em IS NULL;
+            """;
+        await liberar.ExecuteNonQueryAsync(cancellationToken);
+    }
+
     public async Task ConcluirAsync(Guid jobId, DateTimeOffset concluidoEm, CancellationToken cancellationToken)
     {
         await InicializarAsync(cancellationToken);

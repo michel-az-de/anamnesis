@@ -24,6 +24,29 @@ public sealed class Reuniao
     public Transcricao? Transcricao { get; private set; }
     public Ata? Ata { get; private set; }
     public string? MotivoFalha { get; private set; }
+    public DateTimeOffset? ArquivadaEm { get; private set; }
+
+    public static Reuniao Reconstituir(
+        Guid id,
+        string titulo,
+        DateTimeOffset criadaEm,
+        StatusReuniao status,
+        Gravacao? gravacao,
+        Transcricao? transcricao,
+        Ata? ata,
+        string? motivoFalha,
+        DateTimeOffset? arquivadaEm = null)
+    {
+        return new Reuniao(id, titulo, criadaEm)
+        {
+            Status = status,
+            Gravacao = gravacao,
+            Transcricao = transcricao,
+            Ata = ata,
+            MotivoFalha = motivoFalha,
+            ArquivadaEm = arquivadaEm
+        };
+    }
 
     public void IniciarGravacao(DateTimeOffset iniciadaEm)
     {
@@ -65,11 +88,14 @@ public sealed class Reuniao
         Status = StatusReuniao.AguardandoArquivamento;
     }
 
-    public void MarcarArquivada()
+    public void MarcarArquivada(DateTimeOffset arquivadaEm)
     {
         ExigirStatus(StatusReuniao.AguardandoArquivamento);
         Status = StatusReuniao.Arquivada;
+        ArquivadaEm = arquivadaEm;
     }
+
+    public void MarcarArquivada() => MarcarArquivada(DateTimeOffset.UtcNow);
 
     public void MarcarPendenteExclusao()
     {
@@ -83,10 +109,26 @@ public sealed class Reuniao
         Status = StatusReuniao.Excluida;
     }
 
+    public void CancelarExclusaoPendente()
+    {
+        ExigirStatus(StatusReuniao.PendenteExclusao);
+        Status = StatusReuniao.Arquivada;
+    }
+
     public void RegistrarFalha(string motivo)
     {
         MotivoFalha = string.IsNullOrWhiteSpace(motivo) ? "Falha não especificada." : motivo;
         Status = StatusReuniao.Falha;
+    }
+
+    public void ReiniciarProcessamento()
+    {
+        ExigirStatus(StatusReuniao.Falha);
+        Transcricao = null;
+        Ata = null;
+        MotivoFalha = null;
+        ArquivadaEm = null;
+        Status = StatusReuniao.AguardandoProcessamento;
     }
 
     private void ExigirStatus(StatusReuniao esperado)

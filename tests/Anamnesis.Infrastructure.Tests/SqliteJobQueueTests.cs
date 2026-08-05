@@ -77,4 +77,19 @@ public sealed class SqliteJobQueueTests : IAsyncLifetime
 
         Assert.Null(proximo);
     }
+
+    [Fact]
+    public async Task DeveLiberarReservasAtivasParaRetomada()
+    {
+        var fila = new SqliteJobQueue(_caminhoBanco);
+        var criadoEm = new DateTimeOffset(2026, 8, 4, 14, 0, 0, TimeSpan.Zero);
+        await fila.EnfileirarAsync(Guid.NewGuid(), criadoEm, CancellationToken.None);
+        await fila.ReservarProximoAsync(criadoEm.AddMinutes(1), CancellationToken.None);
+
+        await fila.LiberarReservasAtivasAsync(CancellationToken.None);
+        var retomado = await fila.ReservarProximoAsync(criadoEm.AddMinutes(2), CancellationToken.None);
+
+        Assert.NotNull(retomado);
+        Assert.Equal(2, retomado!.Tentativas);
+    }
 }
