@@ -345,7 +345,7 @@ begin
   end
   else if WorkerComVersaoDivergente then
   begin
-    Integridade := 'Inconsistente: a versão do Worker diverge do Tray e do pacote. O reparo é recomendado.';
+    Integridade := 'Inconsistente: a versão do Worker diverge do Tray. O reparo é recomendado.';
   end
   else if PayloadObrigatorioExiste(DiretorioInstalacaoAnterior) then
   begin

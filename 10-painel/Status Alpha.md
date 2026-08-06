@@ -28,7 +28,7 @@ Duas limitações continuam registradas: um Worker morto no meio da transcriçã
 | Entrega para a alpha | Peso | Concluído | Avanço | Evidência atual |
 | --- | ---: | ---: | ---: | --- |
 | Especificações, ADRs e protocolo multi-LLM | 5% | 100% | 5% | SPEKs 001–004, ADRs 001–003 e protocolo versionados |
-| Solução .NET, qualidade e TDD inicial | 5% | 100% | 5% | Solução compilável e 266 testes automatizados verdes, incluindo OBS, Docker, Tray, Worker black box, Desktop real, observabilidade, motion, detecção local e shell Windows instalado |
+| Solução .NET, qualidade e TDD inicial | 5% | 100% | 5% | Solução compilável e 268 testes automatizados verdes, incluindo OBS, Docker, Tray, Worker black box, Desktop real, observabilidade, motion, detecção local e shell Windows instalado |
 | Ciclo de vida de reunião no domínio | 10% | 100% | 10% | Estados, falha, retentativa, arquivamento e retenção cobertos por testes e persistência |
 | Fila local durável | 10% | 100% | 10% | `SqliteJobQueue` com reserva atômica, liberação e conclusão testadas |
 | Persistência de reuniões | 10% | 100% | 10% | `SqliteReuniaoRepository` persiste e restaura o agregado com testes em banco temporário |

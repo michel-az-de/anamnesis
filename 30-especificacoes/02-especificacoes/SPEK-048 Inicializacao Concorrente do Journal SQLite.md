@@ -95,3 +95,8 @@ O timeout SQLite de um segundo continua correto para eventos comuns e para a nat
 - O teste unitario aguarda a violacao real de compartilhamento, cancela durante essa contencao e confirma que uma terceira instancia prepara o mesmo banco.
 - O caixa-preta iniciou dois processos `dotnet` reais, recebeu o sinal de contencao do segundo e confirmou a transferencia da trava com codigo de saida zero, sem OBS, rede ou CLI de modelo.
 - A suite completa foi repetida apos a revisao P3: 266 de 266 testes verdes em Release.
+- Red no runner `31093154432`: o stress de cem journals disputou recursos com testes de processos externos; uma instancia foi preemptada por mais de um segundo e o teste direto excedeu o limite best-effort aceito.
+- Green de isolamento: a classe de stress usa a colecao local sem paralelismo, preservando cem repeticoes, duas escritas por corrida e o timeout produtivo de um segundo.
+- Red estrutural deterministico: com a trava externa ocupada, o SQLite criava o arquivo do banco antes de obter exclusividade.
+- Green estrutural: o cold path agora executa semaforo, `.init.lock`, `OpenAsync` e preparacao do schema nessa ordem; o fast path continua abrindo diretamente depois da primeira preparacao.
+- Validacao local final: os testes de journal e CLI passaram juntos e a suite completa ficou 268 de 268 verde em tres execucoes consecutivas no Windows.

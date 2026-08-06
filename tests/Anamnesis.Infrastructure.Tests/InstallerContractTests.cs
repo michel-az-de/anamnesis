@@ -208,6 +208,14 @@ public sealed partial class InstallerContractTests
         Assert.Contains("ExecutavelTray", divergencia, StringComparison.Ordinal);
         Assert.Contains("ExecutavelWorker", divergencia, StringComparison.Ordinal);
         Assert.DoesNotContain("{srcexe}", divergencia, StringComparison.Ordinal);
+        Assert.Contains(
+            "a versão do Worker diverge do Tray.",
+            inno,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "a versão do Worker diverge do Tray e do pacote.",
+            inno,
+            StringComparison.Ordinal);
 
         var smoke = File.ReadAllText(Path.Combine(raiz, "scripts", "Test-Installer.ps1"));
         Assert.Contains("caminhoWorkerLegado", smoke, StringComparison.Ordinal);

@@ -115,6 +115,37 @@ public sealed class BancoLocalTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task NaoDeveCriarBancoAntesDeAdquirirTravaDePreparacao()
+    {
+        var caminho = Path.Combine(_diretorio, "ordem-da-trava.db");
+        var detectouContencao = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var banco = CriarBanco(
+            caminho,
+            static (conexao, cancellationToken) => Task.CompletedTask,
+            aoDetectarContencao: () => detectouContencao.TrySetResult());
+        Task<SqliteConnection> abrir;
+        bool bancoCriadoAntesDaTrava;
+
+        await using (var bloqueador = new FileStream(
+            caminho + ".init.lock",
+            FileMode.OpenOrCreate,
+            FileAccess.ReadWrite,
+            FileShare.None,
+            bufferSize: 1,
+            FileOptions.None))
+        {
+            abrir = banco.AbrirAsync(CancellationToken.None);
+            await detectouContencao.Task.WaitAsync(LimiteTeste);
+            bancoCriadoAntesDaTrava = File.Exists(caminho);
+        }
+
+        await using var conexao = await abrir.WaitAsync(LimiteTeste);
+        Assert.False(bancoCriadoAntesDaTrava);
+        Assert.True(File.Exists(caminho));
+    }
+
+    [Fact]
     public async Task DeveLimitarEsperaPorTravaMantidaPorOutroHandle()
     {
         var caminho = Path.Combine(_diretorio, "bloqueado.db");

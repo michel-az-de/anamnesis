@@ -8,6 +8,7 @@ using Xunit;
 
 namespace Anamnesis.Infrastructure.Tests;
 
+[Collection(ProcessosExternosGrupo.Nome)]
 public sealed class SqliteEventoOperacionalRepositoryTests : IAsyncLifetime
 {
     private readonly string _diretorio = Path.Combine(

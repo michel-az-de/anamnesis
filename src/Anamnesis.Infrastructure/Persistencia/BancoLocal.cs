@@ -43,11 +43,45 @@ internal sealed class BancoLocal(
 
     public async Task<SqliteConnection> AbrirAsync(CancellationToken cancellationToken)
     {
-        var conexao = new SqliteConnection(_connectionString);
-        await conexao.OpenAsync(cancellationToken);
+        if (_preparado)
+        {
+            return await AbrirConexaoAsync(cancellationToken);
+        }
+
+        await _preparacao.WaitAsync(cancellationToken);
         try
         {
-            await PrepararAsync(conexao, cancellationToken);
+            if (_preparado)
+            {
+                return await AbrirConexaoAsync(cancellationToken);
+            }
+
+            await using var trava = await AdquirirTravaPreparacaoAsync(cancellationToken);
+            var conexao = await AbrirConexaoAsync(cancellationToken);
+            try
+            {
+                await PrepararConexaoAsync(conexao, cancellationToken);
+                return conexao;
+            }
+            catch
+            {
+                await conexao.DisposeAsync();
+                throw;
+            }
+        }
+        finally
+        {
+            _preparacao.Release();
+        }
+    }
+
+    private async Task<SqliteConnection> AbrirConexaoAsync(
+        CancellationToken cancellationToken)
+    {
+        var conexao = new SqliteConnection(_connectionString);
+        try
+        {
+            await conexao.OpenAsync(cancellationToken);
             return conexao;
         }
         catch
@@ -73,45 +107,28 @@ internal sealed class BancoLocal(
         return builder.ToString();
     }
 
-    private async Task PrepararAsync(SqliteConnection conexao, CancellationToken cancellationToken)
+    private async Task PrepararConexaoAsync(
+        SqliteConnection conexao,
+        CancellationToken cancellationToken)
     {
-        if (_preparado)
+        if (esquemaPreparado is not null &&
+            await esquemaPreparado(conexao, cancellationToken))
         {
+            _preparado = true;
             return;
         }
 
-        await _preparacao.WaitAsync(cancellationToken);
-        try
+        // Tray e Worker compartilham o arquivo. Em WAL, leitor e escritor deixam de se
+        // bloquear, o que importa porque o Desktop consulta o banco a cada dois segundos.
+        await using (var wal = conexao.CreateCommand())
         {
-            if (_preparado)
-            {
-                return;
-            }
-
-            await using var trava = await AdquirirTravaPreparacaoAsync(cancellationToken);
-            if (esquemaPreparado is not null &&
-                await esquemaPreparado(conexao, cancellationToken))
-            {
-                _preparado = true;
-                return;
-            }
-
-            // Tray e Worker compartilham o arquivo. Em WAL, leitor e escritor deixam de se
-            // bloquear, o que importa porque o Desktop consulta o banco a cada dois segundos.
-            await using (var wal = conexao.CreateCommand())
-            {
-                wal.CommandText = "PRAGMA journal_mode=WAL;";
-                await wal.ExecuteNonQueryAsync(cancellationToken);
-            }
-
-            await aplicarEsquema(conexao, cancellationToken);
-            _preparacoes++;
-            _preparado = true;
+            wal.CommandText = "PRAGMA journal_mode=WAL;";
+            await wal.ExecuteNonQueryAsync(cancellationToken);
         }
-        finally
-        {
-            _preparacao.Release();
-        }
+
+        await aplicarEsquema(conexao, cancellationToken);
+        _preparacoes++;
+        _preparado = true;
     }
 
     private async Task<FileStream?> AdquirirTravaPreparacaoAsync(

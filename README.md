@@ -29,11 +29,11 @@ Abra esta pasta no Obsidian e comece por `00-home.md`.
 
 ## Status da alpha
 
-O escopo ponderado da alpha e os fluxos E2E hermético e real estão em **100%**. A suíte Release possui **266 testes verdes**. O aplicativo Windows `0.2.0-beta.1` possui Desktop real, ícone próprio, menu na bandeja, instância única, Worker interno e instalador por usuário validado em runner Windows limpo. Consulte o [painel de alpha](10-painel/Status%20Alpha.md) para evidências e limitações atuais.
+O escopo ponderado da alpha e os fluxos E2E hermético e real estão em **100%**. A suíte Release possui **268 testes verdes**. O aplicativo Windows `0.2.0-beta.1` possui Desktop real, ícone próprio, menu na bandeja, instância única, Worker interno e instalador por usuário validado em runner Windows limpo. Consulte o [painel de alpha](10-painel/Status%20Alpha.md) para evidências e limitações atuais.
 
 ## Instalar no Windows
 
-O instalador é autocontido para o Anamnesis, não exige UAC e apresenta termos simples de uso antes da instalação. Ele identifica se deve instalar, atualizar ou reparar os binários, sempre preservando configuração, banco e reuniões. Se o Anamnesis estiver aberto, o instalador pede um encerramento seguro; ele não encerra à força uma gravação ativa nem um processamento em andamento. Após uma instalação interativa, a opção de abrir o Anamnesis fica marcada.
+O instalador é autocontido para o Anamnesis, solicita elevação UAC e mantém os dados do produto no perfil do usuário. Ele apresenta termos simples de uso, identifica se deve instalar, atualizar ou reparar os binários e preserva configuração, banco e reuniões. Se o Anamnesis estiver aberto, o instalador pede um encerramento seguro; ele não encerra à força uma gravação ativa nem um processamento em andamento. Após uma instalação interativa, a opção de abrir o Anamnesis fica marcada.
 
 OBS, Docker Desktop, FFmpeg, modelo Whisper e uma CLI autenticada continuam dependências locais separadas e aparecem na tela de Configurações como `PRONTO` ou `PENDENTE`.
 
