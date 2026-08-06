@@ -52,6 +52,18 @@ public sealed partial class InstallerContractTests
         Assert.DoesNotContain("/NOICONS", script, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void SmokeDevePoderIsolarOGrupoDoMenuIniciar()
+    {
+        var raiz = EncontrarRaizRepositorio();
+        var inno = File.ReadAllText(Path.Combine(raiz, "installer", "Anamnesis.iss"));
+        var script = File.ReadAllText(Path.Combine(raiz, "scripts", "Test-Installer.ps1"));
+
+        Assert.Contains("/GROUP=$grupoAtalhos", script, StringComparison.Ordinal);
+        Assert.Contains("DisableProgramGroupPage=auto", inno, StringComparison.Ordinal);
+        Assert.DoesNotContain("DisableProgramGroupPage=yes", inno, StringComparison.Ordinal);
+    }
+
     private static string EncontrarRaizRepositorio()
     {
         var atual = new DirectoryInfo(AppContext.BaseDirectory);
