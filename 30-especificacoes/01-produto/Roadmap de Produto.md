@@ -29,6 +29,7 @@ flowchart LR
 | Horizonte | Resultado | SPEKs | Prioridade | Confianca da direcao |
 | --- | --- | --- | --- | ---: |
 | Concluido | Desktop real e console persistente operam com dados locais | 030, 031 | entregue | 100% |
+| Validacao final | Aplicativo Windows instalado, identificado e operado pela bandeja | 045 | P1 | 95% |
 | Agora | Validar captura assistida ou automatica em chamadas reais | 032 | P1 | 90% |
 | Contexto de agenda | Eventos Google e Microsoft alimentam o detector local | 033, 034, 035 | P2 | 85% |
 | Conhecimento | Atas sao publicadas em um vault Obsidian sem plugin | 036 | P2 | 95% |
@@ -43,6 +44,7 @@ flowchart TD
     S019["SPEK-019 Ata estruturada"] --> S036["SPEK-036 Obsidian"]
     S002["SPEK-002 Evidencias por tarefa"] --> S037["SPEK-037 Tarefas externas"]
     S030["SPEK-030 Desktop real"] --> S031["SPEK-031 Observabilidade real"]
+    S030 --> S045["SPEK-045 Experiencia Windows instalada"]
     S031 --> S032["SPEK-032 Captura instantanea"]
     S030 --> S033["SPEK-033 Agenda conectada"]
     S033 --> S034["SPEK-034 Google Calendar"]

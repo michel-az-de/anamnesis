@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "resumoExecutivo": {
+      "type": "string"
+    },
+    "decisoes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "tarefas": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "descricao": {
+            "type": "string"
+          },
+          "responsavel": {
+            "type": ["string", "null"]
+          },
+          "prazo": {
+            "type": ["string", "null"]
+          }
+        },
+        "required": ["descricao", "responsavel", "prazo"]
+      }
+    }
+  },
+  "required": ["resumoExecutivo", "decisoes", "tarefas"]
+}

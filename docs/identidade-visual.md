@@ -10,9 +10,9 @@ summary: Direção visual, símbolo, paleta e tom da marca Anamnesis.
 related: ["[[Visao do Produto]]"]
 ---
 
-# Identidade visual — Anamnesis
+# Identidade visual - Anamnesis
 
-![Exploração visual inicial](referencias/identidade-conceito-v1.png)
+![Símbolo aprovado do Anamnesis](../src/Anamnesis.Tray/Assets/Anamnesis.svg)
 
 ## Essência
 
@@ -28,7 +28,7 @@ O símbolo parte de uma estrela de oito pontas contida por anéis e uma moldura 
 - anéis: memória, contexto e recuperação;
 - quadrado: ordem, registro e estrutura.
 
-Para o ícone de bandeja, usar somente a estrela simplificada com no máximo um anel. Não usar o selo completo em 16px ou 24px. A imagem acima é referência de direção, não o logo final: o símbolo aprovado deve ser redesenhado como SVG.
+O símbolo acima é o ativo aprovado em SVG. O gerador `scripts/Gerar-IconeWindows.ps1` produz o `.ico` multirresolução de 16, 24, 32, 48 e 256 px usado pelo EXE, janela, barra de tarefas, bandeja, atalhos, instalador e desinstalador.
 
 ## Paleta
 

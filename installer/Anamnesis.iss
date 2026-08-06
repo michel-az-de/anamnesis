@@ -1,5 +1,8 @@
 #ifndef AppVersion
-  #define AppVersion "0.1.0-beta.1"
+  #define AppVersion "0.2.0-beta.1"
+#endif
+#ifndef AppNumericVersion
+  #define AppNumericVersion "0.2.0.0"
 #endif
 #ifndef SourceRoot
   #error SourceRoot deve ser informado ao compilador.
@@ -27,20 +30,22 @@ OutputBaseFilename=Anamnesis-{#AppVersion}-win-x64-setup
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
+SetupIconFile={#SourceRoot}\tray\Anamnesis.ico
 SetupLogging=yes
 CloseApplications=yes
 RestartApplications=no
 UninstallDisplayIcon={app}\tray\Anamnesis.Tray.exe
-VersionInfoVersion=0.1.0.1
+VersionInfoVersion={#AppNumericVersion}
 VersionInfoDescription=Instalador do Anamnesis
 VersionInfoProductName=Anamnesis
-VersionInfoProductVersion=0.1.0.1
+VersionInfoProductVersion={#AppNumericVersion}
 
 [Languages]
 Name: "brazilianportuguese"; MessagesFile: "compiler:Languages\BrazilianPortuguese.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "Criar atalho na area de trabalho"; GroupDescription: "Atalhos adicionais:"; Flags: unchecked
+Name: "startup"; Description: "Iniciar Anamnesis com o Windows"; GroupDescription: "Inicializacao:"; Flags: checkedonce
 
 [Files]
 Source: "{#SourceRoot}\tray\*"; DestDir: "{app}\tray"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -48,8 +53,10 @@ Source: "{#SourceRoot}\worker\*"; DestDir: "{app}\worker"; Flags: ignoreversion 
 
 [Icons]
 Name: "{group}\Anamnesis"; Filename: "{app}\tray\Anamnesis.Tray.exe"; WorkingDir: "{app}\tray"
-Name: "{group}\Anamnesis Worker"; Filename: "{app}\worker\Anamnesis.Worker.exe"; WorkingDir: "{app}\worker"
 Name: "{autodesktop}\Anamnesis"; Filename: "{app}\tray\Anamnesis.Tray.exe"; WorkingDir: "{app}\tray"; Tasks: desktopicon
+
+[Registry]
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "Anamnesis"; ValueData: """{app}\tray\Anamnesis.Tray.exe"" --background"; Flags: uninsdeletevalue; Tasks: startup
 
 [Run]
 Filename: "{app}\tray\Anamnesis.Tray.exe"; Description: "Iniciar Anamnesis"; Flags: nowait postinstall skipifsilent

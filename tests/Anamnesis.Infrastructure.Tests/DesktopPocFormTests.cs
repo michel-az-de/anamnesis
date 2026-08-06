@@ -73,6 +73,37 @@ public sealed class DesktopPocFormTests
     }
 
     [Fact]
+    public void ModoRealDeveUsarLarguraUtilNasConfiguracoesLocais()
+    {
+        ExecutarEmSta(() =>
+        {
+            var paleta = DesktopPocPalette.Criar(TemaDesktopPoc.Escuro);
+            using var form = new DesktopPocForm(
+                TemaDesktopPoc.Escuro,
+                new DesktopPocEffectsPolicy(AnimacoesAtivas: false),
+                new DesktopSessionRealFake());
+            form.Show();
+            System.Windows.Forms.Application.DoEvents();
+
+            EncontrarBotao(form, "Configurações").PerformClick();
+            System.Windows.Forms.Application.DoEvents();
+
+            var titulo = EncontrarLabels(form)
+                .Single(label => label.Text == "Configuração local em uso");
+            var bloco = Assert.IsType<DesktopSurfacePanel>(titulo.Parent!.Parent);
+
+            Assert.True(bloco.Width >= form.ClientSize.Width / 2);
+            Assert.All(
+                EncontrarLabels(bloco),
+                label => Assert.True(label.Right <= bloco.ClientSize.Width - bloco.Padding.Right));
+            Assert.Contains(
+                EncontrarLabels(form),
+                label => label.Text.StartsWith("Atenção:", StringComparison.Ordinal) &&
+                         label.ForeColor == paleta.Destaque);
+        });
+    }
+
+    [Fact]
     public void ModoRealDeveAtualizarDetalheQuandoSomenteJobMuda()
     {
         ExecutarEmSta(() =>
@@ -357,6 +388,15 @@ public sealed class DesktopPocFormTests
                 12)
         ];
         public int JobsNaFila => 1;
+        public DesktopRuntimeInfo Ambiente { get; } = new(
+            @"C:\Users\felipe\AppData\Local\Anamnesis\config.json",
+            @"C:\Users\felipe\AppData\Local\Anamnesis\anamnesis.db",
+            @"C:\Users\felipe\Documents\Anamnesis\Reunioes",
+            "Codex",
+            [
+                new ProntidaoDesktopItem("OBS", true, "Configurado"),
+                new ProntidaoDesktopItem("Whisper CLI", false, "Executável local não encontrado")
+            ]);
         public int Atualizacoes { get; private set; }
 
         public Task AtualizarAsync(CancellationToken cancellationToken)

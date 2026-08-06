@@ -48,7 +48,9 @@ public sealed class ArquivoConfiguracaoTests : IAsyncLifetime
     public async Task DeveCriarECarregarConfiguracaoPadrao()
     {
         var caminhoArquivo = Path.Combine(_diretorio, "config.json");
-        var arquivo = new ArquivoConfiguracao(caminhoArquivo);
+        var arquivo = new ArquivoConfiguracao(
+            caminhoArquivo,
+            ConfiguracaoAnamnesis.CriarPadrao);
 
         var criada = await arquivo.CarregarAsync(CancellationToken.None);
         var carregada = await arquivo.CarregarAsync(CancellationToken.None);
@@ -60,6 +62,43 @@ public sealed class ArquivoConfiguracaoTests : IAsyncLifetime
         Assert.Equal("pt", carregada.IdiomaWhisper);
         Assert.Equal(14, carregada.RetencaoEventosDias);
         Assert.Empty(carregada.ArgumentosCli);
+    }
+
+    [Fact]
+    public async Task PrimeiraExecucaoDeveDescobrirFerramentasLocaisSemSobrescreverDepois()
+    {
+        var ferramentas = Path.Combine(_diretorio, "ferramentas");
+        var dados = Path.Combine(_diretorio, "dados");
+        var aplicacao = Path.Combine(_diretorio, "aplicacao");
+        Directory.CreateDirectory(ferramentas);
+        Directory.CreateDirectory(Path.Combine(dados, "models"));
+        Directory.CreateDirectory(aplicacao);
+        foreach (var nome in new[] { "ffmpeg.exe", "docker.exe", "codex.exe" })
+        {
+            await File.WriteAllTextAsync(Path.Combine(ferramentas, nome), string.Empty);
+        }
+
+        await File.WriteAllTextAsync(Path.Combine(dados, "models", "ggml-base.bin"), string.Empty);
+        await File.WriteAllTextAsync(Path.Combine(aplicacao, "ata.schema.json"), "{}");
+        var descoberta = new DescobertaConfiguracaoLocal(
+            programFiles: Path.Combine(_diretorio, "programas"),
+            localAppData: dados,
+            diretorioAplicacao: aplicacao,
+            path: ferramentas);
+        var caminhoArquivo = Path.Combine(dados, "config.json");
+        var arquivo = new ArquivoConfiguracao(caminhoArquivo, descoberta.Criar);
+
+        var criada = await arquivo.CarregarAsync(CancellationToken.None);
+        File.Delete(Path.Combine(ferramentas, "codex.exe"));
+        var preservada = await arquivo.CarregarAsync(CancellationToken.None);
+
+        Assert.EndsWith("ffmpeg.exe", criada.CaminhoExecutavelFfmpeg, StringComparison.OrdinalIgnoreCase);
+        Assert.EndsWith("docker.exe", criada.CaminhoExecutavelWhisper, StringComparison.OrdinalIgnoreCase);
+        Assert.EndsWith("ggml-base.bin", criada.CaminhoModeloWhisper, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("whisper.cpp@sha256:", criada.ImagemDockerWhisper, StringComparison.Ordinal);
+        Assert.EndsWith("codex.exe", criada.CaminhoExecutavelCli, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("--output-schema", criada.ArgumentosCli);
+        Assert.Equal(criada.CaminhoExecutavelCli, preservada.CaminhoExecutavelCli);
     }
 
     [Fact]
