@@ -126,6 +126,36 @@ public sealed partial class InstallerContractTests
     }
 
     [Fact]
+    public void SmokeDeveRedescobrirRegistroAposMigracaoElevada()
+    {
+        var script = File.ReadAllText(Path.Combine(
+            EncontrarRaizRepositorio(),
+            "scripts",
+            "Test-Installer.ps1"));
+
+        var atualizacao = script.IndexOf(
+            "$processoAtualizacao = Start-Process -FilePath $atualizador",
+            StringComparison.Ordinal);
+        var codigoAtualizacao = script.IndexOf(
+            "$codigoAtualizacao = $processoAtualizacao.ExitCode",
+            atualizacao,
+            StringComparison.Ordinal);
+        var redescoberta = script.IndexOf(
+            "$registroProdutoInstalado = Get-CaminhoRegistroProdutoInstalado",
+            codigoAtualizacao,
+            StringComparison.Ordinal);
+        var leituraVersao = script.IndexOf(
+            "$versaoAtualizada = Get-ValorRegistroOpcional",
+            codigoAtualizacao,
+            StringComparison.Ordinal);
+
+        Assert.True(atualizacao >= 0);
+        Assert.True(codigoAtualizacao > atualizacao);
+        Assert.True(redescoberta > codigoAtualizacao);
+        Assert.True(leituraVersao > redescoberta);
+    }
+
+    [Fact]
     public void SmokeDevePreservarTrayLegadoESoRepararComTrayAtualCooperativo()
     {
         var script = File.ReadAllText(Path.Combine(

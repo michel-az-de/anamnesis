@@ -469,6 +469,10 @@ try {
         if ($codigoAtualizacao -ne 0) {
             throw "A atualizacao falhou com codigo $codigoAtualizacao."
         }
+        $registroProdutoInstalado = Get-CaminhoRegistroProdutoInstalado
+        if (-not $registroProdutoInstalado) {
+            throw "A atualizacao concluiu sem registro de desinstalacao vigente."
+        }
         $versaoAtualizada = Get-ValorRegistroOpcional `
             -Caminho $registroProdutoInstalado `
             -Nome "DisplayVersion"
