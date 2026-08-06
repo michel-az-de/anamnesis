@@ -43,6 +43,8 @@ Somente uma tag exata `v<versao>` promove os tres arquivos para uma GitHub Relea
 
 A release-base [`v0.2.0-beta.1`](https://github.com/michel-az-de/anamnesis/releases/tag/v0.2.0-beta.1) foi promovida do run `31086786207` e possui atestado imutavel. Seu instalador tem SHA-256 `5852e3e82ab9c80cf72ab85b8cd4425aeab3aa6faf401b3da0a2fc3db23dbecd`.
 
+A release atual [`v0.2.0-beta.5`](https://github.com/michel-az-de/anamnesis/releases/tag/v0.2.0-beta.5) foi promovida pelo run `31116896797`, possui atestado imutavel e EXE com SHA-256 `d9a93b43d65c3ebc85069a8c600ba24f36c8a1d1bde1bccfa2bacf9e36742dc5`.
+
 ## Publicar uma tag
 
 Depois do merge em `main`, atualize `release/versao.json`, revise e publique no GitHub:

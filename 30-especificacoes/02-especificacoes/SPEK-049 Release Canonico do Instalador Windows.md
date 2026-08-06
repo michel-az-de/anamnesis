@@ -46,7 +46,7 @@ Eliminar diretorios de tentativa e versoes divergentes do instalador. Cada relea
 ## Fora de escopo
 
 - Assinatura Authenticode, SmartScreen e atualizacao automatica.
-- Espelhar assets em outro provedor, assinar Authenticode, SmartScreen ou atualizacao automatica.
+- Espelhar assets em outro provedor.
 - Versionar binarios grandes no Git ou introduzir Git LFS nesta entrega.
 
 ## Evidencias locais
