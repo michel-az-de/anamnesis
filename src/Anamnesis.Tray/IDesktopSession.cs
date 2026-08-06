@@ -32,6 +32,8 @@ internal interface IDesktopSession
 
     Guid? ReuniaoAtivaId => null;
 
+    Guid? ReuniaoAcompanhadaId => ReuniaoAtivaId;
+
     DesktopRuntimeInfo? Ambiente => null;
 
     Task AtualizarAsync(CancellationToken cancellationToken);

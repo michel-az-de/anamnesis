@@ -47,6 +47,7 @@ public sealed class DesktopPocState
 {
     private readonly List<ReuniaoDesktopPoc> _reunioes = CriarHistorico();
     private ReuniaoDesktopPoc? _reuniaoProcessando;
+    private string _tituloGravacao = TituloReuniaoManual.Padrao;
 
     public EtapaDesktopPoc Etapa { get; private set; } = EtapaDesktopPoc.Pronto;
 
@@ -54,8 +55,11 @@ public sealed class DesktopPocState
 
     public IReadOnlyList<ReuniaoDesktopPoc> Reunioes => _reunioes;
 
-    public void IniciarGravacao()
+    public Guid? ReuniaoAcompanhadaId => _reuniaoProcessando?.Id;
+
+    public void IniciarGravacao(string? titulo = null)
     {
+        _tituloGravacao = TituloReuniaoManual.Normalizar(titulo);
         DuracaoGravacao = TimeSpan.Zero;
         Etapa = EtapaDesktopPoc.Gravando;
     }
@@ -78,7 +82,7 @@ public sealed class DesktopPocState
         _reuniaoProcessando = new ReuniaoDesktopPoc
         {
             Id = Guid.NewGuid(),
-            Titulo = "Reunião sem título",
+            Titulo = _tituloGravacao,
             Data = "Agora",
             Plataforma = "Google Meet",
             Duracao = FormatarDuracao(DuracaoGravacao),

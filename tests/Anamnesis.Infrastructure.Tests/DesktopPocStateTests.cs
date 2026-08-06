@@ -40,6 +40,28 @@ public sealed class DesktopPocStateTests
     }
 
     [Fact]
+    public void DevePreservarTituloInformadoNaGravacaoManual()
+    {
+        var state = new DesktopPocState();
+
+        state.IniciarGravacao("  Planejamento da alpha  ");
+        var reuniao = state.EncerrarGravacao();
+
+        Assert.Equal("Planejamento da alpha", reuniao.Titulo);
+    }
+
+    [Fact]
+    public void DeveUsarTituloPadraoQuandoTituloManualEstiverVazio()
+    {
+        var state = new DesktopPocState();
+
+        state.IniciarGravacao("   ");
+        var reuniao = state.EncerrarGravacao();
+
+        Assert.Equal("Reunião sem título", reuniao.Titulo);
+    }
+
+    [Fact]
     public void NaoDeveAvancarCronometroForaDaGravacao()
     {
         var state = new DesktopPocState();
