@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
-    [string]$Version = "0.1.0-beta.1",
+    [string]$Version = "0.2.0-beta.1",
+    [string]$NumericVersion = "0.2.0.0",
     [string]$OutputRoot,
     [string]$IsccPath
 )
@@ -42,6 +43,7 @@ if ($LASTEXITCODE -ne 0) {
 $scriptInno = Join-Path $repositorio "installer\Anamnesis.iss"
 & $IsccPath `
     "/DAppVersion=$Version" `
+    "/DAppNumericVersion=$NumericVersion" `
     "/DSourceRoot=$payload" `
     "/DOutputDir=$diretorioInstalador" `
     $scriptInno

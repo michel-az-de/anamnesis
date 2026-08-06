@@ -29,20 +29,31 @@ Abra esta pasta no Obsidian e comece por `00-home.md`.
 
 ## Status da alpha
 
-O roadmap ponderado está em **27%**. O fluxo completo ainda não é testável: a parte de gravação, transcrição, geração da ata e retenção segura será entregue nas próximas SPEKs. Consulte o [painel de alpha](10-painel/Status%20Alpha.md) para ver pesos, evidências e caminho crítico.
+O escopo ponderado da alpha e os fluxos E2E hermético e real estão em **100%**. A suíte Release possui **244 testes verdes**. O aplicativo Windows `0.2.0-beta.1` possui Desktop real, ícone próprio, menu na bandeja, instância única, Worker interno e instalador por usuário. Consulte o [painel de alpha](10-painel/Status%20Alpha.md) para evidências e limitações atuais.
 
-## Primeiro ciclo de desenvolvimento
+## Instalar no Windows
 
-1. Implementar `ObsGravador` e o detector de reunião no `Tray`.
-2. Persistir jobs no SQLite com `SqliteReuniaoRepository`.
-3. Implementar `WhisperTranscritor` com Whisper.net.
-4. Adicionar `CodexCliAtaRunner`, `ClaudeCliAtaRunner`, `KimiCliAtaRunner` e `OllamaAtaRunner`.
-5. Empacotar como aplicativo self-contained `win-x64`, com instalador e assistente inicial.
+O instalador é autocontido para o Anamnesis, não exige UAC e preserva configuração, banco e reuniões nas atualizações. OBS, Docker Desktop, FFmpeg, modelo Whisper e uma CLI autenticada continuam dependências locais separadas e aparecem na tela de Configurações como `PRONTO` ou `PENDENTE`.
+
+Para construir o instalador localmente:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\Build-Installer.ps1
+```
+
+Depois, execute `artifacts\beta\0.2.0-beta.1\installer\Anamnesis-0.2.0-beta.1-win-x64-setup.exe`. O instalador cria somente o atalho **Anamnesis**; o Worker permanece interno. Fechar a janela mantém o aplicativo na bandeja e **Sair** encerra o processo.
+
+## Validar
+
+```powershell
+dotnet test Anamnesis.sln --configuration Release --no-restore --verbosity minimal
+```
 
 ## Requisitos de build
 
 - .NET 10 SDK
 - Windows 10/11 x64
+- Inno Setup 6 apenas para construir o instalador
 
 O projeto usa .NET 10 LTS para manter suporte até novembro de 2028.
 

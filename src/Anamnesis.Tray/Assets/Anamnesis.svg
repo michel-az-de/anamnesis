@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">Anamnesis</title>
+  <desc id="desc">Estrela de oito pontas e um anel de memoria em cobre sobre fundo azul profundo.</desc>
+  <circle cx="128" cy="128" r="116" fill="#10172E"/>
+  <circle cx="128" cy="128" r="94" fill="none" stroke="#B87333" stroke-width="10"/>
+  <path fill="#B87333" d="M128 40 139 100 190 66 156 117 216 128 156 139 190 190 139 156 128 216 117 156 66 190 100 139 40 128 100 117 66 66 117 100Z"/>
+  <circle cx="128" cy="128" r="10" fill="#F3EEE4"/>
+</svg>
