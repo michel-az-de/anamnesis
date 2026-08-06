@@ -4,7 +4,7 @@ aliases: [SPEK-029, Polimento Visual Desktop, Command Deck]
 tags: [especificacao, desktop, design-system, motion, windows, pos-alpha]
 type: spek
 created: 2026-08-05
-updated: 2026-08-05
+updated: 2026-08-06
 status: completed
 summary: Revisão visual sólida e precisa da POC para uma experiência desktop premium, sem transparências ou decoração excessiva.
 related: ["[[Status Alpha]]", "[[Design System Desktop]]", "[[SPEK-027 Desktop Windows para Estado Visivel]]", "[[SPEK-028 Console Local de Observabilidade]]"]
@@ -92,6 +92,7 @@ hover ou clique -> mudança precisa de cor/borda -> transição espacial -> cont
 - `DesktopPocFormTests`
 - `DesktopPocThemeTests`
 - `WindowsTitleBarThemeTests`
+- `InterfaceWindowsGrupo` executa formulários WinForms em série no runner.
 - `dotnet test Anamnesis.sln --configuration Release --no-restore --verbosity minimal`
 
 ## Decisões
@@ -135,6 +136,7 @@ O feedback visual de 2026-08-05 reprovou a direção translúcida por parecer de
 - Validação operacional: processo responsivo, 49,3 MB e 0,31% de um núcleo em amostra ociosa de cinco segundos.
 - DWM real: dark title bar `1`, cantos arredondados `2` e system backdrop `1`, que significa backdrop desativado.
 - Logs: `artifacts/poc-desktop/solid-evidence/validation-command-deck-v4.log` e `artifacts/poc-desktop/solid-evidence/runtime-command-deck-v2.log`.
+- Regressão CI: o run `31123148796` excedeu o limite da janela STA enquanto outra janela WinForms podia executar em paralelo. `DesktopPocFormTests` e `DeteccaoPromptFormTests` agora pertencem à coleção não paralela `InterfaceWindowsGrupo`.
 
 ## Referências técnicas
 

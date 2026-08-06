@@ -5,6 +5,7 @@ using Xunit;
 
 namespace Anamnesis.Infrastructure.Tests;
 
+[Collection(InterfaceWindowsGrupo.Nome)]
 public sealed class DesktopPocFormTests
 {
     [Fact]
@@ -554,4 +555,10 @@ public sealed class DesktopPocFormTests
             Tarefas = []
         };
     }
+}
+
+[CollectionDefinition(Nome, DisableParallelization = true)]
+public sealed class InterfaceWindowsGrupo
+{
+    public const string Nome = "Interface Windows";
 }
