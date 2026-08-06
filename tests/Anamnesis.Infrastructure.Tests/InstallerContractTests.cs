@@ -49,6 +49,8 @@ public sealed partial class InstallerContractTests
         Assert.Contains("atalhoInstalado", script, StringComparison.Ordinal);
         Assert.Contains("configuracaoCriada", script, StringComparison.Ordinal);
         Assert.Contains("desinstalacao.log", script, StringComparison.Ordinal);
+        Assert.Contains("Get-ValorRegistroOpcional", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("Get-ItemPropertyValue", script, StringComparison.Ordinal);
         Assert.DoesNotContain("/NOICONS", script, StringComparison.Ordinal);
     }
 
