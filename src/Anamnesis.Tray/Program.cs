@@ -1,10 +1,12 @@
 using System.Diagnostics;
 using System.Text;
 using Anamnesis.Application.Contracts;
+using Anamnesis.Application.Modelos;
 using Anamnesis.Application.Observabilidade;
 using Anamnesis.Application.UseCases;
 using Anamnesis.Infrastructure.Arquivos;
 using Anamnesis.Infrastructure.Configuracao;
+using Anamnesis.Infrastructure.Deteccao;
 using Anamnesis.Infrastructure.Fila;
 using Anamnesis.Infrastructure.Obs;
 using Anamnesis.Infrastructure.Observabilidade;
@@ -44,6 +46,17 @@ internal static class Program
         var caminhoConfiguracao = ObterCaminhoConfiguracao();
         var arquivoConfiguracao = new ArquivoConfiguracao(caminhoConfiguracao);
         var configuracao = arquivoConfiguracao.CarregarAsync(CancellationToken.None).GetAwaiter().GetResult();
+        var diagnosticoDeteccao = DiagnosticoDeteccaoOptions.Obter(argumentos);
+        if (diagnosticoDeteccao is not null)
+        {
+            return ExecutarDiagnosticoDeteccaoAsync(
+                    new WindowsSinaisReuniaoSource(configuracao.Deteccao),
+                    configuracao.Deteccao.Modo,
+                    diagnosticoDeteccao)
+                .GetAwaiter()
+                .GetResult();
+        }
+
         var workerLauncher = CriarWorkerLauncher(modoValidacao, caminhoConfiguracao);
         var reuniaoRepository = new SqliteReuniaoRepository(configuracao.CaminhoBanco);
         var jobQueue = new SqliteJobQueue(configuracao.CaminhoBanco);
@@ -88,6 +101,10 @@ internal static class Program
                 .GetResult();
         }
 
+        // O detector só pode iniciar depois de o SQLite revelar uma eventual gravação
+        // anterior. Essa leitura é local e nunca consulta ou comanda o OBS.
+        sessaoDesktop.AtualizarAsync(CancellationToken.None).GetAwaiter().GetResult();
+
         ApplicationConfiguration.Initialize();
         DesktopPocTheme.HerdarDoWindows();
         using var icone = new NotifyIcon
@@ -97,6 +114,18 @@ internal static class Program
             Visible = true,
             ContextMenuStrip = new ContextMenuStrip()
         };
+        var detector = new DetectorReuniao(
+            new WindowsSinaisReuniaoSource(configuracao.Deteccao),
+            new PoliticaDeteccaoReuniao(configuracao.Deteccao.CriarPoliticaOptions()),
+            TimeProvider.System,
+            journal);
+        using var capturaInstantanea = new CapturaInstantaneaController(
+            detector,
+            sessaoDesktop,
+            new DeteccaoPromptForm(
+                icone,
+                DesktopPocTheme.ObterAtual(),
+                DesktopPocSystemPreferences.Obter()));
         var iniciar = new ToolStripMenuItem("Iniciar gravação de teste");
         var encerrar = new ToolStripMenuItem("Encerrar gravação de teste") { Enabled = false };
         var processarPendencias = new ToolStripMenuItem("Processar pendências");
@@ -124,6 +153,21 @@ internal static class Program
 
         icone.ContextMenuStrip.Items.Add("Abrir Anamnesis", null, (_, _) => AbrirJanela());
         icone.DoubleClick += (_, _) => AbrirJanela();
+
+        icone.ContextMenuStrip.Items.Add(new ToolStripMenuItem(
+            $"Detecção: {configuracao.Deteccao.Modo}")
+        {
+            Enabled = false
+        });
+        icone.ContextMenuStrip.Items.Add("Silenciar detecção por 1 h", null, async (_, _) =>
+        {
+            await capturaInstantanea.SilenciarAsync(CancellationToken.None);
+            icone.ShowBalloonTip(
+                3000,
+                "Detecção silenciada",
+                "O início manual continua disponível.",
+                ToolTipIcon.Info);
+        });
 
         icone.ContextMenuStrip.Items.Add("Diagnósticos", null, (_, _) =>
         {
@@ -216,8 +260,21 @@ internal static class Program
         {
             iniciar.Enabled = sessaoDesktop.Etapa != EtapaDesktopPoc.Gravando;
             encerrar.Enabled = sessaoDesktop.Etapa == EtapaDesktopPoc.Gravando;
+            icone.Text = sessaoDesktop.RecuperacaoPendente
+                ? "Anamnesis • Recuperação pendente"
+                : sessaoDesktop.Etapa == EtapaDesktopPoc.Gravando
+                    ? "Anamnesis • Gravando"
+                    : "Anamnesis • Pronto";
         };
         sincronizarMenu.Start();
+        using var detectarReuniao = new System.Windows.Forms.Timer { Interval = 1000 };
+        detectarReuniao.Tick += async (_, _) =>
+            await capturaInstantanea.ProcessarAsync(CancellationToken.None);
+        if (configuracao.Deteccao.Modo != ModoDeteccaoReuniao.Manual)
+        {
+            detectarReuniao.Start();
+        }
+
         AbrirJanela();
         System.Windows.Forms.Application.Run();
         return 0;
@@ -234,6 +291,42 @@ internal static class Program
         await controlarGravacao.FinalizarAsync(reuniaoId, CancellationToken.None);
         Console.WriteLine("Gravação de teste concluída e job persistido.");
         return 0;
+    }
+
+    private static async Task<int> ExecutarDiagnosticoDeteccaoAsync(
+        WindowsSinaisReuniaoSource fonte,
+        ModoDeteccaoReuniao modo,
+        DiagnosticoDeteccaoOptions options)
+    {
+        await using var arquivo = CriarArquivoDiagnostico(options.CaminhoSaida);
+        return await DiagnosticoDeteccaoRunner.ExecutarAsync(
+            fonte,
+            modo,
+            options,
+            arquivo ?? Console.Out,
+            CancellationToken.None);
+    }
+
+    private static StreamWriter? CriarArquivoDiagnostico(string? caminhoSaida)
+    {
+        if (string.IsNullOrWhiteSpace(caminhoSaida))
+        {
+            return null;
+        }
+
+        var caminhoCompleto = Path.GetFullPath(caminhoSaida);
+        var diretorio = Path.GetDirectoryName(caminhoCompleto);
+        if (string.IsNullOrWhiteSpace(diretorio) || !Directory.Exists(diretorio))
+        {
+            throw new DirectoryNotFoundException(
+                "O diretório de saída do diagnóstico não existe.");
+        }
+
+        return new StreamWriter(new FileStream(
+            caminhoCompleto,
+            FileMode.CreateNew,
+            FileAccess.Write,
+            FileShare.Read));
     }
 
     private static IWorkerLauncher CriarWorkerLauncher(

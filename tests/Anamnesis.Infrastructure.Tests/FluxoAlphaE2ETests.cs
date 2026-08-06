@@ -149,11 +149,23 @@ public sealed class FluxoAlphaE2ETests : IAsyncLifetime
             reuniaoId,
             null,
             CancellationToken.None);
+        var detector = new DetectorReuniao(
+            new FonteDeteccaoFake(),
+            new PoliticaDeteccaoReuniao(PoliticaDeteccaoOptions.Padrao),
+            relogio,
+            journal);
+        var decisaoDeteccao = await detector.AvaliarAsync(
+            reuniaoAtivaId: null,
+            CancellationToken.None);
+        Assert.Equal(TipoDecisaoDeteccao.SugerirInicio, decisaoDeteccao.Tipo);
         var eventos = await eventoRepository.ListarAsync(
             new EventoOperacionalFiltro(ReuniaoId: reuniaoId),
             CancellationToken.None);
+        var todosEventos = await eventoRepository.ListarAsync(
+            new EventoOperacionalFiltro(Limite: 100),
+            CancellationToken.None);
         Assert.All(CodigosEventoOperacional.Todos, codigo =>
-            Assert.Contains(eventos, evento => evento.Codigo == codigo));
+            Assert.Contains(todosEventos, evento => evento.Codigo == codigo));
         var conteudoJournal = string.Concat(
             Directory.GetFiles(_diretorio, "anamnesis.journal.db*")
                 .Select(caminho => Encoding.UTF8.GetString(File.ReadAllBytes(caminho))));
@@ -168,7 +180,7 @@ public sealed class FluxoAlphaE2ETests : IAsyncLifetime
         await File.WriteAllTextAsync(
             Path.Combine(_diretorio, "eventos-operacionais.json"),
             JsonSerializer.Serialize(eventos, OpcoesJsonEvidencia));
-        await RegistrarAsync("Journal persistiu os 12 códigos e passou no canário de conteúdo sensível.");
+        await RegistrarAsync("Journal persistiu os 13 códigos e passou no canário de conteúdo sensível.");
         await CriarResultadoAsync(reuniaoId, excluida.Status, caminhoBanco, caminhoGravacao, diretorioReuniao, caminhoEntradaCli);
         Assert.True(File.Exists(Path.Combine(_diretorio, "e2e.log")));
         Assert.True(File.Exists(Path.Combine(_diretorio, "resultado.md")));
@@ -252,6 +264,20 @@ public sealed class FluxoAlphaE2ETests : IAsyncLifetime
     private sealed class WorkerLauncherNulo : IWorkerLauncher
     {
         public Task IniciarAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    }
+
+    private sealed class FonteDeteccaoFake : ISinaisReuniaoSource
+    {
+        public Task<SinaisDeteccaoReuniao> ObterAsync(CancellationToken cancellationToken) =>
+            Task.FromResult(new SinaisDeteccaoReuniao(
+                MicrofoneAtivo: true,
+                AudioSaidaAtivo: true,
+                new PlataformaLocal(
+                    "browser_meet",
+                    "Google Meet",
+                    OrigemPlataformaLocal.Navegador),
+                EventoAgendaProximo: false,
+                Ambiguo: false));
     }
 
     private sealed class ObsPreflightNulo : IObsPreflight

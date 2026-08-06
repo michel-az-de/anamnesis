@@ -28,7 +28,7 @@ Duas limitações continuam registradas: um Worker morto no meio da transcriçã
 | Entrega para a alpha | Peso | Concluído | Avanço | Evidência atual |
 | --- | ---: | ---: | ---: | --- |
 | Especificações, ADRs e protocolo multi-LLM | 5% | 100% | 5% | SPEKs 001–004, ADRs 001–003 e protocolo versionados |
-| Solução .NET, qualidade e TDD inicial | 5% | 100% | 5% | Solução compilável e 177 testes automatizados verdes, incluindo OBS, Docker, Tray, Worker black box, Desktop real, observabilidade e motion |
+| Solução .NET, qualidade e TDD inicial | 5% | 100% | 5% | Solução compilável e 231 testes automatizados verdes, incluindo OBS, Docker, Tray, Worker black box, Desktop real, observabilidade, motion e detecção local |
 | Ciclo de vida de reunião no domínio | 10% | 100% | 10% | Estados, falha, retentativa, arquivamento e retenção cobertos por testes e persistência |
 | Fila local durável | 10% | 100% | 10% | `SqliteJobQueue` com reserva atômica, liberação e conclusão testadas |
 | Persistência de reuniões | 10% | 100% | 10% | `SqliteReuniaoRepository` persiste e restaura o agregado com testes em banco temporário |
@@ -71,7 +71,8 @@ A alpha estará pronta quando, em uma máquina Windows limpa e com pré-requisit
 | Console local de observabilidade | SPEK 100% concluída | Eventos seguros, filtros, correlação, métricas e ciclo simulado cobertos por 83 testes; executável em `artifacts/poc-desktop/win-x64-observability-v1` |
 | Design System Desktop v3 | SPEK 100% concluída | Command Deck sólido, sem transparência, com ícones vetoriais, inputs próprios, motion contextual e 96 testes; executável em `artifacts/poc-desktop/win-x64-command-deck-v2` |
 | Desktop com dados reais | SPEK 100% concluída | Histórico e jobs no SQLite, comandos reais, manifesto, recuperação de gravação órfã, publicação e E2E controlado de Tray + Worker |
-| Observabilidade operacional real | SPEK 100% concluída | Journal SQLite isolado, 12 códigos correlacionados, console com dados reais, retenção de 14 dias, canário de privacidade, publicação `artifacts/publish/SPEK-031` e 177 testes verdes ([[ADR-015 Journal SQLite Isolado]]) |
+| Observabilidade operacional real | SPEK 100% concluída | Journal SQLite isolado, 13 códigos correlacionados, console com dados reais, retenção de 14 dias, canário de privacidade e publicação `artifacts/publish/SPEK-031` ([[ADR-015 Journal SQLite Isolado]]) |
+| Captura instantânea e detecção local | 12 de 13 critérios atendidos | Política assistida e automática opt-in, Core Audio + User32 reais, recuperação segura, JSONL sanitizado, E2E controlado e 231 testes verdes; ensaio Meet + Teams/Zoom pendente ([[ADR-016 Deteccao Local por Core Audio e User32]]) |
 | Concorrência de Worker e fila | SPEK 100% concluída | Mutex por banco impede dois Workers no mesmo job; Red registrado com `A reunião está em 'EmTranscricao'` e saída 1, Green com E2E de dois processos reais ([[ADR-012 Instancia Unica do Worker]]) |
 | Ciclo de vida e recuperação da reunião | SPEK 100% concluída | Falha ao encerrar registra `Falha` e libera o índice de gravação ativa; nova gravação possível sem reiniciar o Tray, provado contra SQLite real |
 | Resiliência de processos externos | SPEK 100% concluída | Deadlock da CLI reproduzido em 30 s e corrigido para menos de 1 s; restauração de cena do OBS com limite de 5 s, verificado por teste |
@@ -80,11 +81,11 @@ A alpha estará pronta quando, em uma máquina Windows limpa e com pré-requisit
 
 ## Próximo incremento
 
-**Próximo ciclo: revisar e aprovar a [[SPEK-032 Captura Instantanea e Deteccao Local]].** O Desktop e o console já operam com dados reais; o próximo corte reduz a fricção para entrar em uma reunião e iniciar a captura.
+**Próximo ciclo: concluir o ensaio manual da [[SPEK-032 Captura Instantanea e Deteccao Local]].** A automação local está implementada; falta medir Meet no navegador e Teams ou Zoom, com falsos positivos e evidências reais.
 
 ## Roadmap pós-alpha
 
-O planejamento pós-alpha está documentado em [[Roadmap de Produto]]. As SPEKs 030 e 031 foram concluídas; as SPEKs 032 a 039 permanecem em rascunho e cobrem captura instantânea, agendas Google e Microsoft, Obsidian, Trello e Azure DevOps.
+O planejamento pós-alpha está documentado em [[Roadmap de Produto]]. As SPEKs 030 e 031 foram concluídas; a SPEK-032 está em validação com 12 de 13 critérios atendidos; e as SPEKs 033 a 039 permanecem em rascunho para agendas Google e Microsoft, Obsidian, Trello e Azure DevOps.
 
 Esse roadmap não altera os 100% da alpha. Novos percentuais só serão criados quando houver uma versão-alvo com pesos próprios, evitando misturar produto futuro com a medição já encerrada.
 

@@ -56,6 +56,13 @@ internal sealed class DesktopRealSession(
 
     public int JobsNaFila { get; private set; }
 
+    public bool RecuperacaoPendente { get; private set; }
+
+    public bool Inicializada { get; private set; }
+
+    public Guid? ReuniaoAtivaId =>
+        Etapa == EtapaDesktopPoc.Gravando ? _reuniaoAcompanhadaId : null;
+
     public DesktopRuntimeInfo? Ambiente => ambiente;
 
     public async Task AtualizarAsync(CancellationToken cancellationToken)
@@ -84,23 +91,15 @@ internal sealed class DesktopRealSession(
         var gravacaoPersistida = resumos.FirstOrDefault(
             reuniao => reuniao.Status == StatusReuniao.Gravando);
 
-        // Reconcilia sempre que aparecer uma gravação ativa que não foi esta sessão que iniciou:
-        // sobra de um Tray encerrado à força ou de alteração externa no banco. Restringir à
-        // primeira atualização deixaria a gravação órfã presa até reiniciar o Tray.
-        if (gravacaoPersistida is not null &&
-            gravacaoPersistida.Id != _gravacaoIniciadaNestaSessaoId)
-        {
-            await controlarGravacao.ReconciliarGravacaoAsync(
-                gravacaoPersistida.Id,
-                cancellationToken);
-            resumos = await reuniaoQuery.ListarAsync(
-                new ReuniaoQueryFiltro(null, null, 100),
-                cancellationToken);
-        }
+        // Uma gravacao criada por outro processo ou antes do reinicio exige decisao humana.
+        // Nao consultar o preflight aqui e intencional: ele poderia iniciar o OBS sem consentimento.
+        RecuperacaoPendente = gravacaoPersistida is not null &&
+            gravacaoPersistida.Id != _gravacaoIniciadaNestaSessaoId;
 
         _reunioes = resumos.Select(MapearResumo).ToArray();
         await AtualizarObservabilidadeAsync(cancellationToken);
         AtualizarEtapa(resumos);
+        Inicializada = true;
     }
 
     private async Task AtualizarObservabilidadeAsync(CancellationToken cancellationToken)

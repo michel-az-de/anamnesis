@@ -45,7 +45,7 @@ related: ["[[Especificacoes MOC]]", "[[Protocolo de Agentes]]", "[[Roadmap de Pr
 | SPEK-029 | [[SPEK-029 Polimento Visual e Motion Desktop]] | concluído | `Tray` |
 | SPEK-030 | [[SPEK-030 Desktop com Dados Reais]] | concluído | `Application`, `Infrastructure`, `Tray` |
 | SPEK-031 | [[SPEK-031 Observabilidade Operacional Real]] | concluído | `Application`, `Infrastructure`, `Tray`, `Worker` |
-| SPEK-032 | [[SPEK-032 Captura Instantanea e Deteccao Local]] | rascunho | `Application`, `Infrastructure`, `Tray` |
+| SPEK-032 | [[SPEK-032 Captura Instantanea e Deteccao Local]] | em validação | `Application`, `Infrastructure`, `Tray` |
 | SPEK-033 | [[SPEK-033 Agenda Conectada]] | rascunho | `Application`, `Infrastructure`, `Tray` |
 | SPEK-034 | [[SPEK-034 Google Calendar Adapter]] | rascunho | `Infrastructure`, `Tray` |
 | SPEK-035 | [[SPEK-035 Microsoft Graph Calendar Adapter]] | rascunho | `Infrastructure`, `Tray` |
