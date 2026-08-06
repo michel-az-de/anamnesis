@@ -5,6 +5,7 @@ using Xunit;
 
 namespace Anamnesis.Infrastructure.Tests;
 
+[Collection(InterfaceWindowsGrupo.Nome)]
 public sealed class DeteccaoPromptFormTests
 {
     private static readonly PlataformaLocal Meet = new(
