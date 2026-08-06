@@ -16,5 +16,7 @@
     <ProjectReference Include="..\..\src\Anamnesis.Infrastructure\Anamnesis.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\Anamnesis.Worker\Anamnesis.Worker.csproj" />
     <ProjectReference Include="..\..\src\Anamnesis.Tray\Anamnesis.Tray.csproj" />
+    <ProjectReference Include="..\Anamnesis.InstallerProbe\Anamnesis.InstallerProbe.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\Anamnesis.JournalProbe\Anamnesis.JournalProbe.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 </Project>

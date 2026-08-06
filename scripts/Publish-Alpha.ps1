@@ -1,6 +1,10 @@
 [CmdletBinding()]
 param(
-    [string]$OutputRoot
+    [string]$OutputRoot,
+
+    [string]$Version = "0.2.0-beta.1",
+
+    [string]$NumericVersion = "0.2.0.0"
 )
 
 $ErrorActionPreference = "Stop"
@@ -37,10 +41,24 @@ if ($LASTEXITCODE -ne 0) {
 
 foreach ($destino in $destinos) {
     $projeto = Join-Path $repositorio $destino.Projeto
-    & $dotnet publish $projeto --configuration Release --runtime win-x64 --self-contained true --no-restore --output $destino.Diretorio --verbosity minimal
+    & $dotnet publish `
+        $projeto `
+        --configuration Release `
+        --runtime win-x64 `
+        --self-contained true `
+        --no-restore `
+        --output $destino.Diretorio `
+        --verbosity minimal `
+        "-p:Version=$Version" `
+        "-p:AssemblyVersion=$NumericVersion" `
+        "-p:FileVersion=$NumericVersion" `
+        "-p:InformationalVersion=$Version" `
+        "-p:IncludeSourceRevisionInInformationalVersion=false"
     if ($LASTEXITCODE -ne 0) {
         throw "A publicação falhou para $projeto."
     }
 }
+
+Copy-Item -LiteralPath (Join-Path $repositorio "LICENSE") -Destination (Join-Path $saida "LICENSE")
 
 Write-Host "Alpha publicada em: $saida"

@@ -226,6 +226,39 @@ public sealed class DesktopRealSessionTests
     }
 
     [Fact]
+    public async Task NaoDeveAutorizarAtualizacaoEnquantoInicioDaGravacaoEstaEmAndamento()
+    {
+        var dados = new DadosEmMemoria();
+        var gravador = new GravadorInicioBloqueadoFake();
+        var sessao = new DesktopRealSession(
+            dados,
+            dados,
+            new ControlarGravacaoHandler(
+                dados,
+                dados,
+                gravador,
+                new WorkerLauncherFake(),
+                new ObsPreflightFake(),
+                TimeProvider.System),
+            new ArtefatoLauncherFake(),
+            TimeProvider.System);
+
+        Assert.True(sessao.PodeEncerrarParaAtualizacao);
+
+        var inicio = sessao.IniciarGravacaoAsync("Inicio protegido", CancellationToken.None);
+        await gravador.AguardarInicioAsync();
+
+        Assert.Equal(EtapaDesktopPoc.Pronto, sessao.Etapa);
+        Assert.False(sessao.PodeEncerrarParaAtualizacao);
+
+        gravador.LiberarInicio();
+        await inicio;
+
+        Assert.Equal(EtapaDesktopPoc.Gravando, sessao.Etapa);
+        Assert.False(sessao.PodeEncerrarParaAtualizacao);
+    }
+
+    [Fact]
     public async Task DeveCarregarEventosEQuantidadeDeJobsDoArmazenamentoReal()
     {
         var reuniaoId = Guid.NewGuid();

@@ -35,7 +35,10 @@ $payload = Join-Path $saida "payload"
 $diretorioInstalador = Join-Path $saida "installer"
 New-Item -ItemType Directory -Path $diretorioInstalador | Out-Null
 
-& (Join-Path $PSScriptRoot "Publish-Alpha.ps1") -OutputRoot $payload
+& (Join-Path $PSScriptRoot "Publish-Alpha.ps1") `
+    -OutputRoot $payload `
+    -Version $Version `
+    -NumericVersion $NumericVersion
 if ($LASTEXITCODE -ne 0) {
     throw "A publicacao autocontida falhou."
 }

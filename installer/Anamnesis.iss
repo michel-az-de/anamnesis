@@ -22,7 +22,7 @@ AppUpdatesURL=https://github.com/michel-az-de/anamnesis/releases
 DefaultDirName={localappdata}\Programs\Anamnesis
 DefaultGroupName=Anamnesis
 DisableProgramGroupPage=auto
-PrivilegesRequired=lowest
+PrivilegesRequired=admin
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0
@@ -59,9 +59,14 @@ Name: "brazilianportuguese"; MessagesFile: "compiler:Languages\BrazilianPortugue
 Name: "desktopicon"; Description: "Criar atalho na area de trabalho"; GroupDescription: "Atalhos adicionais:"; Flags: unchecked
 Name: "startup"; Description: "Iniciar Anamnesis com o Windows"; GroupDescription: "Inicializacao:"; Flags: checkedonce
 
+[InstallDelete]
+Type: filesandordirs; Name: "{app}\tray"
+Type: filesandordirs; Name: "{app}\worker"
+
 [Files]
 Source: "{#SourceRoot}\tray\*"; DestDir: "{app}\tray"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#SourceRoot}\worker\*"; DestDir: "{app}\worker"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#SourceRoot}\LICENSE"; DestDir: "{app}"; DestName: "LICENSE"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\Anamnesis"; Filename: "{app}\tray\Anamnesis.Tray.exe"; WorkingDir: "{app}\tray"; IconFilename: "{app}\tray\Anamnesis.ico"
@@ -71,23 +76,30 @@ Name: "{autodesktop}\Anamnesis"; Filename: "{app}\tray\Anamnesis.Tray.exe"; Work
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "Anamnesis"; ValueData: """{app}\tray\Anamnesis.Tray.exe"" --background"; Flags: uninsdeletevalue; Tasks: startup
 
 [Run]
-Filename: "{app}\tray\Anamnesis.Tray.exe"; Description: "Iniciar Anamnesis"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\tray\Anamnesis.Tray.exe"; Description: "Iniciar Anamnesis"; Flags: nowait postinstall skipifsilent; Check: DeveAbrirAposInstalacaoNova
 
 [Code]
 const
   ChaveDesinstalacao = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{B762A4D8-3BA7-4FB4-9A0A-A8135AB0DF2E}_is1';
+  ChaveDiagnostico = 'Software\Anamnesis\Instalador';
+  NomeValorUltimoDiagnostico = 'UltimoDiagnostico';
   ExecutavelTray = 'tray\Anamnesis.Tray.exe';
   ExecutavelWorker = 'worker\Anamnesis.Worker.exe';
   ArgumentoEncerrarParaAtualizacao = '--encerrar-para-atualizacao';
 
 type
   TModoInstalacao = (miInstalar, miAtualizar, miReparar);
+  TEstadoWorker = (ewAusente, ewExecutando, ewDesconhecido);
 
 var
   ModoInstalacao: TModoInstalacao;
   DiretorioInstalacaoAnterior: String;
   VersaoInstalada: String;
-  PaginaAcao: TOutputMsgWizardPage;
+  PaginaDiagnostico: TOutputMsgWizardPage;
+  PaginaAcao: TInputOptionWizardPage;
+  DowngradeDetectado: Boolean;
+  InstalacaoAnteriorDetectada: Boolean;
+  UltimoDiagnosticoAnterior: String;
 
 function PayloadObrigatorioExiste(const Diretorio: String): Boolean;
 begin
@@ -96,32 +108,161 @@ begin
     FileExists(AddBackslash(Diretorio) + ExecutavelWorker);
 end;
 
+function DiretorioPadraoInstalacao: String;
+begin
+  Result := ExpandConstant('{localappdata}\Programs\Anamnesis');
+end;
+
+function CaminhoLogDiagnostico: String;
+begin
+  Result := ExpandConstant('{commonappdata}\Anamnesis\Logs\instalador.log');
+end;
+
+procedure RegistrarDiagnostico(const Categoria, Mensagem: String);
+var
+  Linha: String;
+  Arquivo: String;
+begin
+  Linha := GetDateTimeString('yyyy-mm-dd hh:nn:ss', '-', ':') + ' [' + Categoria + '] ' + Mensagem;
+  Log(Linha);
+  Arquivo := CaminhoLogDiagnostico;
+  if ForceDirectories(ExtractFileDir(Arquivo)) then
+  begin
+    SaveStringToFile(Arquivo, Linha + #13#10, True);
+  end;
+  RegWriteStringValue(HKLM, ChaveDiagnostico, NomeValorUltimoDiagnostico, Linha);
+  RegWriteStringValue(HKCU, ChaveDiagnostico, NomeValorUltimoDiagnostico, Linha);
+end;
+
+function ObterUltimoDiagnostico: String;
+begin
+  Result := '';
+  if not RegQueryStringValue(HKLM, ChaveDiagnostico, NomeValorUltimoDiagnostico, Result) then
+  begin
+    if not RegQueryStringValue(HKCU, ChaveDiagnostico, NomeValorUltimoDiagnostico, Result) then
+    begin
+      Result := 'Nenhum diagnóstico anterior foi registrado.';
+    end;
+  end;
+end;
+
+function CompararVersaoDoExecutavel(
+  const Caminho: String;
+  const VersaoBinariaNova: Int64;
+  var ComparacaoAcumulada: Integer): Boolean;
+var
+  VersaoBinariaInstalada: Int64;
+  ComparacaoAtual: Integer;
+begin
+  Result := GetPackedVersion(Caminho, VersaoBinariaInstalada);
+  if not Result then
+  begin
+    Exit;
+  end;
+
+  ComparacaoAtual := ComparePackedVersion(VersaoBinariaInstalada, VersaoBinariaNova);
+  if ComparacaoAtual > 0 then
+  begin
+    ComparacaoAcumulada := ComparacaoAtual;
+  end
+  else if (ComparacaoAtual < 0) and (ComparacaoAcumulada = 0) then
+  begin
+    ComparacaoAcumulada := ComparacaoAtual;
+  end;
+end;
+
+function CompararVersoesDisponiveis(
+  const Diretorio: String;
+  var ComparacaoAcumulada: Integer): Boolean;
+var
+  VersaoBinariaNova: Int64;
+  VersaoTrayEncontrada: Boolean;
+  VersaoWorkerEncontrada: Boolean;
+begin
+  Result := False;
+  ComparacaoAcumulada := 0;
+  if not GetPackedVersion(ExpandConstant('{srcexe}'), VersaoBinariaNova) then
+  begin
+    Exit;
+  end;
+
+  VersaoTrayEncontrada := CompararVersaoDoExecutavel(
+    AddBackslash(Diretorio) + ExecutavelTray,
+    VersaoBinariaNova,
+    ComparacaoAcumulada);
+  VersaoWorkerEncontrada := CompararVersaoDoExecutavel(
+    AddBackslash(Diretorio) + ExecutavelWorker,
+    VersaoBinariaNova,
+    ComparacaoAcumulada);
+  Result := VersaoTrayEncontrada or VersaoWorkerEncontrada;
+end;
+
 procedure DeterminarModoInstalacao;
 var
   RegistroEncontrado: Boolean;
+  VersaoEncontrada: Boolean;
+  ComparacaoDeVersao: Integer;
+  ComparacaoDeVersaoDisponivel: Boolean;
 begin
-  DiretorioInstalacaoAnterior := '';
+  DiretorioInstalacaoAnterior := DiretorioPadraoInstalacao;
   VersaoInstalada := '';
-  RegQueryStringValue(
-    HKCU,
+  DowngradeDetectado := False;
+  InstalacaoAnteriorDetectada := False;
+  if not RegQueryStringValue(
+    HKLM,
     ChaveDesinstalacao,
     'InstallLocation',
-    DiretorioInstalacaoAnterior);
-  RegistroEncontrado := RegQueryStringValue(
-    HKCU,
+    DiretorioInstalacaoAnterior) then
+  begin
+    RegQueryStringValue(
+      HKCU,
+      ChaveDesinstalacao,
+      'InstallLocation',
+      DiretorioInstalacaoAnterior);
+  end;
+  RegistroEncontrado := RegKeyExists(HKLM, ChaveDesinstalacao) or
+    RegKeyExists(HKCU, ChaveDesinstalacao);
+  InstalacaoAnteriorDetectada := RegistroEncontrado or DirExists(DiretorioInstalacaoAnterior);
+  VersaoEncontrada := RegQueryStringValue(
+    HKLM,
     ChaveDesinstalacao,
     'DisplayVersion',
     VersaoInstalada);
+  if not VersaoEncontrada then
+  begin
+    VersaoEncontrada := RegQueryStringValue(
+      HKCU,
+      ChaveDesinstalacao,
+      'DisplayVersion',
+      VersaoInstalada);
+  end;
 
-  if not RegistroEncontrado then
+  ComparacaoDeVersaoDisponivel := False;
+  if InstalacaoAnteriorDetectada then
+  begin
+    ComparacaoDeVersaoDisponivel :=
+      CompararVersoesDisponiveis(DiretorioInstalacaoAnterior, ComparacaoDeVersao);
+  end;
+
+  if not InstalacaoAnteriorDetectada then
   begin
     ModoInstalacao := miInstalar;
+  end
+  else if ComparacaoDeVersaoDisponivel and (ComparacaoDeVersao > 0) then
+  begin
+    DowngradeDetectado := True;
+    ModoInstalacao := miReparar;
   end
   else if not PayloadObrigatorioExiste(DiretorioInstalacaoAnterior) then
   begin
     ModoInstalacao := miReparar;
   end
-  else if VersaoInstalada = '{#AppVersion}' then
+  else if ComparacaoDeVersaoDisponivel and (ComparacaoDeVersao < 0) then
+  begin
+    ModoInstalacao := miAtualizar;
+  end
+  else if ComparacaoDeVersaoDisponivel or not VersaoEncontrada or
+    (VersaoInstalada = '{#AppVersion}') then
   begin
     ModoInstalacao := miReparar;
   end
@@ -133,6 +274,12 @@ end;
 
 function NomeAcao: String;
 begin
+  if DowngradeDetectado then
+  begin
+    Result := 'Manter versão mais recente';
+    Exit;
+  end;
+
   case ModoInstalacao of
     miInstalar: Result := 'Instalar';
     miAtualizar: Result := 'Atualizar';
@@ -142,6 +289,13 @@ end;
 
 function DescricaoAcao: String;
 begin
+  if DowngradeDetectado then
+  begin
+    Result :=
+      'A versão instalada é mais recente que este pacote. O downgrade foi bloqueado para proteger os dados locais.';
+    Exit;
+  end;
+
   case ModoInstalacao of
     miInstalar:
       Result :=
@@ -157,12 +311,56 @@ begin
   end;
 end;
 
+function ResumoDiagnostico: String;
+var
+  Integridade: String;
+begin
+  if PayloadObrigatorioExiste(DiretorioInstalacaoAnterior) then
+  begin
+    Integridade := 'Íntegra: Tray e Worker foram encontrados.';
+  end
+  else if InstalacaoAnteriorDetectada then
+  begin
+    Integridade := 'Incompleta: falta ao menos um executável obrigatório. O reparo é recomendado.';
+  end
+  else
+  begin
+    Integridade := 'Não existe instalação anterior neste usuário.';
+  end;
+
+  Result :=
+    'Instalação: ' + DiretorioInstalacaoAnterior + #13#10 +
+    'Versão instalada: ' + VersaoInstalada + #13#10 +
+    'Versão deste pacote: {#AppVersion}' + #13#10 +
+    'Integridade: ' + Integridade + #13#10 + #13#10 +
+    'Último diagnóstico conhecido:' + #13#10 +
+    UltimoDiagnosticoAnterior;
+end;
+
+function TextoDaOpcaoRecomendada: String;
+begin
+  if DowngradeDetectado then
+  begin
+    Result := 'Manter a versão mais recente já instalada. Este pacote não fará downgrade.';
+    Exit;
+  end;
+
+  case ModoInstalacao of
+    miInstalar:
+      Result := 'Instalar o Anamnesis neste computador.';
+    miAtualizar:
+      Result := 'Atualizar os binários e preservar todos os dados locais.';
+    miReparar:
+      Result := 'Reparar os binários desta instalação sem apagar dados locais.';
+  end;
+end;
+
 function DiretorioDoTrayInstalado: String;
 begin
   Result := DiretorioInstalacaoAnterior;
   if Result = '' then
   begin
-    Result := WizardDirValue;
+    Result := ExpandConstant('{app}');
   end;
 end;
 
@@ -171,13 +369,13 @@ begin
   Result := CheckForMutexes('Local\Anamnesis.Tray.' + GetUserNameString);
 end;
 
-function WorkerEstaEmExecucao: Boolean;
+function ConsultarEstadoWorker: TEstadoWorker;
 var
   CodigoResultado: Integer;
   Saida: TExecOutput;
   Indice: Integer;
 begin
-  Result := False;
+  Result := ewDesconhecido;
   try
     if ExecAndCaptureOutput(
       ExpandConstant('{sys}\tasklist.exe'),
@@ -186,13 +384,20 @@ begin
       SW_HIDE,
       ewWaitUntilTerminated,
       CodigoResultado,
-      Saida) and (CodigoResultado = 0) then
+      Saida) then
     begin
+      if CodigoResultado <> 0 then
+      begin
+        Log('tasklist devolveu código ' + IntToStr(CodigoResultado) + '.');
+        Exit;
+      end;
+
+      Result := ewAusente;
       for Indice := 0 to GetArrayLength(Saida.StdOut) - 1 do
       begin
         if Pos('Anamnesis.Worker.exe', Saida.StdOut[Indice]) > 0 then
         begin
-          Result := True;
+          Result := ewExecutando;
           Exit;
         end;
       end;
@@ -257,12 +462,28 @@ end;
 procedure InitializeWizard;
 begin
   DeterminarModoInstalacao;
-  PaginaAcao := CreateOutputMsgPage(
+  if InstalacaoAnteriorDetectada and (DiretorioInstalacaoAnterior <> '') then
+  begin
+    WizardForm.DirEdit.Text := DiretorioInstalacaoAnterior;
+  end;
+  UltimoDiagnosticoAnterior := ObterUltimoDiagnostico;
+  PaginaDiagnostico := CreateOutputMsgPage(
     wpLicense,
-    'Preparar Anamnesis',
-    'O instalador verificou esta instalação.',
-    DescricaoAcao + #13#10 + #13#10 +
+    'Diagnóstico da instalação',
+    'O Anamnesis verificou sua instalação antes de alterar qualquer arquivo.',
+    ResumoDiagnostico + #13#10 + #13#10 +
     'Configuração, banco, reuniões, gravações, transcrições e atas permanecem no seu computador.');
+  PaginaAcao := CreateInputOptionPage(
+    PaginaDiagnostico.ID,
+    'Ação recomendada',
+    NomeAcao,
+    DescricaoAcao + #13#10 + #13#10 +
+    'Confirme a opção abaixo para continuar.',
+    True,
+    False);
+  PaginaAcao.Add(TextoDaOpcaoRecomendada);
+  PaginaAcao.SelectedValueIndex := 0;
+  RegistrarDiagnostico('INFO', 'Wizard iniciado. Ação recomendada: ' + NomeAcao + '.');
 end;
 
 function ShouldSkipPage(PageID: Integer): Boolean;
@@ -288,21 +509,170 @@ begin
     'Os dados locais do Anamnesis não serão removidos durante esta operação.';
 end;
 
-function PrepareToInstall(var NeedsRestart: Boolean): String;
+function ValidarProntidaoParaInstalar(var Mensagem: String): Boolean;
+var
+  EstadoWorker: TEstadoWorker;
 begin
-  Result := '';
-  if TrayEstaEmExecucao and not AguardarEncerramentoDoTray then
+  Result := False;
+  Mensagem := '';
+  if DowngradeDetectado then
   begin
-    Result :=
-      'O Anamnesis continua aberto. Feche-o pela bandeja do Windows e execute o instalador novamente. ' +
-      'Se houver uma gravação ativa, finalize-a antes de atualizar ou reparar.';
+    Mensagem :=
+      'Este instalador é mais antigo que a versão já instalada. Baixe uma versão igual ou mais recente; ' +
+      'o Anamnesis não executa downgrade automático.';
+    RegistrarDiagnostico('AVISO', Mensagem);
     Exit;
   end;
 
-  if WorkerEstaEmExecucao then
+  if TrayEstaEmExecucao and not AguardarEncerramentoDoTray then
   begin
-    Result :=
+    Mensagem :=
+      'O Anamnesis continua aberto. Finalize uma gravação ativa ou feche-o pela bandeja do Windows. ' +
+      'O wizard continua aberto para você tentar novamente, sem cancelar a instalação.';
+    RegistrarDiagnostico('AVISO', Mensagem);
+    Exit;
+  end;
+
+  EstadoWorker := ConsultarEstadoWorker;
+  if EstadoWorker = ewExecutando then
+  begin
+    Mensagem :=
       'O Anamnesis ainda está processando uma reunião. Aguarde o Worker terminar e execute o instalador novamente. ' +
       'Nenhum processo foi encerrado à força.';
+    RegistrarDiagnostico('AVISO', Mensagem);
+    Exit;
   end;
+
+  if EstadoWorker = ewDesconhecido then
+  begin
+    Mensagem :=
+      'O instalador não conseguiu confirmar se o Worker está em execução. ' +
+      'Por segurança, nenhuma alteração foi feita. Tente novamente ou reinicie o Windows.';
+    RegistrarDiagnostico('ERRO', Mensagem);
+    Exit;
+  end;
+
+  Result := True;
+  RegistrarDiagnostico('INFO', 'Preflight concluído. Instalação pode continuar.');
+end;
+
+function NextButtonClick(CurPageID: Integer): Boolean;
+var
+  Mensagem: String;
+begin
+  Result := True;
+  if (CurPageID = PaginaAcao.ID) and DowngradeDetectado then
+  begin
+    SuppressibleMsgBox(
+      'A versão instalada é mais recente. Nenhuma alteração será feita. ' +
+      'Use um instalador igual ou mais recente para atualizar.',
+      mbInformation,
+      MB_OK,
+      IDOK);
+    Result := False;
+    Exit;
+  end;
+
+  if (CurPageID = wpReady) and not ValidarProntidaoParaInstalar(Mensagem) then
+  begin
+    WizardForm.NextButton.Caption := 'Tentar novamente';
+    SuppressibleMsgBox(
+      Mensagem + #13#10 + #13#10 +
+      'O assistente continua aberto. Corrija a situação e clique em "Tentar novamente".',
+      mbInformation,
+      MB_OK,
+      IDOK);
+    Result := False;
+  end;
+end;
+
+procedure CurPageChanged(CurPageID: Integer);
+begin
+  if CurPageID = wpReady then
+  begin
+    if TrayEstaEmExecucao then
+    begin
+      WizardForm.NextButton.Caption := 'Tentar novamente';
+    end
+    else
+    begin
+      WizardForm.NextButton.Caption := 'Instalar';
+    end;
+  end;
+end;
+
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  Mensagem: String;
+begin
+  Result := '';
+  if not ValidarProntidaoParaInstalar(Mensagem) then
+  begin
+    Result := Mensagem;
+  end;
+end;
+
+function DeveAbrirAposInstalacaoNova: Boolean;
+begin
+  Result := (ModoInstalacao = miInstalar) and
+    not InstalacaoAnteriorDetectada and
+    not DowngradeDetectado and
+    not TrayEstaEmExecucao;
+  if not Result then
+  begin
+    RegistrarDiagnostico('INFO', 'Tray não foi aberto automaticamente porque a ação foi ' + NomeAcao + '.');
+  end;
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if (CurStep = ssPostInstall) and
+     RegKeyExists(HKLM, ChaveDesinstalacao) and
+     RegKeyExists(HKCU, ChaveDesinstalacao) then
+  begin
+    if RegDeleteKeyIncludingSubkeys(HKCU, ChaveDesinstalacao) then
+    begin
+      RegistrarDiagnostico('INFO', 'Registro de desinstalação legado por usuário foi migrado para a instalação elevada.');
+    end;
+  end;
+end;
+
+function InitializeUninstall: Boolean;
+var
+  EstadoWorker: TEstadoWorker;
+begin
+  Result := False;
+  if TrayEstaEmExecucao and not AguardarEncerramentoDoTray then
+  begin
+    SuppressibleMsgBox(
+      'O Anamnesis continua aberto. Feche-o pela bandeja do Windows antes de desinstalar. ' +
+      'Se houver uma gravação ativa, finalize-a primeiro. Nenhum processo foi encerrado à força.',
+      mbError,
+      MB_OK,
+      IDOK);
+    Exit;
+  end;
+
+  EstadoWorker := ConsultarEstadoWorker;
+  if EstadoWorker = ewExecutando then
+  begin
+    SuppressibleMsgBox(
+      'O Anamnesis ainda está processando uma reunião. Aguarde o Worker terminar antes de desinstalar.',
+      mbError,
+      MB_OK,
+      IDOK);
+    Exit;
+  end;
+
+  if EstadoWorker = ewDesconhecido then
+  begin
+    SuppressibleMsgBox(
+      'Não foi possível confirmar se o Worker está em execução. A desinstalação foi cancelada por segurança.',
+      mbError,
+      MB_OK,
+      IDOK);
+    Exit;
+  end;
+
+  Result := True;
 end;

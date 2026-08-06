@@ -11,10 +11,13 @@ public sealed class SqliteEventoOperacionalRepository(string caminhoBancoPrincip
     IEventoOperacionalQuery
 {
     private const int TimeoutComandoSegundos = 1;
+    private static readonly TimeSpan LimiteExclusividadePreparacao = TimeSpan.FromSeconds(1);
     private readonly BancoLocal _banco = new(
         ResolverCaminhoJournal(caminhoBancoPrincipal),
         SqliteSchema.InicializarEventosOperacionaisAsync,
-        TimeoutComandoSegundos);
+        TimeoutComandoSegundos,
+        LimiteExclusividadePreparacao,
+        SqliteSchema.EventosOperacionaisEstaoInicializadosAsync);
 
     public static string ResolverCaminhoJournal(string caminhoBancoPrincipal)
     {

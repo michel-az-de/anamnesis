@@ -55,6 +55,22 @@ public sealed class WindowsShellTests
         Assert.True(encerramento.Wait(TimeSpan.FromSeconds(2)));
     }
 
+    [Fact]
+    public void EncerramentoParaAtualizacaoDeveConsultarProtecaoAtomicaDaSessao()
+    {
+        var programa = File.ReadAllText(Path.Combine(
+            EncontrarRaizRepositorio(),
+            "src",
+            "Anamnesis.Tray",
+            "Program.cs"));
+
+        Assert.Contains("sessaoDesktop.PodeEncerrarParaAtualizacao", programa, StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "sessaoDesktop.Etapa == EtapaDesktopPoc.Gravando && !permitirRecuperacaoDeGravacao",
+            programa,
+            StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData(EtapaDesktopPoc.Pronto, false, 0, "Pronto", true, false, "Processar pendências")]
     [InlineData(EtapaDesktopPoc.Gravando, false, 0, "Gravando", false, true, "Processar pendências")]

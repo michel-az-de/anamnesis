@@ -229,11 +229,13 @@ internal static class Program
 
         bool TentarEncerrarAplicativo(bool permitirRecuperacaoDeGravacao)
         {
-            if (sessaoDesktop.Etapa == EtapaDesktopPoc.Gravando && !permitirRecuperacaoDeGravacao)
+            if (!permitirRecuperacaoDeGravacao &&
+                !sessaoDesktop.PodeEncerrarParaAtualizacao)
             {
                 AbrirJanela();
                 MessageBox.Show(
-                    "Há uma gravação ativa. Finalize-a antes de atualizar o Anamnesis; " +
+                    "Há uma gravação ativa ou um comando de gravação em andamento. " +
+                    "Finalize-o antes de atualizar o Anamnesis; " +
                     "o instalador não encerra uma gravação à força.",
                     "Atualização do Anamnesis",
                     MessageBoxButtons.OK,
@@ -314,9 +316,10 @@ internal static class Program
         icone.ContextMenuStrip.Items.Add(new ToolStripSeparator());
         icone.ContextMenuStrip.Items.Add("Sair", null, (_, _) =>
         {
-            if (sessaoDesktop.Etapa == EtapaDesktopPoc.Gravando &&
+            if (!sessaoDesktop.PodeEncerrarParaAtualizacao &&
                 MessageBox.Show(
-                    "Há uma gravação ativa. Deseja sair e deixar a recuperação pendente?",
+                    "Há uma gravação ativa ou um comando de gravação em andamento. " +
+                    "Deseja sair e deixar a recuperação pendente?",
                     "Sair do Anamnesis",
                     MessageBoxButtons.YesNo,
                     MessageBoxIcon.Warning,

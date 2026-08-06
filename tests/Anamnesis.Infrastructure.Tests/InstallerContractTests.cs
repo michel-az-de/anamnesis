@@ -115,6 +115,94 @@ public sealed partial class InstallerContractTests
         Assert.Contains("codigoAtualizacao", script, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void AtualizacaoDeveVersionarEValidarOsBinariosReais()
+    {
+        var raiz = EncontrarRaizRepositorio();
+        var build = File.ReadAllText(Path.Combine(raiz, "scripts", "Build-Installer.ps1"));
+        var publish = File.ReadAllText(Path.Combine(raiz, "scripts", "Publish-Alpha.ps1"));
+        var smoke = File.ReadAllText(Path.Combine(raiz, "scripts", "Test-Installer.ps1"));
+
+        Assert.Contains("-Version $Version", build, StringComparison.Ordinal);
+        Assert.Contains("-NumericVersion $NumericVersion", build, StringComparison.Ordinal);
+        Assert.Contains("[string]$Version", publish, StringComparison.Ordinal);
+        Assert.Contains("[string]$NumericVersion", publish, StringComparison.Ordinal);
+        Assert.Contains("-p:Version=$Version", publish, StringComparison.Ordinal);
+        Assert.Contains("-p:FileVersion=$NumericVersion", publish, StringComparison.Ordinal);
+        Assert.Contains(
+            "-p:IncludeSourceRevisionInInformationalVersion=false",
+            publish,
+            StringComparison.Ordinal);
+        Assert.Contains("caminhoTray", smoke, StringComparison.Ordinal);
+        Assert.Contains("caminhoWorker", smoke, StringComparison.Ordinal);
+        Assert.Contains("ProductVersion", smoke, StringComparison.Ordinal);
+        Assert.Contains("versoesBinariosAtualizados", smoke, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ReparoAtualizacaoEDesinstalacaoDevemSerCooperativosEPreservarDados()
+    {
+        var raiz = EncontrarRaizRepositorio();
+        var inno = File.ReadAllText(Path.Combine(raiz, "installer", "Anamnesis.iss"));
+        var script = File.ReadAllText(Path.Combine(raiz, "scripts", "Test-Installer.ps1"));
+
+        Assert.Contains("InitializeUninstall", inno, StringComparison.Ordinal);
+        Assert.Contains("ConsultarEstadoWorker", inno, StringComparison.Ordinal);
+        Assert.Contains("ewDesconhecido", inno, StringComparison.Ordinal);
+        Assert.Contains("DowngradeDetectado", inno, StringComparison.Ordinal);
+        Assert.Contains("codigoDowngradeBloqueado", script, StringComparison.Ordinal);
+        Assert.Contains("[InstallDelete]", inno, StringComparison.Ordinal);
+        Assert.Contains("DestName: \"LICENSE\"", inno, StringComparison.Ordinal);
+        Assert.Contains("encerramentoCooperativoDesinstalacao", script, StringComparison.Ordinal);
+        Assert.Contains("hashConfiguracaoAntes", script, StringComparison.Ordinal);
+        Assert.Contains("reuniaoSentinela", script, StringComparison.Ordinal);
+        Assert.Contains("atalhoPreservado", script, StringComparison.Ordinal);
+        Assert.Contains("downgradeComPayloadIncompletoBloqueado", script, StringComparison.Ordinal);
+        Assert.Contains("reparoPayloadIncompleto", script, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void DowngradeDeveSerBloqueadoAntesDeClassificarPayloadIncompletoComoReparo()
+    {
+        var raiz = EncontrarRaizRepositorio();
+        var inno = File.ReadAllText(Path.Combine(raiz, "installer", "Anamnesis.iss"));
+        var inicio = inno.IndexOf("procedure DeterminarModoInstalacao;", StringComparison.Ordinal);
+        var fim = inno.IndexOf("function NomeAcao: String;", inicio, StringComparison.Ordinal);
+
+        Assert.True(inicio >= 0 && fim > inicio);
+        var determinarModo = inno[inicio..fim];
+        var compararVersoes = determinarModo.IndexOf("CompararVersoesDisponiveis", StringComparison.Ordinal);
+        var verificarPayload = determinarModo.IndexOf("PayloadObrigatorioExiste", StringComparison.Ordinal);
+
+        Assert.True(compararVersoes >= 0);
+        Assert.True(verificarPayload > compararVersoes);
+        Assert.Contains("ExecutavelTray", inno, StringComparison.Ordinal);
+        Assert.Contains("ExecutavelWorker", inno, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void WizardElevadoDeveDiagnosticarVersaoEEvitarAbrirTrayEmReparoOuAtualizacao()
+    {
+        var raiz = EncontrarRaizRepositorio();
+        var inno = File.ReadAllText(Path.Combine(raiz, "installer", "Anamnesis.iss"));
+
+        Assert.Contains("PrivilegesRequired=admin", inno, StringComparison.Ordinal);
+        Assert.DoesNotContain("PrivilegesRequired=lowest", inno, StringComparison.Ordinal);
+        Assert.DoesNotContain("PrivilegesRequiredOverridesAllowed=commandline", inno, StringComparison.Ordinal);
+        Assert.DoesNotContain("PrivilegesRequiredOverridesAllowed=dialog", inno, StringComparison.Ordinal);
+        Assert.Contains("CreateInputOptionPage", inno, StringComparison.Ordinal);
+        Assert.Contains("PaginaDiagnostico", inno, StringComparison.Ordinal);
+        Assert.Contains("Ação recomendada", inno, StringComparison.Ordinal);
+        Assert.Contains("RegistrarDiagnostico", inno, StringComparison.Ordinal);
+        Assert.Contains("UltimoDiagnostico", inno, StringComparison.Ordinal);
+        Assert.Contains("Check: DeveAbrirAposInstalacaoNova", inno, StringComparison.Ordinal);
+        Assert.Contains("function DeveAbrirAposInstalacaoNova: Boolean;", inno, StringComparison.Ordinal);
+        Assert.Contains("Tentar novamente", inno, StringComparison.Ordinal);
+        Assert.Contains("RegKeyExists(HKLM, ChaveDesinstalacao)", inno, StringComparison.Ordinal);
+        Assert.Contains("RegDeleteKeyIncludingSubkeys(HKCU, ChaveDesinstalacao)", inno, StringComparison.Ordinal);
+        Assert.Contains("Get-CaminhoRegistroProdutoInstalado", File.ReadAllText(Path.Combine(raiz, "scripts", "Test-Installer.ps1")), StringComparison.Ordinal);
+    }
+
     private static string EncontrarRaizRepositorio()
     {
         var atual = new DirectoryInfo(AppContext.BaseDirectory);

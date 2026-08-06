@@ -194,6 +194,70 @@ public sealed class SqliteEventoOperacionalRepositoryTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task DeveReconhecerSchemaCompletoAntesDeRepetirDdl()
+    {
+        var repository = new SqliteEventoOperacionalRepository(CaminhoBanco);
+        await repository.RegistrarAsync(
+            CriarEvento(
+                new DateTimeOffset(2026, 8, 6, 12, 0, 0, TimeSpan.Zero),
+                CodigosEventoOperacional.JobReservado,
+                Guid.NewGuid(),
+                Guid.NewGuid()),
+            CancellationToken.None);
+        var caminhoJournal = SqliteEventoOperacionalRepository.ResolverCaminhoJournal(CaminhoBanco);
+        await using var conexao = new SqliteConnection(
+            $"Data Source={caminhoJournal};Pooling=False");
+        await conexao.OpenAsync();
+
+        var pronto = await SqliteSchema.EventosOperacionaisEstaoInicializadosAsync(
+            conexao,
+            CancellationToken.None);
+
+        Assert.True(pronto);
+    }
+
+    [Fact]
+    public async Task DeveEstabilizarPrimeiraInicializacaoConcorrenteEmCemRepeticoes()
+    {
+        for (var iteracao = 0; iteracao < 100; iteracao++)
+        {
+            var caminhoBanco = Path.Combine(_diretorio, $"corrida-{iteracao}.db");
+            var primeira = new SqliteEventoOperacionalRepository(caminhoBanco);
+            var segunda = new SqliteEventoOperacionalRepository(caminhoBanco);
+            var inicio = new TaskCompletionSource(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+
+            async Task RegistrarAsync(
+                SqliteEventoOperacionalRepository repository,
+                int indice)
+            {
+                await inicio.Task;
+                await repository.RegistrarAsync(
+                    CriarEvento(
+                        new DateTimeOffset(2026, 8, 6, 13, 0, 0, TimeSpan.Zero)
+                            .AddSeconds(indice),
+                        CodigosEventoOperacional.JobReservado,
+                        Guid.NewGuid(),
+                        Guid.NewGuid()),
+                    CancellationToken.None);
+            }
+
+            var escritas = new[]
+            {
+                RegistrarAsync(primeira, 0),
+                RegistrarAsync(segunda, 1)
+            };
+            inicio.TrySetResult();
+            await Task.WhenAll(escritas);
+
+            var eventos = await new SqliteEventoOperacionalRepository(caminhoBanco).ListarAsync(
+                new EventoOperacionalFiltro(),
+                CancellationToken.None);
+            Assert.Equal(2, eventos.Count);
+        }
+    }
+
+    [Fact]
     public async Task DeveLimitarConsultaAQuinhentosEventosMaisRecentes()
     {
         var repository = new SqliteEventoOperacionalRepository(CaminhoBanco);
@@ -259,6 +323,39 @@ public sealed class SqliteEventoOperacionalRepositoryTests : IAsyncLifetime
         }
 
         Assert.InRange(cronometro.Elapsed, TimeSpan.Zero, TimeSpan.FromSeconds(2));
+    }
+
+    [Fact]
+    public async Task ContencaoNaTravaDePreparacaoNaoDeveBloquearFluxoObservado()
+    {
+        var caminhoJournal = SqliteEventoOperacionalRepository.ResolverCaminhoJournal(CaminhoBanco);
+        await using var bloqueador = new FileStream(
+            caminhoJournal + ".init.lock",
+            FileMode.OpenOrCreate,
+            FileAccess.ReadWrite,
+            FileShare.None,
+            bufferSize: 1,
+            FileOptions.None);
+        var journal = new JornalOperacional(
+            new SqliteEventoOperacionalRepository(CaminhoBanco),
+            TimeProvider.System);
+        var cronometro = System.Diagnostics.Stopwatch.StartNew();
+
+        await journal.RegistrarAsync(
+            NivelEventoOperacional.Info,
+            CodigosEventoOperacional.GravacaoIniciada,
+            "OBS",
+            "Gravação iniciada.",
+            Guid.NewGuid(),
+            null,
+            null,
+            CancellationToken.None);
+
+        cronometro.Stop();
+        Assert.InRange(
+            cronometro.Elapsed,
+            TimeSpan.FromMilliseconds(750),
+            TimeSpan.FromSeconds(2));
     }
 
     private static EventoOperacional CriarEvento(

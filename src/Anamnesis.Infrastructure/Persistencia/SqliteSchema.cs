@@ -144,4 +144,44 @@ internal static class SqliteSchema
             """;
         await comando.ExecuteNonQueryAsync(cancellationToken);
     }
+
+    public static async Task<bool> EventosOperacionaisEstaoInicializadosAsync(
+        SqliteConnection conexao,
+        CancellationToken cancellationToken)
+    {
+        await using (var consultarModo = conexao.CreateCommand())
+        {
+            consultarModo.CommandText = "PRAGMA journal_mode;";
+            var modo = Convert.ToString(
+                await consultarModo.ExecuteScalarAsync(cancellationToken),
+                CultureInfo.InvariantCulture);
+            if (!string.Equals(modo, "wal", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+        }
+
+        await using var consultarSchema = conexao.CreateCommand();
+        consultarSchema.CommandText = """
+            SELECT
+                (SELECT COUNT(*)
+                 FROM pragma_table_info('eventos_operacionais')
+                 WHERE name IN (
+                     'id', 'criado_em', 'nivel', 'codigo', 'componente', 'mensagem',
+                     'reuniao_id', 'job_id', 'operacao', 'tentativa', 'resultado',
+                     'motivo_codigo', 'duracao_ms')) = 13
+                AND
+                (SELECT COUNT(*)
+                 FROM sqlite_master
+                 WHERE type = 'index'
+                   AND name IN (
+                       'ix_eventos_operacionais_criado',
+                       'ix_eventos_operacionais_filtros',
+                       'ix_eventos_operacionais_reuniao',
+                       'ix_eventos_operacionais_job')) = 4;
+            """;
+        return Convert.ToInt32(
+            await consultarSchema.ExecuteScalarAsync(cancellationToken),
+            CultureInfo.InvariantCulture) == 1;
+    }
 }
