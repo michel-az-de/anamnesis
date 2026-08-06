@@ -605,6 +605,30 @@ public sealed partial class InstallerContractTests
     }
 
     [Fact]
+    public void ReleaseAtualDeveManterABetaUmComoBaseLegadaOficialDoSmoke()
+    {
+        var raiz = EncontrarRaizRepositorio();
+        using var documento = JsonDocument.Parse(File.ReadAllText(Path.Combine(
+            raiz,
+            "release",
+            "versao.json")));
+        var declaracao = documento.RootElement;
+
+        Assert.Equal("0.2.0-beta.1", declaracao
+            .GetProperty("versaoAnteriorParaSmoke")
+            .GetString());
+        Assert.Equal("0.2.0.0", declaracao
+            .GetProperty("versaoNumericaAnteriorParaSmoke")
+            .GetString());
+        Assert.Equal(
+            "https://github.com/michel-az-de/anamnesis/releases/download/v0.2.0-beta.1/Anamnesis-0.2.0-beta.1-win-x64-setup.exe",
+            declaracao.GetProperty("urlInstaladorAnterior").GetString());
+        Assert.Equal(
+            "5852e3e82ab9c80cf72ab85b8cd4425aeab3aa6faf401b3da0a2fc3db23dbecd",
+            declaracao.GetProperty("sha256InstaladorAnterior").GetString());
+    }
+
+    [Fact]
     public void SmokeDeAtualizacaoDeveUsarReleaseAnteriorOficial()
     {
         var raiz = EncontrarRaizRepositorio();

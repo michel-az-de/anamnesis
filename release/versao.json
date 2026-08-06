@@ -2,8 +2,8 @@
   "versao": "0.2.0-beta.6",
   "versaoNumerica": "0.2.0.5",
   "canal": "beta",
-  "versaoAnteriorParaSmoke": "0.2.0-beta.5",
-  "versaoNumericaAnteriorParaSmoke": "0.2.0.4",
-  "urlInstaladorAnterior": "https://github.com/michel-az-de/anamnesis/releases/download/v0.2.0-beta.5/Anamnesis-0.2.0-beta.5-win-x64-setup.exe",
-  "sha256InstaladorAnterior": "d9a93b43d65c3ebc85069a8c600ba24f36c8a1d1bde1bccfa2bacf9e36742dc5"
+  "versaoAnteriorParaSmoke": "0.2.0-beta.1",
+  "versaoNumericaAnteriorParaSmoke": "0.2.0.0",
+  "urlInstaladorAnterior": "https://github.com/michel-az-de/anamnesis/releases/download/v0.2.0-beta.1/Anamnesis-0.2.0-beta.1-win-x64-setup.exe",
+  "sha256InstaladorAnterior": "5852e3e82ab9c80cf72ab85b8cd4425aeab3aa6faf401b3da0a2fc3db23dbecd"
 }
