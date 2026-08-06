@@ -33,7 +33,7 @@ Eliminar diretorios de tentativa e versoes divergentes do instalador. Cada relea
 
 ## Criterios de aceite
 
-- [x] A versao `0.2.0-beta.4`, sua versao numerica e a identidade verificavel da release anterior estao declaradas uma unica vez em `release/versao.json`.
+- [x] A versao `0.2.0-beta.5`, sua versao numerica e a identidade verificavel da release anterior estao declaradas uma unica vez em `release/versao.json`.
 - [x] `Build-Installer.ps1` usa a configuracao por padrao, falha ao receber apenas uma das versoes e gera manifesto com SHA-256 e commit completo.
 - [x] O build distribuivel exige arvore Git limpa e associa o manifesto ao SHA completo do commit.
 - [x] O Inno Setup e a publicacao autocontida nao carregam uma versao beta fixa como padrao independente.
@@ -42,7 +42,7 @@ Eliminar diretorios de tentativa e versoes divergentes do instalador. Cada relea
 - [x] `.gitlab-ci.yml` aceita somente tag protegida e espelha os bytes oficiais no Generic Package Registry sem executar instalador.
 - [x] README e runbook explicam build, hash, promocao GitHub e espelho GitLab.
 - [x] Os contratos cobrem fonte unica, release anterior real, promocao duravel e isolamento do GitLab.
-- [ ] A tag `v0.2.0-beta.4` conclui o smoke instalado e produz release imutavel verificada.
+- [ ] A tag `v0.2.0-beta.5` conclui o smoke instalado e produz release imutavel verificada.
 - [ ] `artifacts/beta/` legado e removido somente apos existir um pacote canonico verificado em `artifacts/releases/`.
 
 ## Fora de escopo
@@ -59,6 +59,7 @@ Eliminar diretorios de tentativa e versoes divergentes do instalador. Cada relea
 - Bootstrap: `v0.2.0-beta.1` promovida a partir do run `31086786207`, asset `8961793262`, com release imutavel e `gh release verify`/`verify-asset` verdes. SHA-256 do EXE: `5852e3e82ab9c80cf72ab85b8cd4425aeab3aa6faf401b3da0a2fc3db23dbecd`.
 - Green completo local: 281 de 281 testes Release aprovados na branch Windows integrada. Os runs `31099937896`, `31100566863`, `31101580716`, `31104316644`, `31105631929`, `31106730785` e `31108401017` revelaram, respectivamente, rejeicao do Worker legado, flutuacao no stress do journal, uma tentativa invalida de reparo com o instalador legado, contencao do `ThreadPool` no sinal de instancia unica, reutilizacao do caminho `HKCU` depois da migracao elevada para `HKLM`, reativacao indevida da tarefa de startup e ausencia da causa explicita no primeiro ramo de bloqueio de downgrade.
 - Green instalado da candidata: o run `31109639731` confirmou as sete regressoes no runner `windows-2025`, publicou o artifact temporario `candidato-anamnesis-0.2.0-beta.4-31109639731` e produziu EXE com SHA-256 `e1321b5a00f463334841f633353456527558f80f4be7579151bd1ecab9b05ba7`. A promocao imutavel ainda depende da tag exata.
+- Falha controlada da primeira promocao: a tag `v0.2.0-beta.4`, preservada no commit `925c22819de89efe4ec0b6b091f1421382787754`, executou o run `31112674427`. O smoke instalado ficou verde, mas `publicar-release-github` falhou antes de criar a release porque a ausencia esperada em `gh release view` foi tratada como erro terminante pelo PowerShell estrito. A correcao usa uma consulta de lista com retorno de sucesso e promove a proxima versao `0.2.0-beta.5`.
 
 ## Decisoes pendentes
 

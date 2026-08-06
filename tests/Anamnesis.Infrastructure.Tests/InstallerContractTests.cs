@@ -641,6 +641,24 @@ public sealed partial class InstallerContractTests
             "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
             github,
             StringComparison.Ordinal);
+
+        var inicioValidacaoAusencia = github.IndexOf(
+            "- name: Validar manifesto e ausencia de release anterior",
+            StringComparison.Ordinal);
+        var inicioPromocao = github.IndexOf(
+            "- name: Promover release imutavel",
+            StringComparison.Ordinal);
+        var validacaoAusencia = github[inicioValidacaoAusencia..inicioPromocao];
+
+        Assert.Contains(
+            "gh release list --repo $env:GITHUB_REPOSITORY --limit 1000 --json tagName",
+            validacaoAusencia,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "$tagsExistentes -contains $env:ANAMNESIS_TAG",
+            validacaoAusencia,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain("gh release view", validacaoAusencia, StringComparison.Ordinal);
         Assert.DoesNotContain("Publicar instalador aprovado e evidencias", github, StringComparison.Ordinal);
     }
 

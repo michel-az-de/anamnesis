@@ -82,11 +82,11 @@ A alpha estará pronta quando, em uma máquina Windows limpa e com pré-requisit
 | Configuração local protegida | SPEK 100% concluída | Senha do OBS protegida por DPAPI com migração transparente do formato em texto claro ([[ADR-014 Protecao de Segredos Locais]]) |
 | Espera finita pela exclusividade do Worker | SPEK 100% concluída | Teto de 5 minutos, saída zero, fila intacta e evento `worker.exclusividade_expirada` persistido no journal ([[SPEK-046 Limite da Espera por Exclusividade]]) |
 | Inicialização concorrente do journal | SPEK 100% concluída | Trava de arquivo entre processos, checagem read-only do schema e cem primeiros acessos concorrentes estabilizados ([[SPEK-048 Inicializacao Concorrente do Journal SQLite]]) |
-| Release canônico do instalador Windows | Em validação | Fonte única, release anterior oficial, promoção GitHub imutável e espelho GitLab protegido implementados. A candidata beta.4 passou o smoke instalado no run `31109639731`; falta a promoção e atestação da tag `v0.2.0-beta.4` ([[SPEK-049 Release Canonico do Instalador Windows]]) |
+| Release canônico do instalador Windows | Em validação | Fonte única, release anterior oficial, promoção GitHub imutável e espelho GitLab protegido implementados. A tag beta.4 preservada no run `31112674427` passou o smoke instalado, mas falhou antes da promoção por tratar a ausência esperada da release como erro terminante; o contrato de regressão está verde e falta promover e atestar a tag `v0.2.0-beta.5` ([[SPEK-049 Release Canonico do Instalador Windows]]) |
 
 ## Próximo incremento
 
-**Próximo ciclo: concluir a [[SPEK-049 Release Canonico do Instalador Windows]].** Falta promover a tag `v0.2.0-beta.4`, repetir o smoke no commit integrado e verificar a release imutável e seus assets.
+**Próximo ciclo: concluir a [[SPEK-049 Release Canonico do Instalador Windows]].** Falta promover a tag `v0.2.0-beta.5`, repetir o smoke no commit integrado e verificar a release imutável e seus assets.
 
 ## Roadmap pós-alpha
 
