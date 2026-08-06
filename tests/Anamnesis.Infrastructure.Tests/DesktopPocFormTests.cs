@@ -278,13 +278,7 @@ public sealed class DesktopPocFormTests
             Assert.Equal(DockStyle.None, pagina.Dock);
             Assert.Equal(esquerdaFinal + DesktopPocDesignTokens.Padrao.Motion.DeslocamentoPagina, pagina.Left);
 
-            var relogio = Stopwatch.StartNew();
-            while (relogio.Elapsed < TimeSpan.FromMilliseconds(400))
-            {
-                System.Windows.Forms.Application.DoEvents();
-                Thread.Yield();
-            }
-
+            AguardarInterface(() => pagina.Dock == DockStyle.Fill);
             Assert.Equal(DockStyle.Fill, pagina.Dock);
             Assert.Equal(esquerdaFinal, pagina.Left);
         });
