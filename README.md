@@ -47,7 +47,7 @@ Depois, execute `artifacts\releases\<versao>\installer\Anamnesis-<versao>-win-x6
 
 ## Release do instalador
 
-A versão canônica está em [`release/versao.json`](release/versao.json). Cada pacote produz `SHA256SUMS.txt` e `release.json`; binários não entram no Git. O GitHub executa o smoke com uma release anterior real e promove assets imutáveis somente por tag. O GitLab espelha os mesmos bytes em tag protegida. Consulte o [runbook de release](docs/release.md) para gerar, verificar e publicar.
+A versão canônica está em [`release/versao.json`](release/versao.json). Cada pacote produz `SHA256SUMS.txt` e `release.json`; binários não entram no Git. O GitHub executa o smoke com uma release anterior real e promove assets imutáveis somente por tag. Consulte o [runbook de release](docs/release.md) para gerar, verificar e publicar.
 
 ## Validar
 

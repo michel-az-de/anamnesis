@@ -558,9 +558,19 @@ public sealed partial class InstallerContractTests
         var smoke = File.ReadAllText(Path.Combine(raiz, "scripts", "Test-Installer.ps1"));
         var inno = File.ReadAllText(Path.Combine(raiz, "installer", "Anamnesis.iss"));
         var github = File.ReadAllText(Path.Combine(raiz, ".github", "workflows", "beta-installer.yml"));
-        var gitlab = File.ReadAllText(Path.Combine(raiz, ".gitlab-ci.yml"));
         var gitignore = File.ReadAllText(Path.Combine(raiz, ".gitignore"));
         var readme = File.ReadAllText(Path.Combine(raiz, "README.md"));
+        var runbook = File.ReadAllText(Path.Combine(raiz, "docs", "release.md"));
+        var spek = File.ReadAllText(Path.Combine(
+            raiz,
+            "30-especificacoes",
+            "02-especificacoes",
+            "SPEK-049 Release Canonico do Instalador Windows.md"));
+        var adr = File.ReadAllText(Path.Combine(
+            raiz,
+            "30-especificacoes",
+            "03-arquitetura",
+            "ADR-018 Release Canonico do Instalador Windows.md"));
         var caminhoObterAnterior = Path.Combine(raiz, "scripts", "Obter-InstaladorAnterior.ps1");
 
         Assert.Contains("release\\versao.json", obterVersao, StringComparison.Ordinal);
@@ -583,10 +593,12 @@ public sealed partial class InstallerContractTests
         Assert.Contains("if: success()", github, StringComparison.Ordinal);
         Assert.Contains("diagnostico-falha", github, StringComparison.Ordinal);
         Assert.DoesNotContain("if: always()", github, StringComparison.Ordinal);
-        Assert.Contains("Obter-VersaoRelease.ps1", gitlab, StringComparison.Ordinal);
-        Assert.Contains("windows-release", gitlab, StringComparison.Ordinal);
-        Assert.Contains("resource_group: anamnesis-release-windows", gitlab, StringComparison.Ordinal);
-        Assert.Contains("packages/generic/anamnesis-windows", gitlab, StringComparison.Ordinal);
+        Assert.DoesNotContain(".gitlab-ci.yml", github, StringComparison.Ordinal);
+        Assert.False(File.Exists(Path.Combine(raiz, ".gitlab-ci.yml")));
+        Assert.DoesNotContain("GitLab", readme, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("GitLab", runbook, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("GitLab", spek, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("GitLab", adr, StringComparison.OrdinalIgnoreCase);
         Assert.Contains(".ci/", gitignore, StringComparison.Ordinal);
         Assert.Contains("docs/release.md", readme, StringComparison.Ordinal);
         Assert.True(File.Exists(caminhoObterAnterior));
@@ -597,7 +609,6 @@ public sealed partial class InstallerContractTests
     {
         var raiz = EncontrarRaizRepositorio();
         var github = File.ReadAllText(Path.Combine(raiz, ".github", "workflows", "beta-installer.yml"));
-        var gitlab = File.ReadAllText(Path.Combine(raiz, ".gitlab-ci.yml"));
         var caminhoScript = Path.Combine(raiz, "scripts", "Obter-InstaladorAnterior.ps1");
 
         Assert.True(File.Exists(caminhoScript));
@@ -613,10 +624,6 @@ public sealed partial class InstallerContractTests
         Assert.DoesNotContain("Construir versao anterior", github, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("-Version $env:ANAMNESIS_PREVIOUS_VERSION", github, StringComparison.Ordinal);
         Assert.Single(Regex.Matches(github, @"Build-Installer\.ps1"));
-
-        Assert.DoesNotContain("Build-Installer.ps1", gitlab, StringComparison.Ordinal);
-        Assert.DoesNotContain("Test-Installer.ps1", gitlab, StringComparison.Ordinal);
-        Assert.DoesNotContain("Instalar-InnoSetup.ps1", gitlab, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -663,25 +670,31 @@ public sealed partial class InstallerContractTests
     }
 
     [Fact]
-    public void GitLabDeveEspelharBytesOficiaisSomenteEmTagProtegida()
+    public void GitHubDeveSerUnicaAutoridadeDeRelease()
     {
         var raiz = EncontrarRaizRepositorio();
-        var gitlab = File.ReadAllText(Path.Combine(raiz, ".gitlab-ci.yml"));
+        var github = File.ReadAllText(Path.Combine(raiz, ".github", "workflows", "beta-installer.yml"));
+        var readme = File.ReadAllText(Path.Combine(raiz, "README.md"));
+        var runbook = File.ReadAllText(Path.Combine(raiz, "docs", "release.md"));
+        var spek = File.ReadAllText(Path.Combine(
+            raiz,
+            "30-especificacoes",
+            "02-especificacoes",
+            "SPEK-049 Release Canonico do Instalador Windows.md"));
+        var adr = File.ReadAllText(Path.Combine(
+            raiz,
+            "30-especificacoes",
+            "03-arquitetura",
+            "ADR-018 Release Canonico do Instalador Windows.md"));
 
-        Assert.DoesNotContain("merge_request_event", gitlab, StringComparison.Ordinal);
-        Assert.Contains("$CI_COMMIT_REF_PROTECTED == \"true\"", gitlab, StringComparison.Ordinal);
-        Assert.Contains("windows-release", gitlab, StringComparison.Ordinal);
-        Assert.Contains("github.com/michel-az-de/anamnesis/releases/download", gitlab, StringComparison.Ordinal);
-        Assert.Contains("/packages/generic/", gitlab, StringComparison.Ordinal);
-        Assert.Contains("CI_JOB_TOKEN", gitlab, StringComparison.Ordinal);
-        Assert.Contains("Get-FileHash", gitlab, StringComparison.Ordinal);
-        Assert.Contains("interruptible: false", gitlab, StringComparison.Ordinal);
-        Assert.Contains("hashExistente", gitlab, StringComparison.Ordinal);
-        Assert.Contains("release.json", gitlab, StringComparison.Ordinal);
-        Assert.Contains("resource_group: anamnesis-release-windows", gitlab, StringComparison.Ordinal);
-        Assert.DoesNotContain("Build-Installer.ps1", gitlab, StringComparison.Ordinal);
-        Assert.DoesNotContain("Test-Installer.ps1", gitlab, StringComparison.Ordinal);
-        Assert.DoesNotContain("Instalar-InnoSetup.ps1", gitlab, StringComparison.Ordinal);
+        Assert.False(File.Exists(Path.Combine(raiz, ".gitlab-ci.yml")));
+        Assert.DoesNotContain(".gitlab-ci.yml", github, StringComparison.Ordinal);
+        Assert.Contains("publicar-release-github", github, StringComparison.Ordinal);
+        Assert.Contains("GitHub Release", runbook, StringComparison.Ordinal);
+        Assert.DoesNotContain("GitLab", readme, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("GitLab", runbook, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("GitLab", spek, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("GitLab", adr, StringComparison.OrdinalIgnoreCase);
     }
 
     private static string EncontrarRaizRepositorio()
