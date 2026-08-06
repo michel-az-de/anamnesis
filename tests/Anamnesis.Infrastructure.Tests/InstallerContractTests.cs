@@ -245,6 +245,44 @@ public sealed partial class InstallerContractTests
     }
 
     [Fact]
+    public void DowngradeSilenciosoDeveRegistrarCausaNoPrimeiroRamoDeBloqueio()
+    {
+        var raiz = EncontrarRaizRepositorio();
+        var inno = File.ReadAllText(Path.Combine(raiz, "installer", "Anamnesis.iss"));
+        var inicioNextButton = inno.IndexOf(
+            "function NextButtonClick",
+            StringComparison.Ordinal);
+        var inicioBloqueio = inicioNextButton < 0
+            ? -1
+            : inno.IndexOf(
+                "if (CurPageID = PaginaAcao.ID) and DowngradeDetectado then",
+                inicioNextButton,
+                StringComparison.Ordinal);
+        var fimBloqueio = inicioBloqueio < 0
+            ? -1
+            : inno.IndexOf("Result := False;", inicioBloqueio, StringComparison.Ordinal);
+
+        Assert.True(inicioNextButton >= 0);
+        Assert.True(inicioBloqueio >= inicioNextButton);
+        Assert.True(fimBloqueio > inicioBloqueio);
+
+        var ramoBloqueio = inno[inicioBloqueio..fimBloqueio];
+        var registroDiagnostico = ramoBloqueio.IndexOf(
+            "RegistrarDiagnostico",
+            StringComparison.Ordinal);
+        var mensagemUsuario = ramoBloqueio.IndexOf(
+            "SuppressibleMsgBox",
+            StringComparison.Ordinal);
+
+        Assert.True(registroDiagnostico >= 0);
+        Assert.True(mensagemUsuario > registroDiagnostico);
+        Assert.Contains(
+            "downgrade autom",
+            ramoBloqueio[..mensagemUsuario],
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void AtualizacaoDeveVersionarEValidarOsBinariosReais()
     {
         var raiz = EncontrarRaizRepositorio();

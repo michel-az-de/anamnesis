@@ -611,6 +611,9 @@ begin
   Result := True;
   if (CurPageID = PaginaAcao.ID) and DowngradeDetectado then
   begin
+    RegistrarDiagnostico(
+      'AVISO',
+      'Downgrade automático bloqueado: este instalador é mais antigo que a versão já instalada.');
     SuppressibleMsgBox(
       'A versão instalada é mais recente. Nenhuma alteração será feita. ' +
       'Use um instalador igual ou mais recente para atualizar.',
