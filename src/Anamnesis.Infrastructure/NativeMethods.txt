@@ -1,0 +1,14 @@
+EnumWindows
+IsWindowVisible
+GetWindowThreadProcessId
+GetWindowTextLength
+GetWindowText
+DwmGetWindowAttribute
+MMDeviceEnumerator
+IMMDeviceEnumerator
+IMMDeviceCollection
+IMMDevice
+IAudioSessionManager2
+IAudioSessionEnumerator
+IAudioSessionControl
+IAudioSessionControl2

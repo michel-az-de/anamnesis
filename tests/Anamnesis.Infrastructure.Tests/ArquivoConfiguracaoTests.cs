@@ -1,3 +1,4 @@
+using Anamnesis.Application.Modelos;
 using Anamnesis.Infrastructure.Configuracao;
 using Xunit;
 
@@ -17,6 +18,30 @@ public sealed class ArquivoConfiguracaoTests : IAsyncLifetime
         }
 
         return Task.CompletedTask;
+    }
+
+    [Fact]
+    public async Task ConfiguracaoLegadaDeveHerdarDeteccaoAssistidaSegura()
+    {
+        var caminho = Path.Combine(_diretorio, "config-legada.json");
+        Directory.CreateDirectory(_diretorio);
+        await File.WriteAllTextAsync(
+            caminho,
+            """
+            {
+              "CaminhoBanco": "dados/anamnesis.db",
+              "DiretorioArquivo": "dados/arquivo"
+            }
+            """);
+
+        var configuracao = await new ArquivoConfiguracao(caminho)
+            .CarregarAsync(CancellationToken.None);
+
+        Assert.Equal(ModoDeteccaoReuniao.Assistido, configuracao.Deteccao.Modo);
+        Assert.False(configuracao.Deteccao.FinalizacaoAutomaticaAtiva);
+        Assert.Contains(
+            configuracao.Deteccao.Aplicativos,
+            aplicativo => aplicativo.Chave == "native_teams");
     }
 
     [Fact]

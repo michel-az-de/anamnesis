@@ -23,7 +23,8 @@ public sealed class JornalOperacionalTests
             "job.concluido",
             "retencao.avaliada",
             "retencao.aplicada",
-            "operacao.falhou"
+            "operacao.falhou",
+            "deteccao.decidida"
         ];
 
         Assert.Equal(esperados, CodigosEventoOperacional.Todos);

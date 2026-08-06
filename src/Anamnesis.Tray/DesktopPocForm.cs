@@ -306,10 +306,33 @@ internal sealed class DesktopPocForm : Form
 
     private Panel CriarTelaInicio()
     {
-        var iniciar = CriarBotaoPrimario("Iniciar gravação", (_, _) => IniciarGravacao());
+        var recuperacao = _sessao.RecuperacaoPendente;
+        var gravando = _sessao.Etapa == EtapaDesktopPoc.Gravando;
+        var textoAcao = recuperacao
+            ? "Revisar gravação anterior"
+            : gravando
+                ? "Ver gravação ao vivo"
+                : "Iniciar gravação";
+        var iniciar = CriarBotaoPrimario(
+            textoAcao,
+            (_, _) =>
+            {
+                if (recuperacao || gravando)
+                {
+                    Navegar("ao-vivo");
+                }
+                else
+                {
+                    IniciarGravacao();
+                }
+            });
         var pagina = CriarPagina(
             "Bom dia, Felipe",
-            "Pronto para registrar sua próxima reunião.",
+            recuperacao
+                ? "Uma gravação anterior aguarda sua decisão."
+                : gravando
+                    ? "A captura atual permanece visível e pode ser encerrada a qualquer momento."
+                    : "Pronto para registrar sua próxima reunião.",
             iniciar,
             out var corpo);
 
@@ -612,7 +635,10 @@ internal sealed class DesktopPocForm : Form
 
     private Panel CriarTelaAoVivo()
     {
-        var subtitulo = _sessao.Etapa == EtapaDesktopPoc.Gravando
+        var recuperacao = _sessao.RecuperacaoPendente;
+        var subtitulo = recuperacao
+            ? "Recuperação pendente • nenhuma ação automática foi enviada ao OBS"
+            : _sessao.Etapa == EtapaDesktopPoc.Gravando
             ? _sessao.ModoDemonstracao
                 ? "Google Meet detectado  •  áudio e microfone ativos"
                 : "Captura OBS ativa e reunião persistida no SQLite"
@@ -634,12 +660,19 @@ internal sealed class DesktopPocForm : Form
             return pagina;
         }
 
-        var vivo = CriarCartao(DesktopSurfaceVariant.Elevated, accent: _paleta.Perigo);
+        var vivo = CriarCartao(
+            DesktopSurfaceVariant.Elevated,
+            accent: recuperacao ? _paleta.Destaque : _paleta.Perigo);
         vivo.Dock = DockStyle.Top;
         vivo.Height = 420;
         vivo.Padding = new Padding(30);
 
-        var gravando = CriarLabel("GRAVANDO AGORA", 10F, _paleta.Perigo, new Point(30, 28), FontStyle.Bold);
+        var gravando = CriarLabel(
+            recuperacao ? "RECUPERAÇÃO PENDENTE" : "GRAVANDO AGORA",
+            10F,
+            recuperacao ? _paleta.Destaque : _paleta.Perigo,
+            new Point(30, 28),
+            FontStyle.Bold);
         _cronometro = CriarLabel(FormatarCronometro(), 34F, _paleta.Texto, new Point(30, 66), FontStyle.Bold);
         _cronometro.AutoSize = true;
         var reuniaoAtiva = _sessao.Reunioes.FirstOrDefault(reuniao => reuniao.Status == "Gravando");
@@ -652,7 +685,9 @@ internal sealed class DesktopPocForm : Form
             new Point(30, 140));
         vivo.Controls.Add(plataforma);
 
-        var encerrar = CriarBotaoPerigo("Encerrar e transcrever", (_, _) => EncerrarGravacao());
+        var encerrar = CriarBotaoPerigo(
+            recuperacao ? "Encerrar gravação anterior" : "Encerrar e transcrever",
+            (_, _) => EncerrarGravacao());
         if (_sessao.ModoDemonstracao)
         {
             var sistemaTexto = CriarLabel("Áudio do sistema", 10F, _paleta.Texto, new Point(30, 180));
@@ -678,7 +713,9 @@ internal sealed class DesktopPocForm : Form
         else
         {
             vivo.Controls.Add(CriarLabel(
-                "A captura foi iniciada pelo caso de uso e está protegida pela trava de gravação única.",
+                recuperacao
+                    ? "Nenhum comando foi enviado ao OBS neste reinício. Encerrar é uma ação explícita e será registrada."
+                    : "A captura foi iniciada pelo caso de uso e está protegida pela trava de gravação única.",
                 10F,
                 _paleta.TextoSecundario,
                 new Point(30, 190)));
@@ -1750,6 +1787,15 @@ internal sealed class DesktopPocForm : Form
 
     private void AtualizarEstadoGlobal()
     {
+        if (_sessao.RecuperacaoPendente)
+        {
+            _estadoGlobal.Text = "Recuperação pendente";
+            _estadoGlobal.ForeColor = _paleta.Destaque;
+            _estadoGlobal.AccessibleDescription =
+                "Uma gravação anterior exige que você escolha encerrar ou manter.";
+            return;
+        }
+
         if (_sessao.Reunioes.Any(reuniao => string.Equals(reuniao.Status, "Falha", StringComparison.Ordinal)))
         {
             _estadoGlobal.Text = "Ação necessária";

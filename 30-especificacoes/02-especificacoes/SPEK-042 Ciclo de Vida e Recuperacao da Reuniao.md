@@ -20,7 +20,7 @@ Garantir que nenhum caminho de falha deixe uma reuniao presa em `Gravando`, porq
 
 `ControlarGravacaoHandler.FinalizarAsync` chamava o gravador sem tratamento. Com o OBS fechado ou a conexao caida, a excecao subia e a reuniao permanecia `Gravando`. Como existe o indice unico parcial `ux_reunioes_gravando`, toda nova gravacao passava a falhar com `GravacaoJaAtivaException`.
 
-A reconciliacao que resolveria isso rodava uma unica vez por sessao, entao a unica saida era reiniciar o Tray.
+A reconciliacao automatica fazia parte da correcao original. A SPEK-032 a supersedeu por uma recuperacao explicita: reiniciar o Tray preserva a reuniao `Gravando`, suspende o detector e aguarda a decisao humana sem consultar, iniciar ou encerrar o OBS.
 
 Alem disso, `AtualizarAsync` escrevia o estado da sessao fora do semaforo que protege os comandos, e era chamada tanto pelo timer de polling quanto de dentro dos proprios comandos.
 
@@ -37,8 +37,8 @@ Alem disso, `AtualizarAsync` escrevia o estado da sessao fora do semaforo que pr
 - Cancelamento durante `FinalizarAsync` segue a mesma compensacao com `CancellationToken.None` e reprojeta a `OperationCanceledException` original.
 - O job so e enfileirado depois de a gravacao ser finalizada e persistida com sucesso.
 - Registrada a falha, o indice de gravacao ativa libera e uma nova gravacao pode comecar sem reiniciar o Tray.
-- A sessao do Desktop reconcilia qualquer gravacao ativa que nao tenha sido iniciada por ela propria, em qualquer atualizacao, e nao apenas na primeira.
-- Uma gravacao iniciada pela propria sessao nao e reconciliada, para nao consultar o OBS a cada ciclo de polling.
+- Uma gravacao ativa que nao foi iniciada no processo atual e marcada como recuperacao pendente em qualquer atualizacao.
+- Recuperacao pendente nao chama preflight, `GetRecordStatus`, `StartRecord` ou `StopRecord`; somente uma acao explicita do usuario pode continuar ou encerrar o fluxo.
 - Todo estado compartilhado da sessao e lido e escrito sob o mesmo semaforo dos comandos.
 - O motivo de uma avaliacao de retencao e um valor tipado; o texto e apresentacao e nunca decide fluxo.
 - Nenhuma dependencia nova e necessaria, portanto esta SPEK nao exige ADR.
@@ -48,8 +48,8 @@ Alem disso, `AtualizarAsync` escrevia o estado da sessao fora do semaforo que pr
 - [x] Falha do gravador ao encerrar deixa a reuniao em `Falha`, com o motivo preservado, e nao enfileira job.
 - [x] Cancelamento durante o `StopRecord` deixa a reuniao em `Falha`, persiste mesmo com o token cancelado, nao enfileira job e preserva a excecao original.
 - [x] Depois dessa falha, uma nova gravacao pode ser iniciada no mesmo processo, contra banco SQLite real.
-- [x] Uma gravacao orfa que aparece depois da primeira atualizacao e reconciliada.
-- [x] O comportamento de reconciliacao na primeira atualizacao permanece.
+- [x] Uma gravacao externa que aparece depois da primeira atualizacao passa a exigir recuperacao explicita.
+- [x] Na primeira atualizacao, uma gravacao anterior permanece `Gravando`, suspende o detector e nao consulta nem altera o OBS.
 - [x] Encerramentos concorrentes continuam enviando um unico stop ao OBS.
 - [x] A retencao decide o tipo de excecao pelo motivo tipado, e nao por comparacao de texto.
 - [x] A suite existente permanece verde.
@@ -60,7 +60,8 @@ Alem disso, `AtualizarAsync` escrevia o estado da sessao fora do semaforo que pr
 - `ControlarGravacaoHandlerTests.DeveCompensarCancelamentoAoEncerrarEPreservarExcecaoOriginal`.
 - `SqliteReuniaoRepositoryTests.DevePermitirNovaGravacaoAposFalhaAoEncerrar`, contra banco temporario real, que e o teste que prova o desbloqueio.
 - `SqliteReuniaoRepositoryTests.DevePermitirNovaGravacaoAposCancelamentoAoEncerrar`, contra banco temporario real.
-- `DesktopRealSessionTests.DeveReconciliarGravacaoOrfaEmAtualizacaoPosterior`.
+- `DesktopRealSessionTests.ReinicioComGravacaoDeveExigirAcaoSemConsultarOuAlterarObs`.
+- `DesktopRealSessionTests.GravacaoExternaPosteriorTambemDeveExigirAcaoExplicita`.
 - `RetencaoGravacaoHandlerTests.DeveRelatarMotivoTipadoSemDependerDoTexto`.
 - Nenhum teste unitario chama OBS, rede ou CLI real.
 
