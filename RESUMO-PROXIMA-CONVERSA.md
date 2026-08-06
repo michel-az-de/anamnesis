@@ -4,7 +4,7 @@ aliases: [Resumo para Próxima Conversa, Handoff, Contexto do Projeto]
 tags: [projeto/anamnesis, handoff]
 type: project
 created: 2026-08-04
-updated: 2026-08-05
+updated: 2026-08-06
 status: growing
 summary: Contexto compacto e verificável para retomar o desenvolvimento do Anamnesis em outra conversa.
 related: ["[[Anamnesis Home]]", "[[Status Alpha]]", "[[Indice de SPEKs]]", "[[Protocolo de Agentes]]"]
@@ -21,11 +21,11 @@ Estado atual: alpha concluída e experiência Windows `0.2.0-beta.1` instalada n
 
 Tecnologia e decisões: .NET 10, Windows 10/11 x64, SQLite local, OBS, Whisper local. Domínio em PT-BR com sufixos técnicos em inglês (ex.: ReuniaoRepository, AtaRunner). Não usar APIs pagas: modelos entram por adaptadores de CLI autenticados por assinatura (Codex, Claude, Kimi, Ollama), sem automatizar interfaces web. A LLM retorna dados estruturados e nunca decide exclusão/estado de reunião. SOLID/KISS/DRY/GoF sem abstrações genéricas ou microserviços; novas dependências/integrações relevantes pedem ADR.
 
-Validação atual: 100% do escopo ponderado da alpha, fluxo hermético e fluxo com pré-requisitos reais. Há 245 testes verdes. O instalador `0.2.0-beta.1` foi aplicado por usuário, preservou configuração e histórico, criou um atalho e startup `--background`; o Worker instalado terminou com código 0 e stderr vazio. O smoke do run `31068430123` também concluiu em runner Windows limpo com instalação, primeiro uso, instância única, Worker, desinstalação e logs verdes. Os E2Es reais provaram inicialização automática do OBS e Docker, MP4 com áudio AAC, transcrição local reconhecível, `ata.md` e reunião arquivada.
+Validação atual: 100% do escopo ponderado da alpha, fluxo hermético e fluxo com pré-requisitos reais. Há 249 testes verdes. O instalador `0.2.0-beta.1` foi aplicado por usuário, preservou configuração e histórico, criou um atalho e startup `--background`; o Worker instalado terminou com código 0 e stderr vazio. O smoke do run `31068430123` também concluiu em runner Windows limpo com instalação, primeiro uso, instância única, Worker, desinstalação e logs verdes. Os E2Es reais provaram inicialização automática do OBS e Docker, MP4 com áudio AAC, transcrição local reconhecível, `ata.md` e reunião arquivada.
 
 Captura universal: a cena OBS `Anamnesis` é criada e reutilizada com `wasapi_output_capture` e `wasapi_input_capture` nos dispositivos padrão. Assim, captura o som do Windows e o microfone sem integração específica com Teams, Meet, Zoom ou navegador. A cena anterior é restaurada após a gravação.
 
-Desktop: as SPEKs 027 a 031 e 045 entregaram uma janela WinForms nativa com o Design System `Command Deck`, identidade visual aplicada ao EXE, instalador, janela e bandeja, além de primeiro uso e diagnóstico acionável. O modo normal consulta reuniões, jobs e os 500 eventos operacionais mais recentes nos SQLite locais, inicia e encerra a gravação pelos casos de uso, acompanha o Worker por polling de dois segundos e abre artefatos por caminhos persistidos. O journal isolado preserva 13 códigos correlacionados por 14 dias e nunca armazena mensagem livre de exceção, áudio, transcrição, ata, prompt, segredo ou caminho pessoal. Concorrência, cancelamento, reinício e bancos legados não deixam uma gravação órfã bloqueando o produto. O modo simulado permanece isolado em `--poc-desktop`.
+Desktop: as SPEKs 027 a 031 e 045 entregaram uma janela WinForms nativa com o Design System `Command Deck`, identidade visual aplicada ao EXE, instalador, janela e bandeja, além de primeiro uso e diagnóstico acionável. O modo normal consulta reuniões, jobs e os 500 eventos operacionais mais recentes nos SQLite locais, inicia e encerra a gravação pelos casos de uso, acompanha o Worker por polling de dois segundos e abre artefatos por caminhos persistidos. O journal isolado preserva 14 códigos correlacionados por 14 dias e nunca armazena mensagem livre de exceção, áudio, transcrição, ata, prompt, segredo ou caminho pessoal. Concorrência, cancelamento, reinício e bancos legados não deixam uma gravação órfã bloqueando o produto. A SPEK-046 limita a espera oculta pela exclusividade a cinco minutos, preserva a fila no timeout e registra o diagnóstico no journal. O modo simulado permanece isolado em `--poc-desktop`.
 
 Próximo incremento: concluir o ensaio manual da SPEK-032 no Google Meet e em Teams ou Zoom, medindo latência e falsos positivos sem iniciar gravação automaticamente sem confirmação do usuário.
 

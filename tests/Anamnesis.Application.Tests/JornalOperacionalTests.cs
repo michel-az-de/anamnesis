@@ -24,7 +24,8 @@ public sealed class JornalOperacionalTests
             "retencao.avaliada",
             "retencao.aplicada",
             "operacao.falhou",
-            "deteccao.decidida"
+            "deteccao.decidida",
+            "worker.exclusividade_expirada"
         ];
 
         Assert.Equal(esperados, CodigosEventoOperacional.Todos);
