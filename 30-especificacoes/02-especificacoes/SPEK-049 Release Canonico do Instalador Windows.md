@@ -57,7 +57,7 @@ Eliminar diretorios de tentativa e versoes divergentes do instalador. Cada relea
 - Red de endurecimento: o contrato de promocao falhou ao exigir a compensacao `gh release delete` para uma publicacao mutavel.
 - Green focado: 14 de 14 contratos do instalador verdes.
 - Bootstrap: `v0.2.0-beta.1` promovida a partir do run `31086786207`, asset `8961793262`, com release imutavel e `gh release verify`/`verify-asset` verdes. SHA-256 do EXE: `5852e3e82ab9c80cf72ab85b8cd4425aeab3aa6faf401b3da0a2fc3db23dbecd`.
-- Green completo: 274 de 274 testes Release aprovados na branch Windows integrada. O run `31099937896` revelou a rejeicao indevida do Worker legado e o run `31100566863` revelou flutuacao no stress do journal; ambas as regressoes foram corrigidas e aguardam nova execucao.
+- Green completo local: 276 de 276 testes Release aprovados na branch Windows integrada. Os runs `31099937896`, `31100566863` e `31101580716` revelaram, respectivamente, rejeicao do Worker legado, flutuacao no stress do journal e uma tentativa invalida de reparo com o instalador legado; as tres regressoes possuem testes e correcoes locais e aguardam nova execucao instalada.
 
 ## Decisoes pendentes
 

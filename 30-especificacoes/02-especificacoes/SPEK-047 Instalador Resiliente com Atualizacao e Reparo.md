@@ -45,6 +45,8 @@ Tray aberto                             -> solicitar encerramento seguro e mante
 - Atualizacao e reparo usam o diretorio ja instalado e reescrevem somente os binarios do produto. Banco, configuracao, reunioes, gravacoes e arquivos do usuario permanecem fora do escopo do instalador.
 - Antes de copiar arquivos, o wizard mostra o diagnostico, a versao instalada, a versao do pacote, a integridade do payload e a acao recomendada. O usuario recebe uma opcao explicita de reparo quando ela for aplicavel.
 - Antes de copiar arquivos, o instalador solicita ao Tray em execucao que encerre cooperativamente. Se houver gravacao ativa, processo antigo ou Worker em processamento, ele permanece no wizard com orientacao e opcao de tentar novamente, sem finalizar processo a forca ou induzir cancelamento.
+- Um Tray legado que ainda nao implementa `--encerrar-para-atualizacao` nunca e finalizado a forca. A atualizacao silenciosa falha preservando o processo e os dados; no fluxo interativo, o usuario deve fechar essa versao e tentar novamente. O E2E pode encerrar apenas o processo legado que ele proprio iniciou, depois de provar esse bloqueio, para simular a acao manual.
+- O bloqueio de downgrade e provado por um instalador diagnostico efemero, compilado com a logica Inno atual e `VersionInfo` inferior a versao candidata. Ele reutiliza o payload canonico ja publicado localmente, nao recompila a aplicacao, nao entra no artefato promovido e nunca usa uma release antiga como substituto da regra atual.
 - A pagina interativa apresenta termos de uso curtos em PT-BR e exige aceite para continuar. O texto informa uso responsavel de gravacoes, armazenamento local, dependencias externas e a licenca MIT sem prometer garantia inexistente.
 - O assistente reutiliza o icone aprovado e a paleta `#10172E`, `#B87333` e `#F3EEE4`, com logotipo tambem nas paginas de boas-vindas e conclusao.
 - Apos concluir em modo interativo, o instalador oferece e executa a abertura do Tray somente em uma instalacao realmente nova. Atualizacao e reparo nunca reabrem o Tray.
@@ -57,6 +59,8 @@ Tray aberto                             -> solicitar encerramento seguro e mante
 - [x] O wizard compara versoes de arquivo, bloqueia downgrade e distingue instalar, atualizar e reparar de modo compreensivel.
 - [x] Um diagnostico persistido de tentativa anterior aparece no wizard e oferece reparo quando aplicavel.
 - [x] Um Tray de versao nova recebe pedido de encerramento cooperativo e sai quando nao ha gravacao ativa.
+- [x] Um Tray legado sem o protocolo cooperativo permanece ativo e bloqueia a atualizacao ate fechamento manual.
+- [ ] Um instalador diagnostico moderno com versao inferior bloqueia downgrade com payload integro e incompleto, sem alterar processo, binarios ou dados.
 - [x] Um Tray com gravacao ativa nao e finalizado a forca e o instalador devolve orientacao compreensivel.
 - [x] O instalador compila com Inno Setup 6.7.3 e mostra a acao `Instalar`, `Atualizar` ou `Reparar` no resumo final.
 - [ ] O smoke em diretorio isolado instala, abre o Tray, repara um payload incompleto, atualiza para uma versao de teste e preserva dados do usuario.
@@ -77,12 +81,15 @@ Tray aberto                             -> solicitar encerramento seguro e mante
 - Green: a comparacao canonica avalia o Tray antes de classificar payload incompleto. O Worker so indica divergencia e recomenda reparo.
 - Regressao adicional: um Tray `0.2.0-beta.1` combinado com Worker legado `1.0.0.0` era classificado como falso downgrade.
 - Red E2E real: o run `31099937896` instalou a release oficial `0.2.0-beta.1`, mas o harness rejeitou seu Worker legado `1.0.0.0` antes de exercitar a atualizacao.
-- Green E2E focado: o smoke continua exigindo a versao exata do Tray, registra a divergencia do Worker oficial como evidencia e segue para reparar e atualizar o payload.
+- Green E2E focado: o smoke continua exigindo a versao exata do Tray, registra a divergencia do Worker oficial, prova que a beta.4 preserva o processo legado ao bloquear e so entao simula o fechamento manual no diretorio isolado.
+- Red E2E real no run `31101580716`: tentar reparar a beta.1 com seu proprio instalador enquanto o Tray legado estava aberto acionou o Restart Manager, preservou o processo e abortou com codigo 5.
+- Red de contrato: o smoke usava a release beta.1 como tentativa de downgrade, mas esse instalador legado nao possui `DowngradeDetectado`; portanto a evidencia podia representar apenas bloqueio de arquivo, nao a regra atual.
 - Red adicional: comparar o Worker instalado com o pacote novo fazia uma atualizacao normal aparecer como inconsistente e o diagnostico afirmava uma divergencia que nem sempre existia.
-- Green adicional: o Tray continua sendo a fonte da versao do produto; o Worker e comparado ao Tray instalado e o smoke substitui somente o Worker efemero por `1.0.0.0` antes de exigir atualizacao bem-sucedida.
-- O smoke ampliado remove o Worker somente na instalacao efemera, prova que o pacote antigo continua bloqueado, verifica a reuniao sentinela no SQLite e restaura o payload com a versao atual.
-- `InstallerContractTests`: 10 de 10 verdes.
-- Suite integrada atual: 274 de 274 testes verdes em Release; o novo contrato protege a identidade canonica do Tray diante do Worker legado oficial.
+- Green adicional: o Tray continua sendo a fonte da versao do produto; o Worker legado da release oficial e aceito como inconsistencia reparavel e precisa terminar alinhado a versao candidata apos a atualizacao.
+- O smoke ampliado usa um probe moderno inferior e nao publicavel nos cenarios de payload integro e Worker ausente, exige a causa `downgrade autom` nos logs, verifica hashes, versoes e reuniao sentinela e restaura o payload com a versao atual.
+- `InstallerContractTests`: 17 de 17 verdes; contratos de instalador e release: 18 de 18 verdes.
+- Suite integrada atual: 276 de 276 testes verdes em Release; `dotnet format --verify-no-changes` e parsers PowerShell verdes.
+- Prova de compilacao local: `Build-DowngradeProbe.ps1` reutilizou o payload canonico e gerou o EXE `0.0.1.0` nao publicavel com SHA-256 `ac1d92ae69193ebd47ac7d12e54b8e0387a5332277150959db364d59e9078a09`, igual ao manifesto efemero.
 - Inno Setup 6.7.3 compilou o instalador `0.2.0-beta.2`; SHA-256 local `bf6cfdc55d1c24e752ee6683b5704b2a20364f5221ec13f61f5ae69868d020e0`.
 - A instalacao real deste usuario foi preservada. A validacao instalada deste incremento sera executada somente no runner Windows efemero.
 

@@ -126,6 +126,95 @@ public sealed partial class InstallerContractTests
     }
 
     [Fact]
+    public void SmokeDevePreservarTrayLegadoESoRepararComTrayAtualCooperativo()
+    {
+        var script = File.ReadAllText(Path.Combine(
+            EncontrarRaizRepositorio(),
+            "scripts",
+            "Test-Installer.ps1"));
+
+        var tentativaLegada = script.IndexOf(
+            "$tentativaAtualizacaoComTrayLegado = Start-Process -FilePath $atualizador",
+            StringComparison.Ordinal);
+        var definicaoAssertLog = script.IndexOf(
+            "function Assert-LogContem",
+            StringComparison.Ordinal);
+        var primeiroUsoAssertLog = tentativaLegada < 0
+            ? -1
+            : script.IndexOf("Assert-LogContem `", tentativaLegada, StringComparison.Ordinal);
+        var fechamentoControlado = tentativaLegada < 0
+            ? -1
+            : script.IndexOf(
+                "Stop-Process -Id $tray.Id -Force",
+                tentativaLegada,
+                StringComparison.Ordinal);
+        var atualizacao = fechamentoControlado < 0
+            ? -1
+            : script.IndexOf(
+                "$processoAtualizacao = Start-Process -FilePath $atualizador",
+                fechamentoControlado,
+                StringComparison.Ordinal);
+        var reparoAtual = atualizacao < 0
+            ? -1
+            : script.IndexOf(
+                "$reparoPayloadIncompleto = Start-Process -FilePath $atualizador",
+                atualizacao,
+                StringComparison.Ordinal);
+
+        Assert.True(tentativaLegada >= 0);
+        Assert.True(definicaoAssertLog >= 0 && definicaoAssertLog < primeiroUsoAssertLog);
+        Assert.True(fechamentoControlado > tentativaLegada);
+        Assert.True(atualizacao > fechamentoControlado);
+        Assert.True(reparoAtual > atualizacao);
+        Assert.Contains("atualizacao-tray-legado-bloqueada.log", script, StringComparison.Ordinal);
+        Assert.Contains("trayLegadoPreservado", script, StringComparison.Ordinal);
+        Assert.Contains("encerramentoCooperativoReparo", script, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SmokeDeveUsarProbeModernoInferiorParaTestarDowngrade()
+    {
+        var raiz = EncontrarRaizRepositorio();
+        var caminhoBuildProbe = Path.Combine(raiz, "scripts", "Build-DowngradeProbe.ps1");
+        var smoke = File.ReadAllText(Path.Combine(raiz, "scripts", "Test-Installer.ps1"));
+        var github = File.ReadAllText(Path.Combine(
+            raiz,
+            ".github",
+            "workflows",
+            "beta-installer.yml"));
+
+        Assert.True(File.Exists(caminhoBuildProbe));
+        var buildProbe = File.ReadAllText(caminhoBuildProbe);
+
+        Assert.Contains("DowngradeInstallerPath", smoke, StringComparison.Ordinal);
+        Assert.Contains("downgrade-probe.json", smoke, StringComparison.Ordinal);
+        Assert.Contains("publicavel", smoke, StringComparison.Ordinal);
+        Assert.Equal(
+            2,
+            Regex.Count(
+                smoke,
+                @"Start-Process -FilePath \$instaladorDowngrade"));
+        Assert.DoesNotContain(
+            "$tentativaDowngrade = Start-Process -FilePath $instalador ",
+            smoke,
+            StringComparison.Ordinal);
+        Assert.Contains("downgrade autom", smoke, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Build-DowngradeProbe.ps1", github, StringComparison.Ordinal);
+        Assert.Contains(
+            "-DowngradeInstallerPath $env:ANAMNESIS_DOWNGRADE_INSTALLER",
+            github,
+            StringComparison.Ordinal);
+        Assert.Contains("payload", buildProbe, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("release.json", buildProbe, StringComparison.Ordinal);
+        Assert.Contains("[Version]", buildProbe, StringComparison.Ordinal);
+        Assert.Contains("deve ficar fora da publicacao canonica", buildProbe, StringComparison.Ordinal);
+        Assert.Contains("ProductVersion", buildProbe, StringComparison.Ordinal);
+        Assert.Contains("sha256", buildProbe, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Publish-Alpha.ps1", buildProbe, StringComparison.Ordinal);
+        Assert.DoesNotContain("Build-Installer.ps1", buildProbe, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void AtualizacaoDeveVersionarEValidarOsBinariosReais()
     {
         var raiz = EncontrarRaizRepositorio();
@@ -228,8 +317,11 @@ public sealed partial class InstallerContractTests
             StringComparison.Ordinal);
 
         var smoke = File.ReadAllText(Path.Combine(raiz, "scripts", "Test-Installer.ps1"));
-        Assert.Contains("caminhoWorkerLegado", smoke, StringComparison.Ordinal);
-        Assert.Contains("Worker legado", smoke, StringComparison.Ordinal);
+        Assert.Contains("workerInicialLegado", smoke, StringComparison.Ordinal);
+        Assert.Contains(
+            "Worker divergente na release anterior oficial",
+            smoke,
+            StringComparison.Ordinal);
     }
 
     [Fact]

@@ -96,12 +96,25 @@ jobs:
             -OutputRoot (Join-Path $env:RUNNER_TEMP "anamnesis-release\$env:ANAMNESIS_VERSION") `
             -IsccPath $env:INNO_ISCC
 
+      - name: Construir probe efemero de downgrade
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $probe = .\scripts\Build-DowngradeProbe.ps1 `
+            -CanonicalOutputRoot (Join-Path $env:RUNNER_TEMP "anamnesis-release\$env:ANAMNESIS_VERSION") `
+            -Version '0.0.1-downgrade-probe' `
+            -NumericVersion '0.0.1.0' `
+            -OutputRoot (Join-Path $env:RUNNER_TEMP 'anamnesis-downgrade-probe') `
+            -IsccPath $env:INNO_ISCC
+          "ANAMNESIS_DOWNGRADE_INSTALLER=$probe" | Add-Content -LiteralPath $env:GITHUB_ENV
+
       - name: Validar instalacao, atualizacao e desinstalacao
         shell: pwsh
         run: |
           .\scripts\Test-Installer.ps1 `
             -InstallerPath $env:ANAMNESIS_PREVIOUS_INSTALLER `
             -UpdateInstallerPath (Join-Path $env:RUNNER_TEMP "anamnesis-release\$env:ANAMNESIS_VERSION\installer\Anamnesis-$env:ANAMNESIS_VERSION-win-x64-setup.exe") `
+            -DowngradeInstallerPath $env:ANAMNESIS_DOWNGRADE_INSTALLER `
             -ExpectedInitialVersion $env:ANAMNESIS_PREVIOUS_VERSION `
             -ExpectedInitialNumericVersion $env:ANAMNESIS_PREVIOUS_NUMERIC_VERSION `
             -ExpectedUpdateVersion $env:ANAMNESIS_VERSION `

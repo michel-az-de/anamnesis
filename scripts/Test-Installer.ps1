@@ -6,6 +6,9 @@ param(
     [Parameter(Mandatory)]
     [string]$UpdateInstallerPath,
 
+    [Parameter(Mandatory)]
+    [string]$DowngradeInstallerPath,
+
     [Parameter(Mandatory = $true)]
     [ValidateNotNullOrEmpty()]
     [string]$ExpectedInitialVersion,
@@ -88,6 +91,27 @@ function Invoke-InstallerProbe {
     }
 }
 
+function Assert-LogContem {
+    param(
+        [Parameter(Mandatory)]
+        [string]$Caminho,
+
+        [Parameter(Mandatory)]
+        [string]$Trecho,
+
+        [Parameter(Mandatory)]
+        [string]$Contexto
+    )
+
+    if (-not (Test-Path -LiteralPath $Caminho -PathType Leaf)) {
+        throw "O log de $Contexto nao foi criado: $Caminho"
+    }
+    $conteudo = Get-Content -LiteralPath $Caminho -Raw
+    if ($conteudo.IndexOf($Trecho, [StringComparison]::OrdinalIgnoreCase) -lt 0) {
+        throw "O log de $Contexto nao comprovou a causa esperada '$Trecho'."
+    }
+}
+
 $repositorio = Split-Path -Parent $PSScriptRoot
 $instalador = [IO.Path]::GetFullPath($InstallerPath)
 if (-not (Test-Path -LiteralPath $instalador -PathType Leaf)) {
@@ -97,6 +121,32 @@ if (-not (Test-Path -LiteralPath $instalador -PathType Leaf)) {
 $atualizador = [IO.Path]::GetFullPath($UpdateInstallerPath)
 if (-not (Test-Path -LiteralPath $atualizador -PathType Leaf)) {
     throw "O instalador de atualizacao nao foi encontrado: $atualizador"
+}
+
+$instaladorDowngrade = [IO.Path]::GetFullPath($DowngradeInstallerPath)
+if (-not (Test-Path -LiteralPath $instaladorDowngrade -PathType Leaf)) {
+    throw "O probe de downgrade nao foi encontrado: $instaladorDowngrade"
+}
+$versaoInstaladorDowngrade =
+    [Diagnostics.FileVersionInfo]::GetVersionInfo($instaladorDowngrade).FileVersion.Trim()
+if ([Version]$versaoInstaladorDowngrade -ge [Version]$ExpectedUpdateNumericVersion) {
+    throw "O probe de downgrade $versaoInstaladorDowngrade nao e inferior a versao atual $ExpectedUpdateNumericVersion."
+}
+$caminhoManifestoDowngrade = Join-Path `
+    (Split-Path -Parent $instaladorDowngrade) `
+    "downgrade-probe.json"
+if (-not (Test-Path -LiteralPath $caminhoManifestoDowngrade -PathType Leaf)) {
+    throw "O manifesto do probe de downgrade nao foi encontrado: $caminhoManifestoDowngrade"
+}
+$manifestoDowngrade = Get-Content -LiteralPath $caminhoManifestoDowngrade -Raw | ConvertFrom-Json
+$hashInstaladorDowngradeEsperado =
+    (Get-FileHash -LiteralPath $instaladorDowngrade -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($manifestoDowngrade.publicavel -ne $false -or
+    $manifestoDowngrade.arquivo -ne (Split-Path -Leaf $instaladorDowngrade) -or
+    $manifestoDowngrade.sha256 -ne $hashInstaladorDowngradeEsperado -or
+    $manifestoDowngrade.versaoNumerica -ne $versaoInstaladorDowngrade -or
+    $manifestoDowngrade.versaoNumericaCanonica -ne $ExpectedUpdateNumericVersion) {
+    throw "O EXE de downgrade nao corresponde ao probe moderno vinculado a versao candidata."
 }
 
 $dotnet = (Get-Command dotnet -ErrorAction SilentlyContinue).Source
@@ -160,9 +210,9 @@ $codigoWorker = $null
 $codigoSegundaAbertura = $null
 $codigoReparo = $null
 $codigoAtualizacao = $null
+$codigoAtualizacaoTrayLegado = $null
 $codigoDowngradeBloqueado = $null
 $codigoDowngradeIncompletoBloqueado = $null
-$codigoReparoPayloadIncompleto = $null
 $codigoDesinstalacao = $null
 $iconeInstalado = $false
 $atalhoInstalado = $false
@@ -180,16 +230,20 @@ $hashBancoAntesAtualizacao = $null
 $atalhoPreservado = $false
 $workerLegadoAtualizado = $false
 $downgradeComPayloadIncompletoBloqueado = $false
+$trayLegadoPreservado = $false
+$trayLegadoEncerradoPeloHarness = $false
+$encerramentoCooperativoReparo = $false
 $encerramentoCooperativoDesinstalacao = $false
+$dadosPreservadosAposDesinstalacao = $false
 $trayDeixadoAtivoParaDesinstalacao = $false
 $caminhoDesinstalador = Join-Path $diretorioInstalacao "unins000.exe"
 $caminhoWorkerStdout = Join-Path $evidencias "worker.stdout.log"
 $caminhoWorkerStderr = Join-Path $evidencias "worker.stderr.log"
 $caminhoReparoLog = Join-Path $evidencias "reparo.log"
+$caminhoAtualizacaoTrayLegadoLog = Join-Path $evidencias "atualizacao-tray-legado-bloqueada.log"
 $caminhoAtualizacaoLog = Join-Path $evidencias "atualizacao.log"
 $caminhoDowngradeLog = Join-Path $evidencias "downgrade-bloqueado.log"
 $caminhoDowngradeIncompletoLog = Join-Path $evidencias "downgrade-payload-incompleto-bloqueado.log"
-$caminhoReparoIncompletoLog = Join-Path $evidencias "reparo-payload-incompleto.log"
 $caminhoDesinstalacaoLog = Join-Path $evidencias "desinstalacao.log"
 
 try {
@@ -317,6 +371,14 @@ try {
             -Banco $caminhoBanco `
             -ReuniaoId $reuniaoSentinela
         $hashConfiguracaoAntes = (Get-FileHash -LiteralPath $caminhoConfiguracao -Algorithm SHA256).Hash
+        $hashBancoAntesAtualizacao = (Get-FileHash -LiteralPath $caminhoBanco -Algorithm SHA256).Hash
+        $hashTrayAntesAtualizacaoLegada =
+            (Get-FileHash -LiteralPath $caminhoTray -Algorithm SHA256).Hash
+        $hashWorkerAntesAtualizacaoLegada =
+            (Get-FileHash -LiteralPath $caminhoWorker -Algorithm SHA256).Hash
+        $displayVersionAntesAtualizacaoLegada = Get-ValorRegistroOpcional `
+            -Caminho $registroProdutoInstalado `
+            -Nome "DisplayVersion"
 
         $raizInstalacao = [IO.Path]::GetFullPath($diretorioInstalacao).TrimEnd('\') + '\'
         $caminhoWorkerCompleto = [IO.Path]::GetFullPath($caminhoWorker)
@@ -326,28 +388,50 @@ try {
             throw "O smoke recusou remover arquivo fora da instalacao isolada: $caminhoWorkerCompleto"
         }
 
-        Remove-Item -LiteralPath $caminhoWorkerCompleto -Force
-        if (Test-Path -LiteralPath $caminhoWorkerCompleto -PathType Leaf) {
-            throw "O smoke nao conseguiu simular o payload incompleto para reparo."
-        }
-
-        $processoReparo = Start-Process -FilePath $instalador -ArgumentList @(
+        $tentativaAtualizacaoComTrayLegado = Start-Process -FilePath $atualizador -ArgumentList @(
             "/VERYSILENT",
             "/SUPPRESSMSGBOXES",
             "/NORESTART",
             "/SP-",
-            "/LOG=$caminhoReparoLog") -Wait -PassThru
-        $codigoReparo = $processoReparo.ExitCode
-        if ($codigoReparo -ne 0) {
-            throw "O reparo falhou com codigo $codigoReparo."
+            "/LOG=$caminhoAtualizacaoTrayLegadoLog") -Wait -PassThru
+        $codigoAtualizacaoTrayLegado = $tentativaAtualizacaoComTrayLegado.ExitCode
+        if ($codigoAtualizacaoTrayLegado -eq 0) {
+            throw "A atualizacao encerrou ou substituiu silenciosamente o Tray legado."
         }
+        Assert-LogContem `
+            -Caminho $caminhoAtualizacaoTrayLegadoLog `
+            -Trecho "Anamnesis continua aberto" `
+            -Contexto "atualizacao bloqueada pelo Tray legado"
         Start-Sleep -Milliseconds 500
-        if (-not $tray.HasExited) {
-            throw "O reparo nao encerrou cooperativamente o Tray instalado."
+        $processoTrayLegado = Get-Process -Id $tray.Id -ErrorAction SilentlyContinue
+        if (-not $processoTrayLegado -or $tray.HasExited) {
+            throw "A atualizacao bloqueada nao preservou o Tray legado em execucao."
         }
-        $tray = $null
-        if (-not (Test-Path -LiteralPath $caminhoWorkerCompleto -PathType Leaf)) {
-            throw "O reparo nao restaurou o Worker ausente."
+        $caminhoProcessoTrayLegado = [IO.Path]::GetFullPath($processoTrayLegado.Path)
+        if (-not $caminhoProcessoTrayLegado.StartsWith(
+                $raizInstalacao,
+                [StringComparison]::OrdinalIgnoreCase) -or
+            -not $caminhoProcessoTrayLegado.Equals(
+                [IO.Path]::GetFullPath($caminhoTray),
+                [StringComparison]::OrdinalIgnoreCase)) {
+            throw "O smoke recusou encerrar processo fora do Tray isolado: $caminhoProcessoTrayLegado"
+        }
+        $trayLegadoPreservado = $true
+        $binarioTrayAposBloqueio = [Diagnostics.FileVersionInfo]::GetVersionInfo($caminhoTray)
+        $binarioWorkerAposBloqueio = [Diagnostics.FileVersionInfo]::GetVersionInfo($caminhoWorker)
+        $versaoWorkerAposBloqueio =
+            "$($binarioWorkerAposBloqueio.ProductVersion)/$($binarioWorkerAposBloqueio.FileVersion)"
+        if ((Get-ValorRegistroOpcional `
+                -Caminho $registroProdutoInstalado `
+                -Nome "DisplayVersion") -ne $displayVersionAntesAtualizacaoLegada -or
+            $binarioTrayAposBloqueio.ProductVersion -ne $ExpectedInitialVersion -or
+            $binarioTrayAposBloqueio.FileVersion -ne $ExpectedInitialNumericVersion -or
+            $versaoWorkerAposBloqueio -ne $versaoWorkerInicial -or
+            (Get-FileHash -LiteralPath $caminhoTray -Algorithm SHA256).Hash -ne
+                $hashTrayAntesAtualizacaoLegada -or
+            (Get-FileHash -LiteralPath $caminhoWorker -Algorithm SHA256).Hash -ne
+                $hashWorkerAntesAtualizacaoLegada) {
+            throw "A atualizacao bloqueada alterou registro ou binarios da release legada."
         }
         Invoke-InstallerProbe `
             -DotnetPath $dotnet `
@@ -357,31 +441,23 @@ try {
             -ReuniaoId $reuniaoSentinela
         if ((Get-FileHash -LiteralPath $caminhoConfiguracao -Algorithm SHA256).Hash -ne
             $hashConfiguracaoAntes) {
-            throw "O reparo alterou a configuracao do usuario."
+            throw "A atualizacao bloqueada alterou a configuracao do usuario."
         }
-        if (-not (Test-Path -LiteralPath $atalhoMenuIniciar -PathType Leaf)) {
-            throw "O reparo removeu o atalho do Menu Iniciar."
+        if ((Get-FileHash -LiteralPath $caminhoBanco -Algorithm SHA256).Hash -ne
+            $hashBancoAntesAtualizacao) {
+            throw "A atualizacao bloqueada alterou o banco local do usuario."
         }
-        if ($null -ne (Get-ValorRegistroOpcional -Caminho $registroInicializacao -Nome "Anamnesis")) {
-            throw "O reparo alterou a opcao de inicializacao com o Windows."
+        if (-not (Test-Path -LiteralPath $sentinela -PathType Leaf)) {
+            throw "A atualizacao bloqueada removeu dados do usuario."
         }
-        $hashBancoAntesAtualizacao = (Get-FileHash -LiteralPath $caminhoBanco -Algorithm SHA256).Hash
 
-        $caminhoWorkerLegado = Join-Path `
-            $repositorio `
-            "src\Anamnesis.Worker\bin\Release\net10.0-windows\Anamnesis.Worker.exe"
-        if (-not (Test-Path -LiteralPath $caminhoWorkerLegado -PathType Leaf)) {
-            throw "O Worker legado de regressao nao foi encontrado: $caminhoWorkerLegado"
+        Stop-Process -Id $tray.Id -Force
+        $null = $tray.WaitForExit(10000)
+        if (-not $tray.HasExited) {
+            throw "O harness nao conseguiu simular o fechamento manual do Tray legado isolado."
         }
-        $versaoWorkerLegado = [Diagnostics.FileVersionInfo]::GetVersionInfo($caminhoWorkerLegado)
-        if ($versaoWorkerLegado.FileVersion -ne "1.0.0.0") {
-            throw "O Worker legado nao reproduz a versao 1.0.0.0: $($versaoWorkerLegado.FileVersion)"
-        }
-        Copy-Item -LiteralPath $caminhoWorkerLegado -Destination $caminhoWorker -Force
-        $versaoWorkerMisto = [Diagnostics.FileVersionInfo]::GetVersionInfo($caminhoWorker)
-        if ($versaoWorkerMisto.FileVersion -ne "1.0.0.0") {
-            throw "O smoke nao conseguiu simular o Worker legado."
-        }
+        $trayLegadoEncerradoPeloHarness = $true
+        $tray = $null
 
         $processoAtualizacao = Start-Process -FilePath $atualizador -ArgumentList @(
             "/VERYSILENT",
@@ -411,7 +487,7 @@ try {
                 "Tray=$($versaoTrayAtualizada.ProductVersion)/$($versaoTrayAtualizada.FileVersion); " +
                 "Worker=$($versaoWorkerAtualizada.ProductVersion)/$($versaoWorkerAtualizada.FileVersion)"
         }
-        $workerLegadoAtualizado = $true
+        $workerLegadoAtualizado = $workerInicialLegado -and $versoesBinariosAtualizados
         if (-not (Test-Path -LiteralPath $caminhoConfiguracao -PathType Leaf) -or
             -not (Test-Path -LiteralPath $sentinela -PathType Leaf)) {
             throw "A atualizacao nao preservou os dados do usuario."
@@ -439,7 +515,10 @@ try {
             throw "A atualizacao alterou a opcao de inicializacao com o Windows."
         }
 
-        $tentativaDowngrade = Start-Process -FilePath $instalador -ArgumentList @(
+        $hashTrayAtualizado = (Get-FileHash -LiteralPath $caminhoTray -Algorithm SHA256).Hash
+        $hashWorkerAtualizado = (Get-FileHash -LiteralPath $caminhoWorker -Algorithm SHA256).Hash
+
+        $tentativaDowngrade = Start-Process -FilePath $instaladorDowngrade -ArgumentList @(
             "/VERYSILENT",
             "/SUPPRESSMSGBOXES",
             "/NORESTART",
@@ -449,12 +528,28 @@ try {
         if ($codigoDowngradeBloqueado -eq 0) {
             throw "O instalador permitiu downgrade da versao $ExpectedUpdateVersion."
         }
+        Assert-LogContem `
+            -Caminho $caminhoDowngradeLog `
+            -Trecho "downgrade autom" `
+            -Contexto "downgrade bloqueado"
         $versaoAposDowngrade = Get-ValorRegistroOpcional `
             -Caminho $registroProdutoInstalado `
             -Nome "DisplayVersion"
+        $trayAposDowngrade = [Diagnostics.FileVersionInfo]::GetVersionInfo($caminhoTray)
+        $workerAposDowngrade = [Diagnostics.FileVersionInfo]::GetVersionInfo($caminhoWorker)
         if ($versaoAposDowngrade -ne $ExpectedUpdateVersion -or
-            [Diagnostics.FileVersionInfo]::GetVersionInfo($caminhoTray).ProductVersion -ne
-                $ExpectedUpdateVersion) {
+            $trayAposDowngrade.ProductVersion -ne $ExpectedUpdateVersion -or
+            $trayAposDowngrade.FileVersion -ne $ExpectedUpdateNumericVersion -or
+            $workerAposDowngrade.ProductVersion -ne $ExpectedUpdateVersion -or
+            $workerAposDowngrade.FileVersion -ne $ExpectedUpdateNumericVersion -or
+            (Get-FileHash -LiteralPath $caminhoTray -Algorithm SHA256).Hash -ne
+                $hashTrayAtualizado -or
+            (Get-FileHash -LiteralPath $caminhoWorker -Algorithm SHA256).Hash -ne
+                $hashWorkerAtualizado -or
+            (Get-FileHash -LiteralPath $caminhoConfiguracao -Algorithm SHA256).Hash -ne
+                $hashConfiguracaoAntes -or
+            (Get-FileHash -LiteralPath $caminhoBanco -Algorithm SHA256).Hash -ne
+                $hashBancoAntesAtualizacao) {
             throw "A tentativa de downgrade alterou a versao instalada."
         }
         Invoke-InstallerProbe `
@@ -464,8 +559,17 @@ try {
             -Banco $caminhoBanco `
             -ReuniaoId $reuniaoSentinela
 
+        $tray = Start-Process `
+            -FilePath $caminhoTray `
+            -WorkingDirectory (Split-Path -Parent $caminhoTray) `
+            -PassThru
+        Start-Sleep -Seconds 3
+        if ($tray.HasExited) {
+            throw "O Tray atual encerrou antes do reparo com codigo $($tray.ExitCode)."
+        }
+
         Remove-Item -LiteralPath $caminhoWorker -Force
-        $tentativaDowngradeIncompleto = Start-Process -FilePath $instalador -ArgumentList @(
+        $tentativaDowngradeIncompleto = Start-Process -FilePath $instaladorDowngrade -ArgumentList @(
             "/VERYSILENT",
             "/SUPPRESSMSGBOXES",
             "/NORESTART",
@@ -475,11 +579,25 @@ try {
         if ($codigoDowngradeIncompletoBloqueado -eq 0) {
             throw "O instalador permitiu downgrade quando o Worker da versao mais nova estava ausente."
         }
+        Assert-LogContem `
+            -Caminho $caminhoDowngradeIncompletoLog `
+            -Trecho "downgrade autom" `
+            -Contexto "downgrade com payload incompleto bloqueado"
         if (Test-Path -LiteralPath $caminhoWorker -PathType Leaf) {
             throw "A tentativa de downgrade recriou o Worker com um pacote mais antigo."
         }
-        if ([Diagnostics.FileVersionInfo]::GetVersionInfo($caminhoTray).ProductVersion -ne
-            $ExpectedUpdateVersion) {
+        $trayAposDowngradeIncompleto = [Diagnostics.FileVersionInfo]::GetVersionInfo($caminhoTray)
+        if ($trayAposDowngradeIncompleto.ProductVersion -ne $ExpectedUpdateVersion -or
+            $trayAposDowngradeIncompleto.FileVersion -ne $ExpectedUpdateNumericVersion -or
+            (Get-FileHash -LiteralPath $caminhoTray -Algorithm SHA256).Hash -ne
+                $hashTrayAtualizado -or
+            (Get-ValorRegistroOpcional `
+                -Caminho $registroProdutoInstalado `
+                -Nome "DisplayVersion") -ne $ExpectedUpdateVersion -or
+            (Get-FileHash -LiteralPath $caminhoConfiguracao -Algorithm SHA256).Hash -ne
+                $hashConfiguracaoAntes -or
+            (Get-FileHash -LiteralPath $caminhoBanco -Algorithm SHA256).Hash -ne
+                $hashBancoAntesAtualizacao) {
             throw "A tentativa de downgrade alterou o Tray da instalacao incompleta."
         }
         Invoke-InstallerProbe `
@@ -489,19 +607,50 @@ try {
             -Banco $caminhoBanco `
             -ReuniaoId $reuniaoSentinela
         $downgradeComPayloadIncompletoBloqueado = $true
+        if ($tray.HasExited) {
+            throw "O downgrade bloqueado encerrou indevidamente o Tray atual."
+        }
 
         $reparoPayloadIncompleto = Start-Process -FilePath $atualizador -ArgumentList @(
             "/VERYSILENT",
             "/SUPPRESSMSGBOXES",
             "/NORESTART",
             "/SP-",
-            "/LOG=$caminhoReparoIncompletoLog") -Wait -PassThru
-        $codigoReparoPayloadIncompleto = $reparoPayloadIncompleto.ExitCode
-        if ($codigoReparoPayloadIncompleto -ne 0 -or
+            "/LOG=$caminhoReparoLog") -Wait -PassThru
+        $codigoReparo = $reparoPayloadIncompleto.ExitCode
+        if ($codigoReparo -ne 0 -or
             -not (Test-Path -LiteralPath $caminhoWorker -PathType Leaf) -or
             [Diagnostics.FileVersionInfo]::GetVersionInfo($caminhoWorker).ProductVersion -ne
                 $ExpectedUpdateVersion) {
             throw "O reparo da versao atual nao restaurou o Worker ausente."
+        }
+        Assert-LogContem `
+            -Caminho $caminhoReparoLog `
+            -Trecho "encerramento cooperativo enviada ao Tray" `
+            -Contexto "reparo cooperativo"
+        $null = $tray.WaitForExit(10000)
+        $encerramentoCooperativoReparo = $tray.HasExited
+        if (-not $encerramentoCooperativoReparo) {
+            throw "O reparo da versao atual nao encerrou cooperativamente o Tray."
+        }
+        $tray = $null
+        Invoke-InstallerProbe `
+            -DotnetPath $dotnet `
+            -Probe $probe `
+            -Comando verify `
+            -Banco $caminhoBanco `
+            -ReuniaoId $reuniaoSentinela
+        if ((Get-FileHash -LiteralPath $caminhoConfiguracao -Algorithm SHA256).Hash -ne
+            $hashConfiguracaoAntes -or
+            (Get-FileHash -LiteralPath $caminhoBanco -Algorithm SHA256).Hash -ne
+            $hashBancoAntesAtualizacao) {
+            throw "O reparo da versao atual alterou dados do usuario."
+        }
+        if (-not (Test-Path -LiteralPath $atalhoMenuIniciar -PathType Leaf)) {
+            throw "O reparo da versao atual removeu o atalho do Menu Iniciar."
+        }
+        if ($null -ne (Get-ValorRegistroOpcional -Caminho $registroInicializacao -Nome "Anamnesis")) {
+            throw "O reparo da versao atual alterou a opcao de inicializacao com o Windows."
         }
 
         $tray = Start-Process `
@@ -558,9 +707,17 @@ if (-not $encerramentoCooperativoDesinstalacao) {
 if (-not (Test-Path -LiteralPath $caminhoDesinstalacaoLog -PathType Leaf)) {
     throw "O log da desinstalacao nao foi criado: $caminhoDesinstalacaoLog"
 }
+Assert-LogContem `
+    -Caminho $caminhoDesinstalacaoLog `
+    -Trecho "encerramento cooperativo enviada ao Tray" `
+    -Contexto "desinstalacao cooperativa"
 
 if (-not (Test-Path -LiteralPath $caminhoReparoLog -PathType Leaf)) {
     throw "O log do reparo nao foi criado: $caminhoReparoLog"
+}
+
+if (-not (Test-Path -LiteralPath $caminhoAtualizacaoTrayLegadoLog -PathType Leaf)) {
+    throw "O log da atualizacao bloqueada pelo Tray legado nao foi criado: $caminhoAtualizacaoTrayLegadoLog"
 }
 
 if (-not (Test-Path -LiteralPath $caminhoAtualizacaoLog -PathType Leaf)) {
@@ -575,10 +732,6 @@ if (-not (Test-Path -LiteralPath $caminhoDowngradeIncompletoLog -PathType Leaf))
     throw "O log do downgrade com payload incompleto nao foi criado: $caminhoDowngradeIncompletoLog"
 }
 
-if (-not (Test-Path -LiteralPath $caminhoReparoIncompletoLog -PathType Leaf)) {
-    throw "O log do reparo do payload incompleto nao foi criado: $caminhoReparoIncompletoLog"
-}
-
 if (Test-Path -LiteralPath $diretorioInstalacao) {
     throw "O diretorio do programa permaneceu depois da desinstalacao: $diretorioInstalacao"
 }
@@ -590,9 +743,26 @@ if (Test-Path -LiteralPath $atalhoMenuIniciar) {
 if (-not (Test-Path -LiteralPath $sentinela -PathType Leaf)) {
     throw "A desinstalacao removeu dados do usuario."
 }
+if (-not (Test-Path -LiteralPath $caminhoConfiguracao -PathType Leaf) -or
+    -not (Test-Path -LiteralPath $caminhoBanco -PathType Leaf) -or
+    (Get-FileHash -LiteralPath $caminhoConfiguracao -Algorithm SHA256).Hash -ne
+        $hashConfiguracaoAntes -or
+    (Get-FileHash -LiteralPath $caminhoBanco -Algorithm SHA256).Hash -ne
+        $hashBancoAntesAtualizacao) {
+    throw "A desinstalacao alterou ou removeu a configuracao ou o banco local."
+}
+Invoke-InstallerProbe `
+    -DotnetPath $dotnet `
+    -Probe $probe `
+    -Comando verify `
+    -Banco $caminhoBanco `
+    -ReuniaoId $reuniaoSentinela
+$dadosPreservadosAposDesinstalacao = $true
 
 $hashInstalador = (Get-FileHash -LiteralPath $instalador -Algorithm SHA256).Hash.ToLowerInvariant()
 $hashAtualizador = (Get-FileHash -LiteralPath $atualizador -Algorithm SHA256).Hash.ToLowerInvariant()
+$hashInstaladorDowngrade =
+    (Get-FileHash -LiteralPath $instaladorDowngrade -Algorithm SHA256).Hash.ToLowerInvariant()
 $inicioValidacao = Get-Date -Format "yyyy-MM-ddTHH:mm:ssK"
 
 $resultado = @"
@@ -602,6 +772,9 @@ $resultado = @"
 - SHA-256: ``$hashInstalador``
 - Instalador de atualizacao: ``$atualizador``
 - SHA-256 da atualizacao: ``$hashAtualizador``
+- Probe de downgrade: ``$instaladorDowngrade``
+- Versao numerica do probe de downgrade: ``$versaoInstaladorDowngrade``
+- SHA-256 do probe de downgrade: ``$hashInstaladorDowngrade``
 - Windows: ``$([Environment]::OSVersion.VersionString)``
 - Evidencia registrada em: ``$inicioValidacao``
 - Codigo de instalacao: ``$codigoInstalacao``
@@ -615,8 +788,12 @@ $resultado = @"
 - Versao instalada: ``$versaoInstalada``
 - Versao inicial do Worker: ``$versaoWorkerInicial``
 - Worker inicial legado aceito da release oficial: ``$workerInicialLegado``
+- Codigo da atualizacao bloqueada pelo Tray legado: ``$codigoAtualizacaoTrayLegado``
+- Tray legado preservado pelo instalador: ``$trayLegadoPreservado``
+- Fechamento manual do Tray legado simulado pelo harness: ``$trayLegadoEncerradoPeloHarness``
 - Codigo de reparo: ``$codigoReparo``
 - Log de reparo criado: ``true``
+- Tray atual encerrado cooperativamente no reparo: ``$encerramentoCooperativoReparo``
 - Codigo de atualizacao: ``$codigoAtualizacao``
 - Log de atualizacao criado: ``true``
 - Versao atualizada: ``$versaoAtualizada``
@@ -625,7 +802,6 @@ $resultado = @"
 - Codigo do downgrade bloqueado: ``$codigoDowngradeBloqueado``
 - Codigo do downgrade com Worker ausente: ``$codigoDowngradeIncompletoBloqueado``
 - Downgrade com payload incompleto bloqueado: ``$downgradeComPayloadIncompletoBloqueado``
-- Codigo do reparo do Worker ausente: ``$codigoReparoPayloadIncompleto``
 - Reuniao sentinela preservada: ``$reuniaoSentinelaPreservada``
 - Hash da configuracao preservado: ``true``
 - Hash do banco preservado na atualizacao: ``true``
@@ -634,7 +810,7 @@ $resultado = @"
 - Tray encerrado cooperativamente na desinstalacao: ``$encerramentoCooperativoDesinstalacao``
 - Log de desinstalacao criado: ``true``
 - Diretorio do programa removido: ``true``
-- Dados do usuario preservados: ``true``
+- Configuracao, banco e reuniao preservados apos desinstalacao: ``$dadosPreservadosAposDesinstalacao``
 "@
 Set-Content -LiteralPath (Join-Path $evidencias "resultado.md") -Value $resultado -Encoding utf8
 Write-Host "Instalador validado. Evidencias: $evidencias"
