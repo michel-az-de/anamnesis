@@ -79,11 +79,22 @@ jobs:
             -OutputRoot (Join-Path $env:RUNNER_TEMP 'anamnesis-beta') `
             -IsccPath (Join-Path $env:RUNNER_TEMP 'inno-setup\ISCC.exe')
 
+      - name: Construir instalador de atualizacao para o smoke
+        shell: pwsh
+        run: |
+          .\scripts\Build-Installer.ps1 `
+            -Version '0.2.0-beta.2' `
+            -NumericVersion '0.2.0.1' `
+            -OutputRoot (Join-Path $env:RUNNER_TEMP 'anamnesis-beta-update') `
+            -IsccPath (Join-Path $env:RUNNER_TEMP 'inno-setup\ISCC.exe')
+
       - name: Validar instalacao e desinstalacao
         shell: pwsh
         run: |
           .\scripts\Test-Installer.ps1 `
             -InstallerPath (Join-Path $env:RUNNER_TEMP 'anamnesis-beta\installer\Anamnesis-0.2.0-beta.1-win-x64-setup.exe') `
+            -UpdateInstallerPath (Join-Path $env:RUNNER_TEMP 'anamnesis-beta-update\installer\Anamnesis-0.2.0-beta.2-win-x64-setup.exe') `
+            -ExpectedUpdateVersion '0.2.0-beta.2' `
             -EvidenceRoot (Join-Path $env:RUNNER_TEMP 'installer-e2e')
 
       - name: Publicar instalador e evidencias
@@ -93,6 +104,7 @@ jobs:
           name: anamnesis-0.2.0-beta.1-win-x64
           path: |
             ${{ runner.temp }}\anamnesis-beta\installer\*
+            ${{ runner.temp }}\anamnesis-beta-update\installer\*
             ${{ runner.temp }}\installer-e2e\**
           if-no-files-found: error
           retention-days: 14

@@ -12,6 +12,7 @@
   <ItemGroup>
     <EmbeddedResource Include="Assets\Anamnesis.ico" LogicalName="Anamnesis.Tray.Assets.Anamnesis.ico" />
     <None Update="Assets\Anamnesis.ico" CopyToOutputDirectory="PreserveNewest" TargetPath="Anamnesis.ico" />
+    <None Update="Assets\Anamnesis.png" CopyToOutputDirectory="PreserveNewest" TargetPath="Anamnesis.png" />
     <None Update="Assets\ata.schema.json" CopyToOutputDirectory="PreserveNewest" TargetPath="ata.schema.json" />
   </ItemGroup>
   <ItemGroup>

@@ -56,13 +56,29 @@ internal static class Program
 
         var modoValidacao = ModoValidacaoTrayOptions.Obter(argumentos);
         var diagnosticoDeteccao = DiagnosticoDeteccaoOptions.Obter(argumentos);
+        var encerrarParaAtualizacao = argumentos.Contains(
+            "--encerrar-para-atualizacao",
+            StringComparer.OrdinalIgnoreCase);
         using var instanciaUnica = modoValidacao is null && diagnosticoDeteccao is null
             ? InstanciaUnicaTray.Criar(
                 Environment.GetEnvironmentVariable("ANAMNESIS_TRAY_INSTANCE_KEY"))
             : null;
         if (instanciaUnica is { EhPrimaria: false })
         {
-            instanciaUnica.SinalizarPrimeiraInstancia();
+            if (encerrarParaAtualizacao)
+            {
+                instanciaUnica.SinalizarEncerramentoParaAtualizacao();
+            }
+            else
+            {
+                instanciaUnica.SinalizarPrimeiraInstancia();
+            }
+
+            return 0;
+        }
+
+        if (encerrarParaAtualizacao)
+        {
             return 0;
         }
 
@@ -211,6 +227,27 @@ internal static class Program
             janela.Activate();
         }
 
+        bool TentarEncerrarAplicativo(bool permitirRecuperacaoDeGravacao)
+        {
+            if (sessaoDesktop.Etapa == EtapaDesktopPoc.Gravando && !permitirRecuperacaoDeGravacao)
+            {
+                AbrirJanela();
+                MessageBox.Show(
+                    "Há uma gravação ativa. Finalize-a antes de atualizar o Anamnesis; " +
+                    "o instalador não encerra uma gravação à força.",
+                    "Atualização do Anamnesis",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+                return false;
+            }
+
+            saindo = true;
+            icone.Visible = false;
+            janela?.Close();
+            System.Windows.Forms.Application.Exit();
+            return true;
+        }
+
         icone.ContextMenuStrip.Items.Add("Abrir Anamnesis", null, (_, _) => AbrirJanela());
         icone.MouseClick += (_, evento) =>
         {
@@ -288,10 +325,7 @@ internal static class Program
                 return;
             }
 
-            saindo = true;
-            icone.Visible = false;
-            janela?.Close();
-            System.Windows.Forms.Application.Exit();
+            TentarEncerrarAplicativo(permitirRecuperacaoDeGravacao: true);
         });
 
         iniciar.Click += async (_, _) =>
@@ -408,6 +442,16 @@ internal static class Program
             if (!despachante.IsDisposed && despachante.IsHandleCreated)
             {
                 despachante.BeginInvoke((Action)AbrirJanela);
+            }
+        });
+        instanciaUnica.ObservarEncerramentoParaAtualizacao(() =>
+        {
+            if (!despachante.IsDisposed && despachante.IsHandleCreated)
+            {
+                despachante.BeginInvoke((Action)(() =>
+                {
+                    TentarEncerrarAplicativo(permitirRecuperacaoDeGravacao: false);
+                }));
             }
         });
         if (!argumentos.Contains("--background", StringComparer.OrdinalIgnoreCase))

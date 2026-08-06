@@ -39,6 +39,22 @@ public sealed class WindowsShellTests
         Assert.True(ativacao.Wait(TimeSpan.FromSeconds(2)));
     }
 
+    [Fact]
+    public void DeveSinalizarEncerramentoCooperativoParaAtualizacao()
+    {
+        var chave = $"Anamnesis.Tests.Update.{Guid.NewGuid():N}";
+        using var encerramento = new ManualResetEventSlim();
+        using var primaria = InstanciaUnicaTray.Criar(chave);
+        primaria.ObservarEncerramentoParaAtualizacao(() => encerramento.Set());
+
+        using var secundaria = InstanciaUnicaTray.Criar(chave);
+
+        Assert.True(primaria.EhPrimaria);
+        Assert.False(secundaria.EhPrimaria);
+        secundaria.SinalizarEncerramentoParaAtualizacao();
+        Assert.True(encerramento.Wait(TimeSpan.FromSeconds(2)));
+    }
+
     [Theory]
     [InlineData(EtapaDesktopPoc.Pronto, false, 0, "Pronto", true, false, "Processar pendências")]
     [InlineData(EtapaDesktopPoc.Gravando, false, 0, "Gravando", false, true, "Processar pendências")]

@@ -3,6 +3,11 @@ param(
     [Parameter(Mandatory)]
     [string]$InstallerPath,
 
+    [Parameter(Mandatory)]
+    [string]$UpdateInstallerPath,
+
+    [string]$ExpectedUpdateVersion = "0.2.0-beta.2",
+
     [string]$EvidenceRoot
 )
 
@@ -34,6 +39,11 @@ $repositorio = Split-Path -Parent $PSScriptRoot
 $instalador = [IO.Path]::GetFullPath($InstallerPath)
 if (-not (Test-Path -LiteralPath $instalador -PathType Leaf)) {
     throw "O instalador nao foi encontrado: $instalador"
+}
+
+$atualizador = [IO.Path]::GetFullPath($UpdateInstallerPath)
+if (-not (Test-Path -LiteralPath $atualizador -PathType Leaf)) {
+    throw "O instalador de atualizacao nao foi encontrado: $atualizador"
 }
 
 $registroProdutoInstalado = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{B762A4D8-3BA7-4FB4-9A0A-A8135AB0DF2E}_is1"
@@ -78,15 +88,20 @@ $tray = $null
 $codigoInstalacao = $null
 $codigoWorker = $null
 $codigoSegundaAbertura = $null
+$codigoReparo = $null
+$codigoAtualizacao = $null
 $codigoDesinstalacao = $null
 $iconeInstalado = $false
 $atalhoInstalado = $false
 $configuracaoCriada = $false
 $inicioWindowsPermaneceuOpcional = $false
 $versaoInstalada = $null
+$versaoAtualizada = $null
 $caminhoDesinstalador = Join-Path $diretorioInstalacao "unins000.exe"
 $caminhoWorkerStdout = Join-Path $evidencias "worker.stdout.log"
 $caminhoWorkerStderr = Join-Path $evidencias "worker.stderr.log"
+$caminhoReparoLog = Join-Path $evidencias "reparo.log"
+$caminhoAtualizacaoLog = Join-Path $evidencias "atualizacao.log"
 $caminhoDesinstalacaoLog = Join-Path $evidencias "desinstalacao.log"
 
 try {
@@ -145,7 +160,7 @@ try {
     $instanciaAnterior = $env:ANAMNESIS_TRAY_INSTANCE_KEY
     $env:ANAMNESIS_CONFIGURACAO = $caminhoConfiguracao
     $env:ANAMNESIS_DIRETORIO_DADOS = $diretorioDados
-    $env:ANAMNESIS_TRAY_INSTANCE_KEY = "installer-smoke-$([Guid]::NewGuid().ToString('N'))"
+    $env:ANAMNESIS_TRAY_INSTANCE_KEY = $null
     try {
         $tray = Start-Process `
             -FilePath $caminhoTray `
@@ -190,6 +205,73 @@ try {
             throw "O Worker instalado falhou com codigo $codigoWorker."
         }
 
+        $raizInstalacao = [IO.Path]::GetFullPath($diretorioInstalacao).TrimEnd('\') + '\'
+        $caminhoWorkerCompleto = [IO.Path]::GetFullPath($caminhoWorker)
+        if (-not $caminhoWorkerCompleto.StartsWith(
+                $raizInstalacao,
+                [StringComparison]::OrdinalIgnoreCase)) {
+            throw "O smoke recusou remover arquivo fora da instalacao isolada: $caminhoWorkerCompleto"
+        }
+
+        Remove-Item -LiteralPath $caminhoWorkerCompleto -Force
+        if (Test-Path -LiteralPath $caminhoWorkerCompleto -PathType Leaf) {
+            throw "O smoke nao conseguiu simular o payload incompleto para reparo."
+        }
+
+        $processoReparo = Start-Process -FilePath $instalador -ArgumentList @(
+            "/VERYSILENT",
+            "/SUPPRESSMSGBOXES",
+            "/NORESTART",
+            "/SP-",
+            "/GROUP=$grupoAtalhos",
+            "/MERGETASKS=!startup,!desktopicon",
+            "/DIR=$diretorioInstalacao",
+            "/LOG=$caminhoReparoLog") -Wait -PassThru
+        $codigoReparo = $processoReparo.ExitCode
+        if ($codigoReparo -ne 0) {
+            throw "O reparo falhou com codigo $codigoReparo."
+        }
+        Start-Sleep -Milliseconds 500
+        if (-not $tray.HasExited) {
+            throw "O reparo nao encerrou cooperativamente o Tray instalado."
+        }
+        $tray = $null
+        if (-not (Test-Path -LiteralPath $caminhoWorkerCompleto -PathType Leaf)) {
+            throw "O reparo nao restaurou o Worker ausente."
+        }
+
+        $processoAtualizacao = Start-Process -FilePath $atualizador -ArgumentList @(
+            "/VERYSILENT",
+            "/SUPPRESSMSGBOXES",
+            "/NORESTART",
+            "/SP-",
+            "/GROUP=$grupoAtalhos",
+            "/MERGETASKS=!startup,!desktopicon",
+            "/DIR=$diretorioInstalacao",
+            "/LOG=$caminhoAtualizacaoLog") -Wait -PassThru
+        $codigoAtualizacao = $processoAtualizacao.ExitCode
+        if ($codigoAtualizacao -ne 0) {
+            throw "A atualizacao falhou com codigo $codigoAtualizacao."
+        }
+        $versaoAtualizada = Get-ValorRegistroOpcional `
+            -Caminho $registroProdutoInstalado `
+            -Nome "DisplayVersion"
+        if ($versaoAtualizada -ne $ExpectedUpdateVersion) {
+            throw "A atualizacao nao registrou a versao esperada: $versaoAtualizada"
+        }
+        if (-not (Test-Path -LiteralPath $caminhoConfiguracao -PathType Leaf) -or
+            -not (Test-Path -LiteralPath $sentinela -PathType Leaf)) {
+            throw "A atualizacao nao preservou os dados do usuario."
+        }
+
+        $tray = Start-Process `
+            -FilePath $caminhoTray `
+            -WorkingDirectory (Split-Path -Parent $caminhoTray) `
+            -PassThru
+        Start-Sleep -Seconds 3
+        if ($tray.HasExited) {
+            throw "O Tray instalado apos a atualizacao encerrou com codigo $($tray.ExitCode)."
+        }
         Stop-Process -Id $tray.Id
         $tray.WaitForExit()
         $tray = $null
@@ -227,6 +309,14 @@ if (-not (Test-Path -LiteralPath $caminhoDesinstalacaoLog -PathType Leaf)) {
     throw "O log da desinstalacao nao foi criado: $caminhoDesinstalacaoLog"
 }
 
+if (-not (Test-Path -LiteralPath $caminhoReparoLog -PathType Leaf)) {
+    throw "O log do reparo nao foi criado: $caminhoReparoLog"
+}
+
+if (-not (Test-Path -LiteralPath $caminhoAtualizacaoLog -PathType Leaf)) {
+    throw "O log da atualizacao nao foi criado: $caminhoAtualizacaoLog"
+}
+
 if (Test-Path -LiteralPath $diretorioInstalacao) {
     throw "O diretorio do programa permaneceu depois da desinstalacao: $diretorioInstalacao"
 }
@@ -240,6 +330,7 @@ if (-not (Test-Path -LiteralPath $sentinela -PathType Leaf)) {
 }
 
 $hashInstalador = (Get-FileHash -LiteralPath $instalador -Algorithm SHA256).Hash.ToLowerInvariant()
+$hashAtualizador = (Get-FileHash -LiteralPath $atualizador -Algorithm SHA256).Hash.ToLowerInvariant()
 $inicioValidacao = Get-Date -Format "yyyy-MM-ddTHH:mm:ssK"
 
 $resultado = @"
@@ -247,6 +338,8 @@ $resultado = @"
 
 - Instalador: ``$instalador``
 - SHA-256: ``$hashInstalador``
+- Instalador de atualizacao: ``$atualizador``
+- SHA-256 da atualizacao: ``$hashAtualizador``
 - Windows: ``$([Environment]::OSVersion.VersionString)``
 - Evidencia registrada em: ``$inicioValidacao``
 - Codigo de instalacao: ``$codigoInstalacao``
@@ -258,6 +351,11 @@ $resultado = @"
 - Configuracao criada no primeiro uso: ``$configuracaoCriada``
 - Inicializacao com Windows permaneceu opcional: ``$inicioWindowsPermaneceuOpcional``
 - Versao instalada: ``$versaoInstalada``
+- Codigo de reparo: ``$codigoReparo``
+- Log de reparo criado: ``true``
+- Codigo de atualizacao: ``$codigoAtualizacao``
+- Log de atualizacao criado: ``true``
+- Versao atualizada: ``$versaoAtualizada``
 - Codigo de desinstalacao: ``$codigoDesinstalacao``
 - Log de desinstalacao criado: ``true``
 - Diretorio do programa removido: ``true``

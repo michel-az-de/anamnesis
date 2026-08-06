@@ -66,6 +66,55 @@ public sealed partial class InstallerContractTests
         Assert.DoesNotContain("DisableProgramGroupPage=yes", inno, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void InstaladorDeveOrientarInstalacaoAtualizacaoEReparoComTermosEIdentidadeVisual()
+    {
+        var raiz = EncontrarRaizRepositorio();
+        var inno = File.ReadAllText(Path.Combine(raiz, "installer", "Anamnesis.iss"));
+        var termos = File.ReadAllText(Path.Combine(raiz, "installer", "Termos-de-Uso.txt"));
+        var projetoTray = File.ReadAllText(Path.Combine(
+            raiz,
+            "src",
+            "Anamnesis.Tray",
+            "Anamnesis.Tray.csproj"));
+
+        Assert.Contains("LicenseFile=Termos-de-Uso.txt", inno, StringComparison.Ordinal);
+        Assert.Contains("TModoInstalacao", inno, StringComparison.Ordinal);
+        Assert.Contains("miInstalar", inno, StringComparison.Ordinal);
+        Assert.Contains("miAtualizar", inno, StringComparison.Ordinal);
+        Assert.Contains("miReparar", inno, StringComparison.Ordinal);
+        Assert.Contains("UsePreviousAppDir=yes", inno, StringComparison.Ordinal);
+        Assert.Contains("WizardStyle=modern dynamic", inno, StringComparison.Ordinal);
+        Assert.Contains("WizardImageFile={#SourceRoot}\\tray\\Anamnesis.png", inno, StringComparison.Ordinal);
+        Assert.Contains("WizardImageBackColor=$10172E", inno, StringComparison.Ordinal);
+        Assert.Contains("SolicitarEncerramentoDoTray", inno, StringComparison.Ordinal);
+        Assert.Contains("--encerrar-para-atualizacao", inno, StringComparison.Ordinal);
+        Assert.Contains("CheckForMutexes", inno, StringComparison.Ordinal);
+        Assert.Contains("CloseApplications=no", inno, StringComparison.Ordinal);
+        Assert.DoesNotContain("CloseApplications=yes", inno, StringComparison.Ordinal);
+        Assert.Contains("UninstallDisplayIcon={app}\\tray\\Anamnesis.ico", inno, StringComparison.Ordinal);
+        Assert.Contains("IconFilename: \"{app}\\tray\\Anamnesis.ico\"", inno, StringComparison.Ordinal);
+        Assert.Contains("Termos simples de uso", termos, StringComparison.Ordinal);
+        Assert.Contains("gravações", termos, StringComparison.Ordinal);
+        Assert.Contains("licença MIT", termos, StringComparison.Ordinal);
+        Assert.Contains("Assets\\Anamnesis.png", projetoTray, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SmokeDoInstaladorDeveValidarReparoEAtualizacaoIsolados()
+    {
+        var script = File.ReadAllText(Path.Combine(
+            EncontrarRaizRepositorio(),
+            "scripts",
+            "Test-Installer.ps1"));
+
+        Assert.Contains("UpdateInstallerPath", script, StringComparison.Ordinal);
+        Assert.Contains("reparo.log", script, StringComparison.Ordinal);
+        Assert.Contains("atualizacao.log", script, StringComparison.Ordinal);
+        Assert.Contains("codigoReparo", script, StringComparison.Ordinal);
+        Assert.Contains("codigoAtualizacao", script, StringComparison.Ordinal);
+    }
+
     private static string EncontrarRaizRepositorio()
     {
         var atual = new DirectoryInfo(AppContext.BaseDirectory);

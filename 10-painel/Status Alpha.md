@@ -15,11 +15,11 @@ related: ["[[Anamnesis Home]]", "[[Projeto MOC]]", "[[Indice de SPEKs]]", "[[Pro
 > **Progresso do escopo de engenharia: 100%**
 > **Fluxo ponta a ponta hermético testado: 100%**
 > **Fluxo ponta a ponta com pré-requisitos reais: 100%**
-> **Achados de robustez fechados: 14 de 15**
+> **Achados de robustez fechados: 15 de 16**
 
 O primeiro indicador reconhece a fundação já entregue. O segundo registra o fluxo integrado exercitado sem rede externa, com substitutos locais para os binários indisponíveis. O terceiro só avança quando for possível executar, na mesma máquina, o fluxo completo com OBS, Whisper e uma CLI autenticada configurados. Assim, evitamos confundir estrutura pronta com uma alpha utilizável.
 
-O quarto indicador acompanha quinze achados conhecidos: os três primeiros indicadores mediam funcionalidade entregue, não resiliência. Ele é deliberadamente uma contagem, e não um percentual de robustez. Quatorze foram corrigidos nas SPEKs 040 a 044 e 046; o décimo quinto, a concentração de 24% da base em dois arquivos de interface, segue aberto por decisão de escopo.
+O quarto indicador acompanha dezesseis achados conhecidos: os três primeiros indicadores mediam funcionalidade entregue, não resiliência. Ele é deliberadamente uma contagem, e não um percentual de robustez. Quinze foram corrigidos nas SPEKs 040 a 044, 046 e 048; a concentração de 24% da base em dois arquivos de interface segue aberta por decisão de escopo.
 
 Duas limitações continuam registradas: um Worker morto no meio da transcrição custa uma execução extra antes de recuperar, porque a recuperação vive na máquina de estados e exige SPEK própria; e a cena anterior do OBS não sobrevive a um Tray encerrado à força.
 
@@ -28,7 +28,7 @@ Duas limitações continuam registradas: um Worker morto no meio da transcriçã
 | Entrega para a alpha | Peso | Concluído | Avanço | Evidência atual |
 | --- | ---: | ---: | ---: | --- |
 | Especificações, ADRs e protocolo multi-LLM | 5% | 100% | 5% | SPEKs 001–004, ADRs 001–003 e protocolo versionados |
-| Solução .NET, qualidade e TDD inicial | 5% | 100% | 5% | Solução compilável e 249 testes automatizados verdes, incluindo OBS, Docker, Tray, Worker black box, Desktop real, observabilidade, motion, detecção local e shell Windows instalado |
+| Solução .NET, qualidade e TDD inicial | 5% | 100% | 5% | Solução compilável e 257 testes automatizados verdes, incluindo OBS, Docker, Tray, Worker black box, Desktop real, observabilidade, motion, detecção local e shell Windows instalado |
 | Ciclo de vida de reunião no domínio | 10% | 100% | 10% | Estados, falha, retentativa, arquivamento e retenção cobertos por testes e persistência |
 | Fila local durável | 10% | 100% | 10% | `SqliteJobQueue` com reserva atômica, liberação e conclusão testadas |
 | Persistência de reuniões | 10% | 100% | 10% | `SqliteReuniaoRepository` persiste e restaura o agregado com testes em banco temporário |
@@ -74,12 +74,14 @@ A alpha estará pronta quando, em uma máquina Windows limpa e com pré-requisit
 | Observabilidade operacional real | SPEK 100% concluída | Journal SQLite isolado, 14 códigos correlacionados, console com dados reais, retenção de 14 dias, canário de privacidade e publicação `artifacts/publish/SPEK-031` ([[ADR-015 Journal SQLite Isolado]]) |
 | Captura instantânea e detecção local | 12 de 13 critérios atendidos | Política assistida e automática opt-in, Core Audio + User32 reais, recuperação segura, JSONL sanitizado, E2E controlado e 249 testes verdes; ensaio Meet + Teams/Zoom pendente ([[ADR-016 Deteccao Local por Core Audio e User32]]) |
 | Experiência Windows instalada | SPEK 100% concluída | Instalador `0.2.0-beta.1` validado nesta máquina e no runner `windows-2025`; identidade própria, uma instância, um atalho, startup `--background`, primeiro uso, Worker interno e desinstalação com logs comprovados pelo run `31068430123` ([[SPEK-045 Experiencia Windows Instalada e Primeiro Uso]]) |
+| Instalador resiliente com atualização e reparo | Em validação | Termos simples, orientação para instalar, atualizar ou reparar, imagem de marca e encerramento cooperativo do Tray compilados com Inno Setup 6.7.3; 257 testes Release verdes. Falta o smoke ampliado em runner Windows limpo ([[SPEK-047 Instalador Resiliente com Atualizacao e Reparo]]) |
 | Concorrência de Worker e fila | SPEK 100% concluída | Mutex por banco impede dois Workers no mesmo job; Red registrado com `A reunião está em 'EmTranscricao'` e saída 1, Green com E2E de dois processos reais ([[ADR-012 Instancia Unica do Worker]]) |
 | Ciclo de vida e recuperação da reunião | SPEK 100% concluída | Falha ao encerrar registra `Falha` e libera o índice de gravação ativa; nova gravação possível sem reiniciar o Tray, provado contra SQLite real |
 | Resiliência de processos externos | SPEK 100% concluída | Deadlock da CLI reproduzido em 30 s e corrigido para menos de 1 s; restauração de cena do OBS com limite de 5 s, verificado por teste |
 | Persistência local determinística | SPEK 100% concluída | Esquema preparado uma vez por instância, banco em WAL e engine SQLite embarcada com versão verificada; +1,9 MB em 121 MB publicados ([[ADR-013 Engine SQLite Embarcada]]) |
 | Configuração local protegida | SPEK 100% concluída | Senha do OBS protegida por DPAPI com migração transparente do formato em texto claro ([[ADR-014 Protecao de Segredos Locais]]) |
 | Espera finita pela exclusividade do Worker | SPEK 100% concluída | Teto de 5 minutos, saída zero, fila intacta e evento `worker.exclusividade_expirada` persistido no journal ([[SPEK-046 Limite da Espera por Exclusividade]]) |
+| Inicialização concorrente do journal | SPEK 100% concluída | Trava de arquivo entre processos, checagem read-only do schema e cem primeiros acessos concorrentes estabilizados ([[SPEK-048 Inicializacao Concorrente do Journal SQLite]]) |
 
 ## Próximo incremento
 
@@ -87,7 +89,7 @@ A alpha estará pronta quando, em uma máquina Windows limpa e com pré-requisit
 
 ## Roadmap pós-alpha
 
-O planejamento pós-alpha está documentado em [[Roadmap de Produto]]. As SPEKs 030, 031, 045 e 046 foram concluídas; a SPEK-032 está em validação com 12 de 13 critérios atendidos; e as SPEKs 033 a 039 permanecem em rascunho para agendas Google e Microsoft, Obsidian, Trello e Azure DevOps.
+O planejamento pós-alpha está documentado em [[Roadmap de Produto]]. As SPEKs 030, 031, 045, 046 e 048 foram concluídas; a SPEK-032 está em validação com 12 de 13 critérios atendidos; e as SPEKs 033 a 039 permanecem em rascunho para agendas Google e Microsoft, Obsidian, Trello e Azure DevOps.
 
 Esse roadmap não altera os 100% da alpha. Novos percentuais só serão criados quando houver uma versão-alvo com pesos próprios, evitando misturar produto futuro com a medição já encerrada.
 
