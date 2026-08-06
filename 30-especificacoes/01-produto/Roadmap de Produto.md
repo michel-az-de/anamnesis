@@ -29,7 +29,7 @@ flowchart LR
 | Horizonte | Resultado | SPEKs | Prioridade | Confianca da direcao |
 | --- | --- | --- | --- | ---: |
 | Concluido | Desktop real e console persistente operam com dados locais | 030, 031 | entregue | 100% |
-| Validacao final | Aplicativo Windows instalado, identificado e operado pela bandeja | 045 | P1 | 95% |
+| Concluido | Aplicativo Windows instalado, identificado e operado pela bandeja | 045 | entregue | 100% |
 | Agora | Validar captura assistida ou automatica em chamadas reais | 032 | P1 | 90% |
 | Contexto de agenda | Eventos Google e Microsoft alimentam o detector local | 033, 034, 035 | P2 | 85% |
 | Conhecimento | Atas sao publicadas em um vault Obsidian sem plugin | 036 | P2 | 95% |

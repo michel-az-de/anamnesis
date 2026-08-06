@@ -5,7 +5,7 @@ tags: [especificacao, windows, tray, instalador, primeiro-uso]
 type: spek
 created: 2026-08-05
 updated: 2026-08-05
-status: in-progress
+status: completed
 summary: Entrega o Anamnesis como um unico produto Windows instalado, identificado, operacional na bandeja e verificavel no primeiro uso.
 related: ["[[SPEK-022 Instalador da Beta em Windows Limpo]]", "[[SPEK-030 Desktop com Dados Reais]]", "[[ADR-017 Provisionamento do Aplicativo Windows]]"]
 ---
@@ -54,10 +54,10 @@ Instalar -> abrir Anamnesis -> validar prontidao -> permanecer na bandeja
 - [x] Menu dinamico oferece as acoes definitivas e reflete pronto, gravando, processamento pendente e recuperacao.
 - [x] Inicializacao com o Windows pode ser ativada ou desativada por usuario e usa `--background`.
 - [x] O instalador cria somente o atalho publico Anamnesis e inicia o Desktop real ao terminar.
-- [ ] Primeiro uso cria configuracao valida, preserva dados anteriores e informa dependencias ausentes sem encerrar o shell.
+- [x] Primeiro uso cria configuracao valida, preserva dados anteriores e informa dependencias ausentes sem encerrar o shell.
 - [x] Com os pre-requisitos desta maquina, o aplicativo instalado abre pronto e inicia o Worker internamente.
 - [x] Testes automatizados cobrem shell e contrato do instalador sem OBS, rede ou CLI real.
-- [ ] Instalacao, execucao visual e desinstalacao geram logs, capturas e hashes reproduziveis.
+- [x] Instalacao, execucao visual e desinstalacao geram logs, capturas e hashes reproduziveis.
 
 ## Testes associados
 
@@ -67,15 +67,16 @@ Instalar -> abrir Anamnesis -> validar prontidao -> permanecer na bandeja
 - `ArquivoConfiguracaoTests`
 - `Test-Installer.ps1`
 
-## Entrega em validacao
+## Entrega concluida
 
 - Instalador final local: `0.2.0-beta.1`, 65.024.601 bytes, SHA-256 `b90ce4e22e41d31a453e7d0504abd34e9e36c155c1d90a5ebc4acc4dda66f17c`.
 - Instalacao real por usuario em `%LocalAppData%\Programs\Anamnesis`, com um atalho publico, inicializacao `--background` e uma unica instancia ativa.
 - Pipeline desta maquina exibido como pronto para OBS, FFmpeg, Whisper em Docker, modelo local e Codex CLI.
 - Worker instalado executado com codigo 0, fila vazia e stderr vazio.
-- Suite Release: 244 testes verdes, sendo 3 Domain, 51 Application e 190 Infrastructure.
+- Suite Release: 245 testes verdes, sendo 3 Domain, 51 Application e 191 Infrastructure.
 - Evidencias locais: `artifacts/evidencias/SPEK-045/resultado-final.md`, capturas da janela, configuracoes e menu da bandeja, log do instalador e logs do Worker.
-- O smoke anterior concluiu instalacao e desinstalacao; o smoke ampliado e isolado aguarda o runner Windows limpo da CI para fechar os dois criterios restantes sem atingir a instalacao real.
+- Smoke ampliado concluido no runner `windows-2025`: run `31068430123`, job `validar-instalador` verde em 2m44s e artefato `8954751968` com instalador e evidencias.
+- O runner limpo validou payload, icone, versao, atalho publico isolado, startup opcional, primeira configuracao, instancia unica, Worker, desinstalacao, preservacao dos dados e logs de instalacao e desinstalacao.
 
 ## Decisoes pendentes
 
