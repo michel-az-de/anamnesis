@@ -74,7 +74,7 @@ A alpha estará pronta quando, em uma máquina Windows limpa e com pré-requisit
 | Observabilidade operacional real | SPEK 100% concluída | Journal SQLite isolado, 14 códigos correlacionados, console com dados reais, retenção de 14 dias, canário de privacidade e publicação `artifacts/publish/SPEK-031` ([[ADR-015 Journal SQLite Isolado]]) |
 | Captura instantânea e detecção local | 12 de 13 critérios atendidos | Política assistida e automática opt-in, Core Audio + User32 reais, recuperação segura, JSONL sanitizado, E2E controlado e 249 testes verdes; ensaio Meet + Teams/Zoom pendente ([[ADR-016 Deteccao Local por Core Audio e User32]]) |
 | Experiência Windows instalada | SPEK 100% concluída | Instalador `0.2.0-beta.1` validado nesta máquina e no runner `windows-2025`; identidade própria, uma instância, um atalho, startup `--background`, primeiro uso, Worker interno e desinstalação com logs comprovados pelo run `31068430123` ([[SPEK-045 Experiencia Windows Instalada e Primeiro Uso]]) |
-| Instalador resiliente com atualização e reparo | Em validação | Termos simples, diagnóstico, comparação binária com Tray canônico, preservação do Tray legado, probe moderno de downgrade e encerramento cooperativo cobertos por 281 testes verdes; probe efêmero compilado com Inno Setup 6.7.3. Falta o smoke ampliado em runner Windows limpo ([[SPEK-047 Instalador Resiliente com Atualizacao e Reparo]]) |
+| Instalador resiliente com atualização e reparo | SPEK 100% concluída | O run `31109639731` migrou beta.1 para beta.4, preservou startup, atalho, configuração, banco e reunião, bloqueou dois downgrades modernos, reparou o Worker e desinstalou com encerramento cooperativo ([[SPEK-047 Instalador Resiliente com Atualizacao e Reparo]]) |
 | Concorrência de Worker e fila | SPEK 100% concluída | Mutex por banco impede dois Workers no mesmo job; Red registrado com `A reunião está em 'EmTranscricao'` e saída 1, Green com E2E de dois processos reais ([[ADR-012 Instancia Unica do Worker]]) |
 | Ciclo de vida e recuperação da reunião | SPEK 100% concluída | Falha ao encerrar registra `Falha` e libera o índice de gravação ativa; nova gravação possível sem reiniciar o Tray, provado contra SQLite real |
 | Resiliência de processos externos | SPEK 100% concluída | Deadlock da CLI reproduzido em 30 s e corrigido para menos de 1 s; restauração de cena do OBS com limite de 5 s, verificado por teste |
@@ -82,11 +82,11 @@ A alpha estará pronta quando, em uma máquina Windows limpa e com pré-requisit
 | Configuração local protegida | SPEK 100% concluída | Senha do OBS protegida por DPAPI com migração transparente do formato em texto claro ([[ADR-014 Protecao de Segredos Locais]]) |
 | Espera finita pela exclusividade do Worker | SPEK 100% concluída | Teto de 5 minutos, saída zero, fila intacta e evento `worker.exclusividade_expirada` persistido no journal ([[SPEK-046 Limite da Espera por Exclusividade]]) |
 | Inicialização concorrente do journal | SPEK 100% concluída | Trava de arquivo entre processos, checagem read-only do schema e cem primeiros acessos concorrentes estabilizados ([[SPEK-048 Inicializacao Concorrente do Journal SQLite]]) |
-| Release canônico do instalador Windows | Em validação | Fonte única, release anterior oficial, promoção GitHub imutável e espelho GitLab protegido implementados. `v0.2.0-beta.1` está publicada e atestada; falta o smoke instalado e a promoção de `v0.2.0-beta.4` ([[SPEK-049 Release Canonico do Instalador Windows]]) |
+| Release canônico do instalador Windows | Em validação | Fonte única, release anterior oficial, promoção GitHub imutável e espelho GitLab protegido implementados. A candidata beta.4 passou o smoke instalado no run `31109639731`; falta a promoção e atestação da tag `v0.2.0-beta.4` ([[SPEK-049 Release Canonico do Instalador Windows]]) |
 
 ## Próximo incremento
 
-**Próximo ciclo: concluir a [[SPEK-049 Release Canonico do Instalador Windows]].** Falta executar o smoke instalado de `0.2.0-beta.1` para `0.2.0-beta.4` no runner Windows e promover a release imutável.
+**Próximo ciclo: concluir a [[SPEK-049 Release Canonico do Instalador Windows]].** Falta promover a tag `v0.2.0-beta.4`, repetir o smoke no commit integrado e verificar a release imutável e seus assets.
 
 ## Roadmap pós-alpha
 

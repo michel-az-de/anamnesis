@@ -60,7 +60,7 @@ related: ["[[Especificacoes MOC]]", "[[Protocolo de Agentes]]", "[[Roadmap de Pr
 | SPEK-044 | [[SPEK-044 Configuracao Local Protegida]] | concluído | `Infrastructure` |
 | SPEK-045 | [[SPEK-045 Experiencia Windows Instalada e Primeiro Uso]] | concluido | `Tray`, `Infrastructure`, `Installer`, `Scripts`, `CI` |
 | SPEK-046 | [[SPEK-046 Limite da Espera por Exclusividade]] | concluido | `Application`, `Infrastructure`, `Worker` |
-| SPEK-047 | [[SPEK-047 Instalador Resiliente com Atualizacao e Reparo]] | em validação | `Tray`, `Installer`, `Scripts`, `CI` |
+| SPEK-047 | [[SPEK-047 Instalador Resiliente com Atualizacao e Reparo]] | concluído | `Tray`, `Installer`, `Scripts`, `CI` |
 | SPEK-048 | [[SPEK-048 Inicializacao Concorrente do Journal SQLite]] | concluido | `Infrastructure` |
 | SPEK-049 | [[SPEK-049 Release Canonico do Instalador Windows]] | em validacao | `Installer`, `Scripts`, `CI`, `Docs` |
 

@@ -5,7 +5,7 @@ tags: [especificacao, instalador, windows, atualizacao, reparo]
 type: spek
 created: 2026-08-06
 updated: 2026-08-06
-status: validating
+status: completed
 summary: Evolui o instalador elevado por usuario para diagnosticar instalacao, comparar versoes, orientar reparo e encerrar o Tray de forma cooperativa.
 related: ["[[SPEK-045 Experiencia Windows Instalada e Primeiro Uso]]", "[[ADR-008 Instalador por Usuario com Inno Setup]]", "[[ADR-017 Provisionamento do Aplicativo Windows]]"]
 ---
@@ -63,13 +63,13 @@ Tray aberto                             -> solicitar encerramento seguro e mante
 - [x] Um diagnostico persistido de tentativa anterior aparece no wizard e oferece reparo quando aplicavel.
 - [x] Um Tray de versao nova recebe pedido de encerramento cooperativo e sai quando nao ha gravacao ativa.
 - [x] Um Tray legado sem o protocolo cooperativo permanece ativo e bloqueia a atualizacao ate fechamento manual.
-- [ ] Um instalador diagnostico moderno com versao inferior bloqueia downgrade com payload integro e incompleto, sem alterar processo, binarios ou dados.
+- [x] Um instalador diagnostico moderno com versao inferior bloqueia downgrade com payload integro e incompleto, sem alterar processo, binarios ou dados.
 - [x] Um Tray com gravacao ativa nao e finalizado a forca e o instalador devolve orientacao compreensivel.
 - [x] O instalador compila com Inno Setup 6.7.3 e mostra a acao `Instalar`, `Atualizar` ou `Reparar` no resumo final.
-- [ ] O smoke em diretorio isolado instala, abre o Tray, repara um payload incompleto, atualiza para uma versao de teste e preserva dados do usuario.
-- [ ] A atualizacao e o reparo preservam o atalho publico, a configuracao, o banco e a desinstalacao posterior.
+- [x] O smoke em diretorio isolado instala, abre o Tray, repara um payload incompleto, atualiza para uma versao de teste e preserva dados do usuario.
+- [x] A atualizacao e o reparo preservam o atalho publico, a configuracao, o banco e a desinstalacao posterior.
 - [x] O smoke valida a versao registrada no hive efetivamente vigente depois da migracao elevada de `HKCU` para `HKLM`.
-- [ ] Uma atualizacao elevada preserva a opcao de inicializacao com o Windows que estava desativada na instalacao legada.
+- [x] Uma atualizacao elevada preserva a opcao de inicializacao com o Windows que estava desativada na instalacao legada.
 - [x] A instalacao nova oferece abrir o Anamnesis ao concluir; atualizacao e reparo nao o abrem.
 
 ## Testes associados
@@ -100,6 +100,8 @@ Tray aberto                             -> solicitar encerramento seguro e mante
 - Green de regressao: a necessidade de preservar o startup e calculada depois do diagnostico, aplicada uma unica vez em `CurPageChanged(wpSelectTasks)`, confirmada por `WizardIsTaskSelected` e protegida pelo preflight; instalacoes novas nao entram nesse guard. O contrato dedicado passou e o instalador `0.2.0-beta.4` compilou com Inno Setup 6.7.3, SHA-256 `98e646f76a436eb55095d7575c18bcd080c773a32e8da5b681b6936e7c84ee5b`.
 - Red E2E real no run `31108401017`: o probe moderno foi bloqueado com codigo diferente de zero, mas `NextButtonClick` abortou na pagina de acao antes do preflight e o log nao registrou a causa `downgrade automatico` exigida pela evidencia.
 - Green de regressao: o primeiro ramo de bloqueio registra a causa explicita antes da mensagem e do aborto; o contrato dedicado passou e o instalador compilou com Inno Setup 6.7.3, SHA-256 `788a2d0f022281eb1875fc81b9184979c014889b61c4c60a91f875f93591241d`.
+- Green E2E instalado: o run `31109639731` aprovou em `windows-2025` a migracao `0.2.0-beta.1` para `0.2.0-beta.4`, o bloqueio do Tray legado, os dois downgrades modernos, o reparo do Worker ausente e a desinstalacao cooperativa. O artifact `candidato-anamnesis-0.2.0-beta.4-31109639731` registrou SHA-256 `e1321b5a00f463334841f633353456527558f80f4be7579151bd1ecab9b05ba7`.
+- Auditoria do artifact: startup permaneceu desativado; atalho, configuracao e banco mantiveram seus hashes; o Tray permaneceu vivo nos bloqueios; `worker.stderr.log` ficou vazio; e a reuniao sentinela `85b810e959924d55b77044c639dcc4e1` continuou consultavel no SQLite apos a desinstalacao sem alterar o hash do banco.
 - Prova de compilacao local: `Build-DowngradeProbe.ps1` reutilizou o payload canonico e gerou o EXE `0.0.1.0` nao publicavel com SHA-256 `ac1d92ae69193ebd47ac7d12e54b8e0387a5332277150959db364d59e9078a09`, igual ao manifesto efemero.
 - Inno Setup 6.7.3 compilou o instalador `0.2.0-beta.2`; SHA-256 local `bf6cfdc55d1c24e752ee6683b5704b2a20364f5221ec13f61f5ae69868d020e0`.
 - A instalacao real deste usuario foi preservada. A validacao instalada deste incremento sera executada somente no runner Windows efemero.
@@ -107,4 +109,4 @@ Tray aberto                             -> solicitar encerramento seguro e mante
 ## Decisoes pendentes
 
 - Assinatura de codigo e canal automatico de distribuicao terao SPEK e ADR proprias.
-- Falta executar o smoke ampliado em runner Windows limpo. A instalacao real deste usuario foi preservada de proposito durante a validacao local.
+- A instalacao real deste usuario foi preservada de proposito; o smoke ampliado aprovado usou somente o runner Windows efemero e diretorios isolados.
