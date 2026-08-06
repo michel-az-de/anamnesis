@@ -12,6 +12,8 @@ internal sealed class DesktopDemoSession : IDesktopSession
 
     public IReadOnlyList<ReuniaoDesktopPoc> Reunioes => _state.Reunioes;
 
+    public Guid? ReuniaoAcompanhadaId => _state.ReuniaoAcompanhadaId;
+
     public Task AtualizarAsync(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -21,7 +23,7 @@ internal sealed class DesktopDemoSession : IDesktopSession
     public Task IniciarGravacaoAsync(string titulo, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        _state.IniciarGravacao();
+        _state.IniciarGravacao(titulo);
         return Task.CompletedTask;
     }
 

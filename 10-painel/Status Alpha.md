@@ -28,7 +28,7 @@ Duas limitações continuam registradas: um Worker morto no meio da transcriçã
 | Entrega para a alpha | Peso | Concluído | Avanço | Evidência atual |
 | --- | ---: | ---: | ---: | --- |
 | Especificações, ADRs e protocolo multi-LLM | 5% | 100% | 5% | SPEKs 001–004, ADRs 001–003 e protocolo versionados |
-| Solução .NET, qualidade e TDD inicial | 5% | 100% | 5% | Solução compilável e 281 testes automatizados verdes, incluindo OBS, Docker, Tray, Worker black box, Desktop real, observabilidade, motion, detecção local e release Windows |
+| Solução .NET, qualidade e TDD inicial | 5% | 100% | 5% | Solução compilável e 284 testes automatizados verdes, incluindo OBS, Docker, Tray, Worker black box, Desktop real, observabilidade, motion, detecção local e release Windows |
 | Ciclo de vida de reunião no domínio | 10% | 100% | 10% | Estados, falha, retentativa, arquivamento e retenção cobertos por testes e persistência |
 | Fila local durável | 10% | 100% | 10% | `SqliteJobQueue` com reserva atômica, liberação e conclusão testadas |
 | Persistência de reuniões | 10% | 100% | 10% | `SqliteReuniaoRepository` persiste e restaura o agregado com testes em banco temporário |
@@ -83,14 +83,15 @@ A alpha estará pronta quando, em uma máquina Windows limpa e com pré-requisit
 | Espera finita pela exclusividade do Worker | SPEK 100% concluída | Teto de 5 minutos, saída zero, fila intacta e evento `worker.exclusividade_expirada` persistido no journal ([[SPEK-046 Limite da Espera por Exclusividade]]) |
 | Inicialização concorrente do journal | SPEK 100% concluída | Trava de arquivo entre processos, checagem read-only do schema e cem primeiros acessos concorrentes estabilizados ([[SPEK-048 Inicializacao Concorrente do Journal SQLite]]) |
 | Release canônico do instalador Windows | SPEK 100% concluída | O run [`31116896797`](https://github.com/michel-az-de/anamnesis/actions/runs/31116896797) concluiu o smoke e a promoção. A [release `v0.2.0-beta.5`](https://github.com/michel-az-de/anamnesis/releases/tag/v0.2.0-beta.5) é imutável, atestada por `gh release verify` e tem EXE, `SHA256SUMS.txt` e `release.json` verificados por `gh release verify-asset`; SHA-256 oficial do EXE: `d9a93b43d65c3ebc85069a8c600ba24f36c8a1d1bde1bccfa2bacf9e36742dc5` ([[SPEK-049 Release Canonico do Instalador Windows]]) |
+| Fluxo de processamento assistido no Tray | SPEK 100% concluída | Título manual no Command Deck e no menu do Tray, barra indeterminada, console correlacionado por `ReuniaoId`, abertura direta na aba Transcrição e polling incremental sem recriar a página ativa; 284 testes Release verdes ([[SPEK-050 Fluxo de Processamento Assistido no Tray]]) |
 
 ## Próximo incremento
 
-**Próximo ciclo: concluir a [[SPEK-032 Captura Instantanea e Deteccao Local]].** Falta o ensaio de Meet + Teams/Zoom para fechar o décimo terceiro critério.
+**Próximo ciclo: concluir a [[SPEK-032 Captura Instantanea e Deteccao Local]].** A SPEK-050 corrigiu o refresh durante transcrição e tornou o fluxo manual de reunião visível e acionável.
 
 ## Roadmap pós-alpha
 
-O planejamento pós-alpha está documentado em [[Roadmap de Produto]]. As SPEKs 030, 031, 045, 046 e 048 foram concluídas; a SPEK-032 está em validação com 12 de 13 critérios atendidos; e as SPEKs 033 a 039 permanecem em rascunho para agendas Google e Microsoft, Obsidian, Trello e Azure DevOps.
+O planejamento pós-alpha está documentado em [[Roadmap de Produto]]. As SPEKs 030, 031, 045, 046, 048, 049 e 050 foram concluídas; a SPEK-032 está em validação com 12 de 13 critérios atendidos; e as SPEKs 033 a 039 permanecem em rascunho para agendas Google e Microsoft, Obsidian, Trello e Azure DevOps.
 
 Esse roadmap não altera os 100% da alpha. Novos percentuais só serão criados quando houver uma versão-alvo com pesos próprios, evitando misturar produto futuro com a medição já encerrada.
 

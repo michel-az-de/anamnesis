@@ -333,9 +333,18 @@ internal static class Program
 
         iniciar.Click += async (_, _) =>
         {
+            var titulo = DialogoTituloReuniao.Solicitar(
+                null,
+                DesktopPocTheme.ObterAtual(),
+                DesktopPocSystemPreferences.Obter());
+            if (titulo is null)
+            {
+                return;
+            }
+
             try
             {
-                await sessaoDesktop.IniciarGravacaoAsync("Reunião sem título", CancellationToken.None);
+                await sessaoDesktop.IniciarGravacaoAsync(titulo, CancellationToken.None);
                 iniciar.Enabled = false;
                 encerrar.Enabled = true;
                 icone.ShowBalloonTip(3000, "Anamnesis", "Gravação iniciada.", ToolTipIcon.Info);

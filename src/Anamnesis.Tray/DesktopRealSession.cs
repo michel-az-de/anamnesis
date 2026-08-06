@@ -68,6 +68,8 @@ internal sealed class DesktopRealSession(
     public Guid? ReuniaoAtivaId =>
         Etapa == EtapaDesktopPoc.Gravando ? _reuniaoAcompanhadaId : null;
 
+    public Guid? ReuniaoAcompanhadaId => _reuniaoAcompanhadaId;
+
     public DesktopRuntimeInfo? Ambiente => ambiente;
 
     public async Task AtualizarAsync(CancellationToken cancellationToken)
@@ -279,13 +281,19 @@ internal sealed class DesktopRealSession(
             return;
         }
 
-        Etapa = resumos.Any(reuniao => reuniao.Status is
+        var emProcessamento = resumos.FirstOrDefault(reuniao => reuniao.Status is
             StatusReuniao.AguardandoProcessamento or
             StatusReuniao.EmTranscricao or
             StatusReuniao.EmAnalise or
-            StatusReuniao.AguardandoArquivamento)
-            ? EtapaDesktopPoc.Processando
-            : EtapaDesktopPoc.Pronto;
+            StatusReuniao.AguardandoArquivamento);
+        if (emProcessamento is not null)
+        {
+            _reuniaoAcompanhadaId = emProcessamento.Id;
+            Etapa = EtapaDesktopPoc.Processando;
+            return;
+        }
+
+        Etapa = EtapaDesktopPoc.Pronto;
     }
 
     private ReuniaoDesktopPoc MapearResumo(ReuniaoResumo resumo) => new()

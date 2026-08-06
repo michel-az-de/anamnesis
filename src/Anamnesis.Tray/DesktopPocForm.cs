@@ -26,12 +26,21 @@ internal sealed class DesktopPocForm : Form
     private readonly CancellationTokenSource _lifetime = new();
     private string _paginaAtual = "inicio";
     private Guid? _reuniaoDetalheId;
+    private Guid? _reuniaoAcompanhadaId;
+    private string? _filtroObservabilidade;
     private bool _pollingEmAndamento;
-    private string? _assinaturaDados;
     private int _versaoNavegacao;
     private Label? _cronometro;
     private DesktopSignalMeter? _audioSistema;
     private DesktopSignalMeter? _microfone;
+    private DesktopSurfacePanel? _cartaoProcessamento;
+    private Label? _tituloProcessamento;
+    private Label? _descricaoProcessamento;
+    private Label? _estadoProcessamento;
+    private ProgressBar? _barraProcessamento;
+    private DesktopActionButton? _abrirLogsProcessamento;
+    private DesktopActionButton? _abrirTranscricaoProcessamento;
+    private Action? _atualizarConsoleObservabilidade;
     private int _onda;
 
     public DesktopPocForm()
@@ -264,10 +273,11 @@ internal sealed class DesktopPocForm : Form
         return botao;
     }
 
-    private void Navegar(string pagina)
+    private void Navegar(string pagina, string? filtroObservabilidade = null)
     {
         _versaoNavegacao++;
         _paginaAtual = pagina;
+        _filtroObservabilidade = pagina == "observabilidade" ? filtroObservabilidade : null;
         if (pagina != "detalhe")
         {
             _reuniaoDetalheId = null;
@@ -286,6 +296,7 @@ internal sealed class DesktopPocForm : Form
         }
 
         _conteudo.SuspendLayout();
+        LimparReferenciasDaPagina();
         _conteudo.Controls.Clear();
         var novaPagina = pagina switch
         {
@@ -303,6 +314,21 @@ internal sealed class DesktopPocForm : Form
         {
             DesktopPocMotion.AnimarEntrada(novaPagina, novaPagina.Bounds, _tokens.Motion, animacoesAtivas: true);
         }
+    }
+
+    private void LimparReferenciasDaPagina()
+    {
+        _cronometro = null;
+        _audioSistema = null;
+        _microfone = null;
+        _cartaoProcessamento = null;
+        _tituloProcessamento = null;
+        _descricaoProcessamento = null;
+        _estadoProcessamento = null;
+        _barraProcessamento = null;
+        _abrirLogsProcessamento = null;
+        _abrirTranscricaoProcessamento = null;
+        _atualizarConsoleObservabilidade = null;
     }
 
     private Panel CriarTelaInicio()
@@ -428,7 +454,7 @@ internal sealed class DesktopPocForm : Form
         return pagina;
     }
 
-    private Panel CriarTelaDetalhe(ReuniaoDesktopPoc reuniao)
+    private Panel CriarTelaDetalhe(ReuniaoDesktopPoc reuniao, string abaInicial = "Resumo")
     {
         var voltar = CriarBotaoSecundario("←  Voltar", (_, _) => Navegar("reunioes"));
         var pagina = CriarPagina(
@@ -487,7 +513,7 @@ internal sealed class DesktopPocForm : Form
 
         corpo.Controls.Add(detalhe);
         corpo.Controls.Add(abas);
-        Selecionar("Resumo");
+        Selecionar(nomes.Contains(abaInicial, StringComparer.Ordinal) ? abaInicial : "Resumo");
         return pagina;
     }
 
@@ -754,15 +780,8 @@ internal sealed class DesktopPocForm : Form
     private Panel CriarTelaAtividade()
     {
         var pagina = CriarPagina("Atividade", "Processamento local e eventos operacionais", null, out var corpo);
+        var reuniaoAcompanhada = ObterReuniaoAcompanhada();
         var itens = new List<(string, string, string)>();
-        if (_sessao.Etapa == EtapaDesktopPoc.Processando)
-        {
-            itens.Add(("Reunião sem título", "Whisper transcrevendo localmente", "Processando"));
-        }
-        else if (_sessao.Etapa == EtapaDesktopPoc.Concluido)
-        {
-            itens.Add(("Reunião sem título", "Transcrição e ata concluídas", "Concluído"));
-        }
 
         if (_sessao.ModoDemonstracao)
         {
@@ -772,6 +791,7 @@ internal sealed class DesktopPocForm : Form
         else
         {
             itens.AddRange(_sessao.Reunioes
+                .Where(reuniao => reuniaoAcompanhada is null || reuniao.Id != reuniaoAcompanhada.Id)
                 .Take(20)
                 .Select(reuniao => (
                     reuniao.Titulo,
@@ -784,16 +804,157 @@ internal sealed class DesktopPocForm : Form
 
         if (_sessao.Etapa is EtapaDesktopPoc.Processando or EtapaDesktopPoc.Concluido)
         {
-            var mensagem = _sessao.Etapa == EtapaDesktopPoc.Processando
-                ? _sessao.ModoDemonstracao
-                    ? "Gravação salva. Whisper iniciou a transcrição local simulada."
-                    : "Gravação salva. O Worker iniciou o processamento local."
-                : "Transcrição e ata concluídas. A reunião está disponível no histórico.";
-            corpo.Controls.Add(CriarAviso(mensagem));
+            corpo.Controls.Add(CriarCartaoAcompanhamentoProcessamento());
         }
 
         return pagina;
     }
+
+    private DesktopSurfacePanel CriarCartaoAcompanhamentoProcessamento()
+    {
+        _cartaoProcessamento = CriarCartao(DesktopSurfaceVariant.Elevated, accent: _paleta.Destaque);
+        _cartaoProcessamento.Dock = DockStyle.Top;
+        _cartaoProcessamento.Height = 194;
+        _cartaoProcessamento.Margin = new Padding(0, 0, 0, 12);
+        _cartaoProcessamento.Padding = new Padding(20);
+
+        _estadoProcessamento = CriarLabel(
+            "PROCESSAMENTO LOCAL",
+            8.5F,
+            _paleta.Destaque,
+            new Point(20, 16),
+            FontStyle.Bold);
+        _estadoProcessamento.Font = new Font(
+            _tokens.Tipografia.Mono,
+            8.5F,
+            FontStyle.Bold,
+            GraphicsUnit.Point);
+        _tituloProcessamento = CriarLabel("", 13F, _paleta.Texto, new Point(20, 42), FontStyle.Bold);
+        _descricaoProcessamento = CriarLabel("", 9.5F, _paleta.TextoSecundario, new Point(20, 70));
+        _barraProcessamento = new ProgressBar
+        {
+            Location = new Point(20, 100),
+            Height = 14,
+            Style = ProgressBarStyle.Marquee,
+            MarqueeAnimationSpeed = 30,
+            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
+        };
+        _cartaoProcessamento.Resize += (_, _) =>
+        {
+            if (_barraProcessamento is not null)
+            {
+                _barraProcessamento.Width = Math.Max(160, _cartaoProcessamento.ClientSize.Width - 40);
+            }
+        };
+        _abrirLogsProcessamento = CriarBotaoSecundario("Ver console de logs", (_, _) =>
+        {
+            var reuniao = ObterReuniaoAcompanhada();
+            if (reuniao is not null)
+            {
+                AbrirConsoleDaReuniao(reuniao.Id);
+            }
+        });
+        _abrirLogsProcessamento.Location = new Point(20, 134);
+        _abrirTranscricaoProcessamento = CriarBotaoPrimario("Abrir transcrição", (_, _) =>
+        {
+            var reuniao = ObterReuniaoAcompanhada();
+            if (reuniao is not null)
+            {
+                AbrirTranscricaoDaReuniao(reuniao.Id);
+            }
+        });
+        _abrirTranscricaoProcessamento.Location = new Point(170, 134);
+
+        _cartaoProcessamento.Controls.Add(_abrirTranscricaoProcessamento);
+        _cartaoProcessamento.Controls.Add(_abrirLogsProcessamento);
+        _cartaoProcessamento.Controls.Add(_barraProcessamento);
+        _cartaoProcessamento.Controls.Add(_descricaoProcessamento);
+        _cartaoProcessamento.Controls.Add(_tituloProcessamento);
+        _cartaoProcessamento.Controls.Add(_estadoProcessamento);
+        AtualizarAcompanhamentoProcessamento();
+        return _cartaoProcessamento;
+    }
+
+    private void AtualizarAcompanhamentoProcessamento()
+    {
+        if (_cartaoProcessamento is null ||
+            _cartaoProcessamento.IsDisposed ||
+            _tituloProcessamento is null ||
+            _descricaoProcessamento is null ||
+            _estadoProcessamento is null ||
+            _barraProcessamento is null ||
+            _abrirLogsProcessamento is null ||
+            _abrirTranscricaoProcessamento is null)
+        {
+            return;
+        }
+
+        var reuniao = ObterReuniaoAcompanhada();
+        var emProcessamento = _sessao.Etapa == EtapaDesktopPoc.Processando;
+        var concluido = _sessao.Etapa == EtapaDesktopPoc.Concluido && reuniao is not null;
+        _cartaoProcessamento.Visible = emProcessamento || concluido;
+        if (!_cartaoProcessamento.Visible)
+        {
+            return;
+        }
+
+        var titulo = reuniao?.Titulo ?? "Reunião em processamento";
+        _estadoProcessamento.Text = concluido ? "PROCESSAMENTO CONCLUÍDO" : "PROCESSAMENTO LOCAL";
+        _estadoProcessamento.ForeColor = concluido ? _paleta.Positivo : _paleta.Destaque;
+        _tituloProcessamento.Text = concluido ? $"Concluída: {titulo}" : $"Em processamento: {titulo}";
+        _descricaoProcessamento.Text = concluido
+            ? "Transcrição e ata concluídas. Abra a reunião diretamente na aba de transcrição."
+            : DescreverProcessamento(reuniao);
+        _barraProcessamento.Visible = emProcessamento;
+        _barraProcessamento.MarqueeAnimationSpeed = emProcessamento ? 30 : 0;
+        _abrirLogsProcessamento.Visible = reuniao is not null;
+        _abrirTranscricaoProcessamento.Visible = concluido;
+    }
+
+    private string DescreverProcessamento(ReuniaoDesktopPoc? reuniao) => reuniao?.Status switch
+    {
+        "Aguardando processamento" => "Gravação salva. Aguardando o Worker local iniciar.",
+        "Transcrevendo" => "Whisper transcrevendo localmente.",
+        "Gerando ata" => "Gerando a ata estruturada localmente.",
+        "Arquivando" => "Arquivando os artefatos locais da reunião.",
+        _ => _sessao.ModoDemonstracao
+            ? "Gravação salva. Whisper iniciou a transcrição local simulada."
+            : "Gravação salva. O Worker iniciou o processamento local."
+    };
+
+    private ReuniaoDesktopPoc? ObterReuniaoAcompanhada()
+    {
+        var reuniaoId = _sessao.ReuniaoAcompanhadaId ?? _reuniaoAcompanhadaId;
+        if (reuniaoId is not null)
+        {
+            var reuniao = _sessao.Reunioes.FirstOrDefault(item => item.Id == reuniaoId.Value);
+            if (reuniao is not null)
+            {
+                _reuniaoAcompanhadaId = reuniao.Id;
+                return reuniao;
+            }
+        }
+
+        var emProcessamento = _sessao.Reunioes.FirstOrDefault(reuniao =>
+            reuniao.Status is "Aguardando processamento" or "Transcrevendo" or "Gerando ata" or "Arquivando");
+        if (emProcessamento is not null)
+        {
+            _reuniaoAcompanhadaId = emProcessamento.Id;
+        }
+
+        return emProcessamento;
+    }
+
+    private void AtualizarReuniaoAcompanhada()
+    {
+        _ = ObterReuniaoAcompanhada();
+    }
+
+    private void AbrirConsoleDaReuniao(Guid reuniaoId) =>
+        Navegar("observabilidade", $"r:{reuniaoId:N}");
+
+    private async void AbrirTranscricaoDaReuniao(Guid reuniaoId) =>
+        await AbrirDetalheAsync(reuniaoId, "Transcrição");
 
     private Panel CriarTelaObservabilidade()
     {
@@ -883,6 +1044,7 @@ internal sealed class DesktopPocForm : Form
         var busca = CriarCampoTexto("Filtrar evento, mensagem ou correlação");
         busca.Dock = DockStyle.Fill;
         busca.Margin = new Padding(0, 2, 10, 2);
+        busca.Text = _filtroObservabilidade ?? string.Empty;
         var nivel = CriarCombo(NiveisObservabilidade);
         nivel.Dock = DockStyle.Fill;
         nivel.Margin = new Padding(0, 2, 10, 2);
@@ -980,6 +1142,7 @@ internal sealed class DesktopPocForm : Form
         nivel.SelectedIndexChanged += (_, _) => AtualizarConsole();
         intervalo.SelectedIndexChanged += (_, _) => AtualizarConsole();
         componente.SelectedIndexChanged += (_, _) => AtualizarConsole();
+        _atualizarConsoleObservabilidade = AtualizarConsole;
 
         corpo.Controls.Add(console);
         corpo.Controls.Add(filtros);
@@ -1592,19 +1755,32 @@ internal sealed class DesktopPocForm : Form
         return botao;
     }
 
-    private async void IniciarGravacao() => await IniciarGravacaoAgoraAsync();
+    private async void IniciarGravacao()
+    {
+        var titulo = DialogoTituloReuniao.Solicitar(this, _tema, _politicaVisual);
+        await IniciarGravacaoSeTituloConfirmadoAgoraAsync(titulo);
+    }
 
-    internal async Task IniciarGravacaoAgoraAsync()
+    internal Task IniciarGravacaoAgoraAsync() =>
+        IniciarGravacaoComTituloAgoraAsync(TituloReuniaoManual.Padrao);
+
+    internal Task IniciarGravacaoSeTituloConfirmadoAgoraAsync(string? titulo) =>
+        titulo is null ? Task.CompletedTask : IniciarGravacaoComTituloAgoraAsync(titulo);
+
+    internal async Task IniciarGravacaoComTituloAgoraAsync(string titulo)
     {
         var cancellationToken = _lifetime.Token;
         try
         {
-            await _sessao.IniciarGravacaoAsync("Reunião sem título", cancellationToken);
+            await _sessao.IniciarGravacaoAsync(
+                TituloReuniaoManual.Normalizar(titulo),
+                cancellationToken);
             if (IsDisposed)
             {
                 return;
             }
 
+            _reuniaoAcompanhadaId = _sessao.ReuniaoAcompanhadaId ?? _sessao.ReuniaoAtivaId;
             if (_sessao.ModoDemonstracao)
             {
                 _observabilidade.RegistrarInicioGravacao();
@@ -1654,7 +1830,9 @@ internal sealed class DesktopPocForm : Form
         }
     }
 
-    private async void EncerrarGravacao()
+    private async void EncerrarGravacao() => await EncerrarGravacaoAgoraAsync();
+
+    internal async Task EncerrarGravacaoAgoraAsync()
     {
         try
         {
@@ -1670,6 +1848,7 @@ internal sealed class DesktopPocForm : Form
                 _observabilidade.RegistrarFimGravacao(_sessao.DuracaoGravacao);
             }
 
+            AtualizarReuniaoAcompanhada();
             _estadoGlobal.Text = "Processando localmente";
             _estadoGlobal.ForeColor = _paleta.Destaque;
             Navegar("atividade");
@@ -1688,6 +1867,7 @@ internal sealed class DesktopPocForm : Form
             _timerGravacao.Stop();
             _estadoGlobal.Text = "Processamento pendente";
             _estadoGlobal.ForeColor = _paleta.Destaque;
+            AtualizarReuniaoAcompanhada();
             Navegar("atividade");
             MostrarFalhaSegura(
                 $"{exception.Message} O job permanece salvo e pode ser retomado pelo Tray.",
@@ -1720,16 +1900,15 @@ internal sealed class DesktopPocForm : Form
         }
         _estadoGlobal.Text = "Tudo funcionando";
         _estadoGlobal.ForeColor = _paleta.Positivo;
-        if (_paginaAtual is "atividade" or "observabilidade")
-        {
-            Navegar(_paginaAtual);
-        }
+        AtualizarReuniaoAcompanhada();
+        AtualizarAcompanhamentoProcessamento();
+        _atualizarConsoleObservabilidade?.Invoke();
     }
 
     private string FormatarCronometro() =>
         $"{(int)_sessao.DuracaoGravacao.TotalMinutes:00}:{_sessao.DuracaoGravacao.Seconds:00}";
 
-    private async Task AbrirDetalheAsync(Guid reuniaoId)
+    private async Task AbrirDetalheAsync(Guid reuniaoId, string abaInicial = "Resumo")
     {
         var versaoSolicitacao = ++_versaoNavegacao;
         try
@@ -1750,8 +1929,10 @@ internal sealed class DesktopPocForm : Form
 
             _reuniaoDetalheId = reuniaoId;
             _paginaAtual = "detalhe";
+            _filtroObservabilidade = null;
+            LimparReferenciasDaPagina();
             _conteudo.Controls.Clear();
-            _conteudo.Controls.Add(CriarTelaDetalhe(reuniao));
+            _conteudo.Controls.Add(CriarTelaDetalhe(reuniao, abaInicial));
         }
         catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
         {
@@ -1785,43 +1966,10 @@ internal sealed class DesktopPocForm : Form
             _observabilidade.SubstituirEventos(
                 _sessao.EventosOperacionais,
                 _sessao.JobsNaFila);
-
-            var novaAssinatura = string.Join(
-                '|',
-                _sessao.Reunioes.Select(reuniao => $"{reuniao.Id:N}:{reuniao.Status}")
-                    .Concat(_sessao.EventosOperacionais.Select(evento =>
-                        $"{evento.CriadoEm.ToUniversalTime().Ticks}:{evento.Evento}:{evento.CorrelacaoId}"))
-                    .Append($"jobs:{_sessao.JobsNaFila}"));
-            var dadosMudaram = !string.Equals(_assinaturaDados, novaAssinatura, StringComparison.Ordinal);
-            _assinaturaDados = novaAssinatura;
+            AtualizarReuniaoAcompanhada();
             AtualizarEstadoGlobal();
-
-            if (_paginaAtual == "detalhe" && _reuniaoDetalheId is not null)
-            {
-                var detalheId = _reuniaoDetalheId.Value;
-                var versaoNavegacao = _versaoNavegacao;
-                var detalhe = await _sessao.ObterDetalheAsync(
-                    detalheId,
-                    _lifetime.Token);
-                if (!IsDisposed &&
-                    detalhe is not null &&
-                    _paginaAtual == "detalhe" &&
-                    _reuniaoDetalheId == detalheId &&
-                    _versaoNavegacao == versaoNavegacao)
-                {
-                    _conteudo.Controls.Clear();
-                    _conteudo.Controls.Add(CriarTelaDetalhe(detalhe));
-                }
-
-                return;
-            }
-
-            if (!dadosMudaram)
-            {
-                return;
-            }
-
-            Navegar(_paginaAtual);
+            AtualizarAcompanhamentoProcessamento();
+            _atualizarConsoleObservabilidade?.Invoke();
         }
         catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
         {
@@ -1896,8 +2044,8 @@ internal sealed class DesktopPocForm : Form
             MessageBoxIcon.Warning);
     }
 
-    internal Task AbrirDetalheAgoraAsync(Guid reuniaoId) =>
-        AbrirDetalheAsync(reuniaoId);
+    internal Task AbrirDetalheAgoraAsync(Guid reuniaoId, string abaInicial = "Resumo") =>
+        AbrirDetalheAsync(reuniaoId, abaInicial);
 
     internal Task AtualizarAgoraAsync() => AtualizarDadosReaisAsync();
 
