@@ -58,7 +58,7 @@ related: ["[[Especificacoes MOC]]", "[[Protocolo de Agentes]]", "[[Roadmap de Pr
 | SPEK-042 | [[SPEK-042 Ciclo de Vida e Recuperacao da Reuniao]] | concluído | `Application`, `Tray` |
 | SPEK-043 | [[SPEK-043 Persistencia Local Deterministica]] | concluído | `Infrastructure` |
 | SPEK-044 | [[SPEK-044 Configuracao Local Protegida]] | concluído | `Infrastructure` |
-| SPEK-045 | [[SPEK-045 Experiencia Windows Instalada e Primeiro Uso]] | em validacao | `Tray`, `Infrastructure`, `Installer`, `Scripts`, `CI` |
+| SPEK-045 | [[SPEK-045 Experiencia Windows Instalada e Primeiro Uso]] | concluido | `Tray`, `Infrastructure`, `Installer`, `Scripts`, `CI` |
 
 ## Fluxo obrigatório
 
