@@ -1,6 +1,7 @@
 using System.Drawing.Drawing2D;
 using System.Globalization;
 using System.Diagnostics;
+using Anamnesis.Application.Modelos;
 using Anamnesis.Application.UseCases;
 
 namespace Anamnesis.Tray;
@@ -17,22 +18,28 @@ internal sealed class DesktopPocForm : Form
     private readonly DesktopPocEffectsPolicy _politicaVisual;
     private readonly IDesktopSession _sessao;
     private readonly DesktopPocObservabilityState _observabilidade;
+    private readonly EdicaoReuniaoDesktop _edicao = new();
+    private readonly DiagnosticoGuiadoDesktop _diagnosticoGuiado = new();
     private readonly Panel _conteudo = new();
     private readonly Label _estadoGlobal = new();
     private readonly Dictionary<string, Button> _navegacao = [];
     private readonly System.Windows.Forms.Timer _timerGravacao = new() { Interval = 1000 };
     private readonly System.Windows.Forms.Timer _timerProcessamento = new() { Interval = 2800 };
     private readonly System.Windows.Forms.Timer _timerPolling = new() { Interval = 2000 };
+    private readonly System.Windows.Forms.Timer _timerAudio = new() { Interval = 120 };
     private readonly CancellationTokenSource _lifetime = new();
     private string _paginaAtual = "inicio";
     private Guid? _reuniaoDetalheId;
     private Guid? _reuniaoAcompanhadaId;
     private string? _filtroObservabilidade;
     private bool _pollingEmAndamento;
+    private bool _audioEmAndamento;
     private int _versaoNavegacao;
     private Label? _cronometro;
     private DesktopSignalMeter? _audioSistema;
     private DesktopSignalMeter? _microfone;
+    private Label? _audioSistemaTexto;
+    private Label? _microfoneTexto;
     private DesktopSurfacePanel? _cartaoProcessamento;
     private Label? _tituloProcessamento;
     private Label? _descricaoProcessamento;
@@ -40,7 +47,19 @@ internal sealed class DesktopPocForm : Form
     private ProgressBar? _barraProcessamento;
     private DesktopActionButton? _abrirLogsProcessamento;
     private DesktopActionButton? _abrirTranscricaoProcessamento;
+    private DesktopOperationalSteps? _etapasOperacionais;
     private Action? _atualizarConsoleObservabilidade;
+    private Label? _tituloTesteGuiado;
+    private Label? _mensagemTesteGuiado;
+    private Label? _trechoTesteGuiado;
+    private ProgressBar? _barraTesteGuiado;
+    private TextBox? _consoleTesteGuiado;
+    private DesktopActionButton? _iniciarTesteGuiado;
+    private DesktopActionButton? _cancelarTesteGuiado;
+    private DesktopActionButton? _copiarDiagnosticoTeste;
+    private DesktopActionButton? _corrigirTesteGuiado;
+    private DesktopActionButton? _abrirReuniaoTeste;
+    private CancellationTokenSource? _cancelamentoTesteGuiado;
     private int _onda;
 
     public DesktopPocForm()
@@ -91,6 +110,7 @@ internal sealed class DesktopPocForm : Form
         _timerGravacao.Tick += (_, _) => AtualizarGravacao();
         _timerProcessamento.Tick += (_, _) => ConcluirProcessamento();
         _timerPolling.Tick += async (_, _) => await AtualizarDadosReaisAsync();
+        _timerAudio.Tick += async (_, _) => await AtualizarAudioAgoraAsync();
 
         Navegar("inicio");
     }
@@ -111,6 +131,10 @@ internal sealed class DesktopPocForm : Form
 
         await AtualizarDadosReaisAsync();
         _timerPolling.Start();
+        if (_sessao.Etapa == EtapaDesktopPoc.Gravando)
+        {
+            _timerAudio.Start();
+        }
     }
 
     protected override void OnVisibleChanged(EventArgs e)
@@ -124,10 +148,15 @@ internal sealed class DesktopPocForm : Form
         if (Visible)
         {
             _timerPolling.Start();
+            if (_sessao.Etapa == EtapaDesktopPoc.Gravando)
+            {
+                _timerAudio.Start();
+            }
         }
         else
         {
             _timerPolling.Stop();
+            _timerAudio.Stop();
         }
     }
 
@@ -136,9 +165,12 @@ internal sealed class DesktopPocForm : Form
         if (disposing)
         {
             _lifetime.Cancel();
+            _cancelamentoTesteGuiado?.Cancel();
+            _cancelamentoTesteGuiado?.Dispose();
             _timerGravacao.Dispose();
             _timerProcessamento.Dispose();
             _timerPolling.Dispose();
+            _timerAudio.Dispose();
             _lifetime.Dispose();
         }
 
@@ -275,6 +307,22 @@ internal sealed class DesktopPocForm : Form
 
     private void Navegar(string pagina, string? filtroObservabilidade = null)
     {
+        if (_paginaAtual == "detalhe" && pagina != "detalhe" && _edicao.Sujo)
+        {
+            var descartar = MessageBox.Show(
+                "Existem alterações não salvas nesta reunião. Deseja descartá-las?",
+                "Descartar alterações?",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning,
+                MessageBoxDefaultButton.Button2);
+            if (descartar != DialogResult.Yes)
+            {
+                return;
+            }
+
+            _edicao.Cancelar();
+        }
+
         _versaoNavegacao++;
         _paginaAtual = pagina;
         _filtroObservabilidade = pagina == "observabilidade" ? filtroObservabilidade : null;
@@ -305,6 +353,7 @@ internal sealed class DesktopPocForm : Form
             "tarefas" => CriarTelaTarefas(),
             "atividade" => CriarTelaAtividade(),
             "observabilidade" => CriarTelaObservabilidade(),
+            "teste-guiado" => CriarTelaTesteGuiado(),
             "configuracoes" => CriarTelaConfiguracoes(),
             _ => CriarTelaInicio()
         };
@@ -321,6 +370,8 @@ internal sealed class DesktopPocForm : Form
         _cronometro = null;
         _audioSistema = null;
         _microfone = null;
+        _audioSistemaTexto = null;
+        _microfoneTexto = null;
         _cartaoProcessamento = null;
         _tituloProcessamento = null;
         _descricaoProcessamento = null;
@@ -328,7 +379,18 @@ internal sealed class DesktopPocForm : Form
         _barraProcessamento = null;
         _abrirLogsProcessamento = null;
         _abrirTranscricaoProcessamento = null;
+        _etapasOperacionais = null;
         _atualizarConsoleObservabilidade = null;
+        _tituloTesteGuiado = null;
+        _mensagemTesteGuiado = null;
+        _trechoTesteGuiado = null;
+        _barraTesteGuiado = null;
+        _consoleTesteGuiado = null;
+        _iniciarTesteGuiado = null;
+        _cancelarTesteGuiado = null;
+        _copiarDiagnosticoTeste = null;
+        _corrigirTesteGuiado = null;
+        _abrirReuniaoTeste = null;
     }
 
     private Panel CriarTelaInicio()
@@ -383,7 +445,10 @@ internal sealed class DesktopPocForm : Form
         {
             status.Controls.Add(CriarCartaoStatus("OBS", "Configurado", "Comando real pelo caso de uso"), 0, 0);
             status.Controls.Add(CriarCartaoStatus("Worker", "Local", "Processamento assíncrono"), 1, 0);
-            status.Controls.Add(CriarCartaoStatus("SQLite", "Ativo", "Histórico persistido"), 2, 0);
+            status.Controls.Add(CriarCartaoStatus(
+                "Detecção local",
+                _sessao.Ambiente?.ModoDeteccao ?? "Assistido",
+                "Manual, assistida ou automática"), 2, 0);
         }
 
         var tituloLista = CriarCabecalhoSecao("Reuniões recentes", "Ver todas", (_, _) => Navegar("reunioes"));
@@ -485,7 +550,7 @@ internal sealed class DesktopPocForm : Form
             }
 
             detalhe.Controls.Clear();
-            detalhe.Controls.Add(CriarConteudoDetalhe(reuniao, nome));
+            detalhe.Controls.Add(CriarConteudoDetalhe(reuniao, nome, () => Selecionar(nome)));
         }
 
         foreach (var nome in nomes)
@@ -517,7 +582,10 @@ internal sealed class DesktopPocForm : Form
         return pagina;
     }
 
-    private FlowLayoutPanel CriarConteudoDetalhe(ReuniaoDesktopPoc reuniao, string aba)
+    private FlowLayoutPanel CriarConteudoDetalhe(
+        ReuniaoDesktopPoc reuniao,
+        string aba,
+        Action atualizarAba)
     {
         var rolagem = new FlowLayoutPanel
         {
@@ -533,7 +601,10 @@ internal sealed class DesktopPocForm : Form
         switch (aba)
         {
             case "Transcrição":
-                rolagem.Controls.Add(CriarBlocoTexto("Transcrição com timestamps", reuniao.Transcricao));
+                rolagem.Controls.Add(
+                    !_sessao.ModoDemonstracao && reuniao.Transcricao.Count > 0
+                        ? CriarBlocoTranscricaoEditavel(reuniao, atualizarAba)
+                        : CriarBlocoTexto("Transcrição com timestamps", reuniao.Transcricao));
                 break;
             case "Decisões":
                 rolagem.Controls.Add(CriarBlocoTexto("Decisões", reuniao.Decisoes.Select(item => $"•  {item}")));
@@ -561,6 +632,130 @@ internal sealed class DesktopPocForm : Form
 
         AjustarLarguraFilhos(rolagem);
         return rolagem;
+    }
+
+    private DesktopSurfacePanel CriarBlocoTranscricaoEditavel(
+        ReuniaoDesktopPoc reuniao,
+        Action atualizarAba)
+    {
+        var transcricao = string.Join(Environment.NewLine, reuniao.Transcricao);
+        if (!_edicao.Editando || _edicao.ReuniaoId != reuniao.Id)
+        {
+            var blocoLeitura = CriarBlocoTexto("Transcrição com timestamps", reuniao.Transcricao);
+            var editar = CriarBotaoSecundario("Editar conteúdo", (_, _) =>
+            {
+                _edicao.Iniciar(reuniao.Id, reuniao.Titulo, transcricao);
+                atualizarAba();
+            });
+            editar.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            editar.Location = new Point(blocoLeitura.Width - editar.Width - 20, 18);
+            blocoLeitura.Controls.Add(editar);
+            blocoLeitura.Resize += (_, _) => editar.Left = blocoLeitura.ClientSize.Width - editar.Width - 20;
+            editar.BringToFront();
+            return blocoLeitura;
+        }
+
+        _edicao.Sincronizar(reuniao.Titulo, transcricao);
+        var bloco = CriarCartao(DesktopSurfaceVariant.Base, accent: _paleta.Destaque);
+        bloco.Height = 440;
+        bloco.Margin = new Padding(0, 0, 0, 12);
+        bloco.Padding = new Padding(22);
+        bloco.Controls.Add(CriarLabel(
+            "Editar reunião",
+            13F,
+            _paleta.Texto,
+            new Point(22, 18),
+            FontStyle.Bold));
+        bloco.Controls.Add(CriarLabel(
+            "O polling continua ativo, mas não substitui este rascunho.",
+            9F,
+            _paleta.TextoSecundario,
+            new Point(22, 48)));
+
+        var tituloLabel = CriarLabel("Título", 9F, _paleta.Texto, new Point(22, 82), FontStyle.Bold);
+        var titulo = CriarCampoTexto("Título da reunião");
+        titulo.Name = "titulo-editor";
+        titulo.Text = _edicao.Titulo;
+        titulo.Location = new Point(22, 106);
+        titulo.Width = 620;
+        titulo.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+
+        var transcricaoLabel = CriarLabel(
+            "Transcrição",
+            9F,
+            _paleta.Texto,
+            new Point(22, 158),
+            FontStyle.Bold);
+        var editor = new TextBox
+        {
+            Name = "transcricao-editor",
+            Text = _edicao.Transcricao,
+            Multiline = true,
+            AcceptsReturn = true,
+            ScrollBars = ScrollBars.Vertical,
+            BorderStyle = BorderStyle.FixedSingle,
+            BackColor = _paleta.Superficies.PainelElevado,
+            ForeColor = _paleta.Texto,
+            Font = new Font(_tokens.Tipografia.Interface, 9.5F, FontStyle.Regular, GraphicsUnit.Point),
+            Location = new Point(22, 182),
+            Size = new Size(720, 172),
+            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
+        };
+        void AtualizarRascunho() => _edicao.Alterar(titulo.Text, editor.Text);
+        titulo.TextChanged += (_, _) => AtualizarRascunho();
+        editor.TextChanged += (_, _) => AtualizarRascunho();
+
+        async void SalvarEdicao(object? sender, EventArgs _)
+        {
+            AtualizarRascunho();
+            var botaoSalvar = (Button)sender!;
+            try
+            {
+                botaoSalvar.Enabled = false;
+                var tituloNormalizado = TituloReuniaoManual.Normalizar(_edicao.Titulo);
+                await _sessao.SalvarEdicaoAsync(
+                    reuniao.Id,
+                    tituloNormalizado,
+                    _edicao.Transcricao,
+                    _lifetime.Token);
+                _edicao.Concluir(tituloNormalizado, _edicao.Transcricao.Trim());
+                await AbrirDetalheAsync(reuniao.Id, "Transcrição");
+            }
+            catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
+            {
+            }
+            catch (Exception exception)
+            {
+                botaoSalvar.Enabled = true;
+                MostrarFalhaSegura(
+                    $"Não foi possível salvar a reunião. {exception.Message}",
+                    "Edição não salva",
+                    exception,
+                    "editar_reuniao");
+            }
+        }
+
+        var salvar = CriarBotaoPrimario("Salvar alterações", SalvarEdicao);
+        salvar.Location = new Point(22, 380);
+        var cancelar = CriarBotaoSecundario("Cancelar edição", (_, _) =>
+        {
+            _edicao.Cancelar();
+            atualizarAba();
+        });
+        cancelar.Location = new Point(170, 380);
+
+        bloco.Controls.Add(cancelar);
+        bloco.Controls.Add(salvar);
+        bloco.Controls.Add(editor);
+        bloco.Controls.Add(transcricaoLabel);
+        bloco.Controls.Add(titulo);
+        bloco.Controls.Add(tituloLabel);
+        bloco.Resize += (_, _) =>
+        {
+            titulo.Width = Math.Max(220, bloco.ClientSize.Width - 44);
+            editor.Width = Math.Max(220, bloco.ClientSize.Width - 44);
+        };
+        return bloco;
     }
 
     private DesktopSurfacePanel CriarBlocoArquivosPersistidos(ReuniaoDesktopPoc reuniao)
@@ -691,7 +886,7 @@ internal sealed class DesktopPocForm : Form
             DesktopSurfaceVariant.Elevated,
             accent: recuperacao ? _paleta.Destaque : _paleta.Perigo);
         vivo.Dock = DockStyle.Top;
-        vivo.Height = 420;
+        vivo.Height = 470;
         vivo.Padding = new Padding(30);
 
         var gravando = CriarLabel(
@@ -715,39 +910,39 @@ internal sealed class DesktopPocForm : Form
         var encerrar = CriarBotaoPerigo(
             recuperacao ? "Encerrar gravação anterior" : "Encerrar e transcrever",
             (_, _) => EncerrarGravacao());
-        if (_sessao.ModoDemonstracao)
+        var sistemaTexto = CriarLabel("Áudio do sistema", 10F, _paleta.Texto, new Point(30, 178));
+        _audioSistemaTexto = CriarLabel("Sem leitura", 9F, _paleta.TextoSecundario, new Point(430, 178));
+        _audioSistema = new DesktopSignalMeter(_paleta, _tokens, _politicaVisual, _paleta.Destaque)
         {
-            var sistemaTexto = CriarLabel("Áudio do sistema", 10F, _paleta.Texto, new Point(30, 180));
-            _audioSistema = new DesktopSignalMeter(_paleta, _tokens, _politicaVisual, _paleta.Destaque)
-            {
-                Location = new Point(30, 210),
-                Size = new Size(520, 15),
-                Value = 54
-            };
-            var micTexto = CriarLabel("Microfone", 10F, _paleta.Texto, new Point(30, 246));
-            _microfone = new DesktopSignalMeter(_paleta, _tokens, _politicaVisual, _paleta.Positivo)
-            {
-                Location = new Point(30, 276),
-                Size = new Size(520, 15),
-                Value = 36
-            };
-            encerrar.Location = new Point(30, 330);
-            vivo.Controls.Add(_microfone);
-            vivo.Controls.Add(micTexto);
-            vivo.Controls.Add(_audioSistema);
-            vivo.Controls.Add(sistemaTexto);
-        }
-        else
+            AccessibleName = "Nível do áudio do sistema",
+            Location = new Point(30, 206),
+            Size = new Size(520, 34)
+        };
+        var micTexto = CriarLabel("Microfone", 10F, _paleta.Texto, new Point(30, 254));
+        _microfoneTexto = CriarLabel("Sem leitura", 9F, _paleta.TextoSecundario, new Point(430, 254));
+        _microfone = new DesktopSignalMeter(_paleta, _tokens, _politicaVisual, _paleta.Positivo)
         {
-            vivo.Controls.Add(CriarLabel(
-                recuperacao
-                    ? "Nenhum comando foi enviado ao OBS neste reinício. Encerrar é uma ação explícita e será registrada."
-                    : "A captura foi iniciada pelo caso de uso e está protegida pela trava de gravação única.",
-                10F,
-                _paleta.TextoSecundario,
-                new Point(30, 190)));
-            encerrar.Location = new Point(30, 248);
-        }
+            AccessibleName = "Nível do microfone",
+            Location = new Point(30, 282),
+            Size = new Size(520, 34)
+        };
+        var explicacaoCaptura = CriarLabel(
+            recuperacao
+                ? "Nenhum comando foi enviado ao OBS neste reinício. Encerrar é uma ação explícita e será registrada."
+                : "Níveis lidos localmente pelo Core Audio. O conteúdo não é persistido nem enviado.",
+            9F,
+            _paleta.TextoSecundario,
+            new Point(30, 330));
+        explicacaoCaptura.MaximumSize = new Size(720, 38);
+        encerrar.Location = new Point(30, 392);
+        vivo.Controls.Add(explicacaoCaptura);
+        vivo.Controls.Add(_microfone);
+        vivo.Controls.Add(_microfoneTexto);
+        vivo.Controls.Add(micTexto);
+        vivo.Controls.Add(_audioSistema);
+        vivo.Controls.Add(_audioSistemaTexto);
+        vivo.Controls.Add(sistemaTexto);
+        AplicarNivelAudio();
 
         vivo.Controls.Add(encerrar);
         vivo.Controls.Add(_cronometro);
@@ -814,7 +1009,7 @@ internal sealed class DesktopPocForm : Form
     {
         _cartaoProcessamento = CriarCartao(DesktopSurfaceVariant.Elevated, accent: _paleta.Destaque);
         _cartaoProcessamento.Dock = DockStyle.Top;
-        _cartaoProcessamento.Height = 194;
+        _cartaoProcessamento.Height = 260;
         _cartaoProcessamento.Margin = new Padding(0, 0, 0, 12);
         _cartaoProcessamento.Padding = new Padding(20);
 
@@ -831,9 +1026,15 @@ internal sealed class DesktopPocForm : Form
             GraphicsUnit.Point);
         _tituloProcessamento = CriarLabel("", 13F, _paleta.Texto, new Point(20, 42), FontStyle.Bold);
         _descricaoProcessamento = CriarLabel("", 9.5F, _paleta.TextoSecundario, new Point(20, 70));
+        _etapasOperacionais = new DesktopOperationalSteps(_paleta, _tokens)
+        {
+            Location = new Point(20, 96),
+            Size = new Size(720, 56),
+            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
+        };
         _barraProcessamento = new ProgressBar
         {
-            Location = new Point(20, 100),
+            Location = new Point(20, 164),
             Height = 14,
             Style = ProgressBarStyle.Marquee,
             MarqueeAnimationSpeed = 30,
@@ -844,6 +1045,7 @@ internal sealed class DesktopPocForm : Form
             if (_barraProcessamento is not null)
             {
                 _barraProcessamento.Width = Math.Max(160, _cartaoProcessamento.ClientSize.Width - 40);
+                _etapasOperacionais.Width = Math.Max(320, _cartaoProcessamento.ClientSize.Width - 40);
             }
         };
         _abrirLogsProcessamento = CriarBotaoSecundario("Ver console de logs", (_, _) =>
@@ -854,7 +1056,7 @@ internal sealed class DesktopPocForm : Form
                 AbrirConsoleDaReuniao(reuniao.Id);
             }
         });
-        _abrirLogsProcessamento.Location = new Point(20, 134);
+        _abrirLogsProcessamento.Location = new Point(20, 200);
         _abrirTranscricaoProcessamento = CriarBotaoPrimario("Abrir transcrição", (_, _) =>
         {
             var reuniao = ObterReuniaoAcompanhada();
@@ -863,11 +1065,12 @@ internal sealed class DesktopPocForm : Form
                 AbrirTranscricaoDaReuniao(reuniao.Id);
             }
         });
-        _abrirTranscricaoProcessamento.Location = new Point(170, 134);
+        _abrirTranscricaoProcessamento.Location = new Point(170, 200);
 
         _cartaoProcessamento.Controls.Add(_abrirTranscricaoProcessamento);
         _cartaoProcessamento.Controls.Add(_abrirLogsProcessamento);
         _cartaoProcessamento.Controls.Add(_barraProcessamento);
+        _cartaoProcessamento.Controls.Add(_etapasOperacionais);
         _cartaoProcessamento.Controls.Add(_descricaoProcessamento);
         _cartaoProcessamento.Controls.Add(_tituloProcessamento);
         _cartaoProcessamento.Controls.Add(_estadoProcessamento);
@@ -899,6 +1102,7 @@ internal sealed class DesktopPocForm : Form
         }
 
         var titulo = reuniao?.Titulo ?? "Reunião em processamento";
+        _etapasOperacionais?.DefinirEstado(FluxoOperacionalDesktop.Criar(reuniao?.Status));
         _estadoProcessamento.Text = concluido ? "PROCESSAMENTO CONCLUÍDO" : "PROCESSAMENTO LOCAL";
         _estadoProcessamento.ForeColor = concluido ? _paleta.Positivo : _paleta.Destaque;
         _tituloProcessamento.Text = concluido ? $"Concluída: {titulo}" : $"Em processamento: {titulo}";
@@ -1250,6 +1454,231 @@ internal sealed class DesktopPocForm : Form
         _ => "INFO"
     };
 
+    private DesktopSurfacePanel CriarCartaoEntradaTesteGuiado()
+    {
+        var cartao = CriarCartao(DesktopSurfaceVariant.Elevated, accent: _paleta.Destaque);
+        cartao.Height = 150;
+        cartao.Margin = new Padding(0, 0, 0, 12);
+        cartao.Padding = new Padding(20);
+        cartao.Controls.Add(CriarLabel(
+            "Teste de áudio e transcrição",
+            12F,
+            _paleta.Texto,
+            new Point(20, 16),
+            FontStyle.Bold));
+        cartao.Controls.Add(CriarLabel(
+            "Fale por cinco segundos. O Anamnesis grava, transcreve e mostra o diagnóstico no mesmo fluxo.",
+            9.5F,
+            _paleta.TextoSecundario,
+            new Point(20, 48)));
+        var abrir = CriarBotaoPrimario("Abrir teste guiado", (_, _) => Navegar("teste-guiado"));
+        abrir.Location = new Point(20, 88);
+        cartao.Controls.Add(abrir);
+        return cartao;
+    }
+
+    private Panel CriarTelaTesteGuiado()
+    {
+        var voltar = CriarBotaoSecundario("←  Configurações", (_, _) => Navegar("configuracoes"));
+        var pagina = CriarPagina(
+            "Teste guiado",
+            "Valide captura, áudio, Worker e transcrição com evidência local em tempo real",
+            voltar,
+            out var corpo);
+        var cartao = CriarCartao(DesktopSurfaceVariant.Elevated, accent: _paleta.Destaque);
+        cartao.Dock = DockStyle.Fill;
+        cartao.Padding = new Padding(24);
+
+        _tituloTesteGuiado = CriarLabel(
+            "Pronto para testar",
+            16F,
+            _paleta.Texto,
+            new Point(24, 18),
+            FontStyle.Bold);
+        _mensagemTesteGuiado = CriarLabel(
+            _diagnosticoGuiado.Mensagem,
+            9.5F,
+            _paleta.TextoSecundario,
+            new Point(24, 52));
+        _mensagemTesteGuiado.MaximumSize = new Size(760, 42);
+        _etapasOperacionais = new DesktopOperationalSteps(_paleta, _tokens)
+        {
+            Location = new Point(24, 92),
+            Size = new Size(820, 58),
+            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
+        };
+        _barraTesteGuiado = new ProgressBar
+        {
+            Location = new Point(24, 158),
+            Size = new Size(820, 12),
+            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
+            Style = ProgressBarStyle.Marquee,
+            MarqueeAnimationSpeed = 30
+        };
+
+        var sistemaTitulo = CriarLabel("Áudio do sistema", 9F, _paleta.Texto, new Point(24, 190));
+        _audioSistemaTexto = CriarLabel("Sem leitura", 9F, _paleta.TextoSecundario, new Point(430, 190));
+        _audioSistema = new DesktopSignalMeter(_paleta, _tokens, _politicaVisual, _paleta.Destaque)
+        {
+            AccessibleName = "Nível do áudio do sistema no teste",
+            Location = new Point(24, 216),
+            Size = new Size(520, 32)
+        };
+        var microfoneTitulo = CriarLabel("Microfone", 9F, _paleta.Texto, new Point(24, 262));
+        _microfoneTexto = CriarLabel("Sem leitura", 9F, _paleta.TextoSecundario, new Point(430, 262));
+        _microfone = new DesktopSignalMeter(_paleta, _tokens, _politicaVisual, _paleta.Positivo)
+        {
+            AccessibleName = "Nível do microfone no teste",
+            Location = new Point(24, 288),
+            Size = new Size(520, 32)
+        };
+
+        var consoleTitulo = CriarLabel("Console seguro do teste", 9F, _paleta.Texto, new Point(570, 190), FontStyle.Bold);
+        _consoleTesteGuiado = new TextBox
+        {
+            Name = "console-teste",
+            Multiline = true,
+            ReadOnly = true,
+            ScrollBars = ScrollBars.Vertical,
+            BackColor = _paleta.ConsoleFundo,
+            ForeColor = _paleta.ConsoleTexto,
+            BorderStyle = BorderStyle.FixedSingle,
+            Font = new Font(_tokens.Tipografia.Mono, 8F, FontStyle.Regular, GraphicsUnit.Point),
+            Location = new Point(570, 216),
+            Size = new Size(310, 104),
+            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
+        };
+        _trechoTesteGuiado = CriarLabel("", 9.5F, _paleta.Texto, new Point(24, 338));
+        _trechoTesteGuiado.MaximumSize = new Size(840, 48);
+
+        _iniciarTesteGuiado = CriarBotaoPrimario(
+            "Iniciar teste de 5 s",
+            async (_, _) => await IniciarTesteGuiadoAgoraAsync(TimeSpan.FromSeconds(5)));
+        _iniciarTesteGuiado.Location = new Point(24, 400);
+        _cancelarTesteGuiado = CriarBotaoSecundario("Cancelar teste", (_, _) => CancelarTesteGuiado());
+        _cancelarTesteGuiado.Location = new Point(190, 400);
+        _copiarDiagnosticoTeste = CriarBotaoSecundario("Copiar diagnóstico", (_, _) =>
+        {
+            Clipboard.SetText(_diagnosticoGuiado.CriarDiagnosticoCopiavel());
+        });
+        _copiarDiagnosticoTeste.Location = new Point(330, 400);
+        _corrigirTesteGuiado = CriarBotaoPrimario("Corrigir agora", (_, _) => Navegar("configuracoes"));
+        _corrigirTesteGuiado.Location = new Point(486, 400);
+        _abrirReuniaoTeste = CriarBotaoPrimario("Abrir reunião", async (_, _) =>
+        {
+            if (_diagnosticoGuiado.ReuniaoId is Guid reuniaoId)
+            {
+                await AbrirDetalheAsync(reuniaoId, "Transcrição");
+            }
+        });
+        _abrirReuniaoTeste.Location = new Point(626, 400);
+
+        cartao.Controls.Add(_abrirReuniaoTeste);
+        cartao.Controls.Add(_corrigirTesteGuiado);
+        cartao.Controls.Add(_copiarDiagnosticoTeste);
+        cartao.Controls.Add(_cancelarTesteGuiado);
+        cartao.Controls.Add(_iniciarTesteGuiado);
+        cartao.Controls.Add(_trechoTesteGuiado);
+        cartao.Controls.Add(_consoleTesteGuiado);
+        cartao.Controls.Add(consoleTitulo);
+        cartao.Controls.Add(_microfone);
+        cartao.Controls.Add(_microfoneTexto);
+        cartao.Controls.Add(microfoneTitulo);
+        cartao.Controls.Add(_audioSistema);
+        cartao.Controls.Add(_audioSistemaTexto);
+        cartao.Controls.Add(sistemaTitulo);
+        cartao.Controls.Add(_barraTesteGuiado);
+        cartao.Controls.Add(_etapasOperacionais);
+        cartao.Controls.Add(_mensagemTesteGuiado);
+        cartao.Controls.Add(_tituloTesteGuiado);
+        cartao.Resize += (_, _) =>
+        {
+            _etapasOperacionais.Width = Math.Max(420, cartao.ClientSize.Width - 48);
+            _barraTesteGuiado.Width = Math.Max(420, cartao.ClientSize.Width - 48);
+            _consoleTesteGuiado.Width = Math.Max(220, cartao.ClientSize.Width - 594);
+        };
+        corpo.Controls.Add(cartao);
+        AtualizarTelaTesteGuiado();
+        return pagina;
+    }
+
+    private void AtualizarTelaTesteGuiado()
+    {
+        if (_tituloTesteGuiado is null ||
+            _mensagemTesteGuiado is null ||
+            _trechoTesteGuiado is null ||
+            _barraTesteGuiado is null ||
+            _consoleTesteGuiado is null ||
+            _iniciarTesteGuiado is null ||
+            _cancelarTesteGuiado is null ||
+            _copiarDiagnosticoTeste is null ||
+            _corrigirTesteGuiado is null ||
+            _abrirReuniaoTeste is null)
+        {
+            return;
+        }
+
+        _tituloTesteGuiado.Text = _diagnosticoGuiado.Estado switch
+        {
+            EstadoDiagnosticoGuiado.Capturando => "Fale agora",
+            EstadoDiagnosticoGuiado.Processando => "Processando o teste",
+            EstadoDiagnosticoGuiado.Sucesso => "Tudo certo",
+            EstadoDiagnosticoGuiado.Falha => "O teste encontrou um problema",
+            EstadoDiagnosticoGuiado.Cancelado => "Teste cancelado",
+            _ => "Pronto para testar"
+        };
+        _mensagemTesteGuiado.Text = _diagnosticoGuiado.Mensagem;
+        _trechoTesteGuiado.Text = string.IsNullOrWhiteSpace(_diagnosticoGuiado.TrechoReconhecido)
+            ? ""
+            : $"Reconhecido: {_diagnosticoGuiado.TrechoReconhecido}";
+        var emAndamento = _diagnosticoGuiado.Estado is
+            EstadoDiagnosticoGuiado.Capturando or EstadoDiagnosticoGuiado.Processando;
+        _barraTesteGuiado.Visible = emAndamento;
+        _barraTesteGuiado.MarqueeAnimationSpeed = emAndamento ? 30 : 0;
+        _iniciarTesteGuiado.Visible = !emAndamento;
+        _cancelarTesteGuiado.Visible = _diagnosticoGuiado.Estado == EstadoDiagnosticoGuiado.Capturando;
+        var falhou = _diagnosticoGuiado.Estado == EstadoDiagnosticoGuiado.Falha;
+        _copiarDiagnosticoTeste.Visible = falhou;
+        _corrigirTesteGuiado.Visible = falhou;
+        _abrirReuniaoTeste.Visible = _diagnosticoGuiado.TudoCerto;
+
+        var reuniao = _diagnosticoGuiado.ReuniaoId is Guid reuniaoId
+            ? _sessao.Reunioes.FirstOrDefault(item => item.Id == reuniaoId)
+            : null;
+        var status = reuniao?.Status ?? (_diagnosticoGuiado.Estado switch
+        {
+            EstadoDiagnosticoGuiado.Capturando => "Gravando",
+            EstadoDiagnosticoGuiado.Sucesso => "Ata pronta",
+            EstadoDiagnosticoGuiado.Falha => "Falha",
+            _ => null
+        });
+        _etapasOperacionais?.DefinirEstado(FluxoOperacionalDesktop.Criar(status));
+        AplicarNivelAudio();
+        AtualizarConsoleTesteGuiado();
+    }
+
+    private void AtualizarConsoleTesteGuiado()
+    {
+        if (_consoleTesteGuiado is null || _diagnosticoGuiado.ReuniaoId is not Guid reuniaoId)
+        {
+            return;
+        }
+
+        var correlacao = reuniaoId.ToString("N");
+        var existentes = _consoleTesteGuiado.Lines.ToHashSet(StringComparer.Ordinal);
+        foreach (var evento in _sessao.EventosOperacionais
+                     .Where(item => item.CorrelacaoId.Contains(correlacao, StringComparison.OrdinalIgnoreCase))
+                     .Reverse())
+        {
+            var linha = $"{evento.CriadoEm:HH:mm:ss} [{FormatarNivel(evento.Nivel)}] {evento.Componente} {evento.Evento} | {evento.Mensagem}";
+            if (existentes.Add(linha))
+            {
+                _consoleTesteGuiado.AppendText(
+                    (_consoleTesteGuiado.TextLength == 0 ? "" : Environment.NewLine) + linha);
+            }
+        }
+    }
+
     private Panel CriarTelaConfiguracoes()
     {
         var ambienteAtual = _sessao.Ambiente;
@@ -1287,7 +1716,8 @@ internal sealed class DesktopPocForm : Form
                         $"Arquivo: {ambiente.CaminhoConfiguracao}",
                         $"Banco SQLite: {ambiente.CaminhoBanco}",
                         $"Arquivo de reuniões: {ambiente.DiretorioArquivo}",
-                        $"CLI de atas: {ambiente.NomeCli}"
+                        $"CLI de atas: {ambiente.NomeCli}",
+                        $"Detecção local: {ambiente.ModoDeteccao}"
                     ]));
             var prontidao = ambiente?.Prontidao ?? [];
             conteudo.Controls.Add(CriarBlocoTexto(
@@ -1302,6 +1732,8 @@ internal sealed class DesktopPocForm : Form
                 conteudo.Controls.Add(CriarAlerta(
                     "O aplicativo continuará aberto. Configure apenas os componentes marcados como pendentes."));
             }
+
+            conteudo.Controls.Add(CriarCartaoEntradaTesteGuiado());
 
             conteudo.SizeChanged += (_, _) => AjustarLarguraFilhos(conteudo);
             corpo.Controls.Add(conteudo);
@@ -1788,6 +2220,7 @@ internal sealed class DesktopPocForm : Form
 
             _timerProcessamento.Stop();
             _timerGravacao.Start();
+            _timerAudio.Start();
             _estadoGlobal.Text = "Gravando";
             _estadoGlobal.ForeColor = _paleta.Perigo;
             Navegar("ao-vivo");
@@ -1813,20 +2246,17 @@ internal sealed class DesktopPocForm : Form
     private void AtualizarGravacao()
     {
         _sessao.AvancarGravacao();
-        _onda++;
         if (_cronometro is not null)
         {
             _cronometro.Text = FormatarCronometro();
         }
 
-        if (_audioSistema is not null)
+        if (_sessao.ModoDemonstracao)
         {
-            _audioSistema.Value = 25 + ((_onda * 17) % 68);
-        }
-
-        if (_microfone is not null)
-        {
-            _microfone.Value = 18 + ((_onda * 23) % 62);
+            _onda++;
+            AplicarNivelAudio(new NivelAudioLeitura(
+                25 + ((_onda * 17) % 68),
+                18 + ((_onda * 23) % 62)));
         }
     }
 
@@ -1843,6 +2273,7 @@ internal sealed class DesktopPocForm : Form
             }
 
             _timerGravacao.Stop();
+            _timerAudio.Stop();
             if (_sessao.ModoDemonstracao)
             {
                 _observabilidade.RegistrarFimGravacao(_sessao.DuracaoGravacao);
@@ -1865,6 +2296,7 @@ internal sealed class DesktopPocForm : Form
             }
 
             _timerGravacao.Stop();
+            _timerAudio.Stop();
             _estadoGlobal.Text = "Processamento pendente";
             _estadoGlobal.ForeColor = _paleta.Destaque;
             AtualizarReuniaoAcompanhada();
@@ -1970,6 +2402,15 @@ internal sealed class DesktopPocForm : Form
             AtualizarEstadoGlobal();
             AtualizarAcompanhamentoProcessamento();
             _atualizarConsoleObservabilidade?.Invoke();
+            await AtualizarDiagnosticoGuiadoAsync();
+            if (_sessao.Etapa == EtapaDesktopPoc.Gravando && Visible)
+            {
+                _timerAudio.Start();
+            }
+            else
+            {
+                _timerAudio.Stop();
+            }
         }
         catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
         {
@@ -2048,6 +2489,180 @@ internal sealed class DesktopPocForm : Form
         AbrirDetalheAsync(reuniaoId, abaInicial);
 
     internal Task AtualizarAgoraAsync() => AtualizarDadosReaisAsync();
+
+    internal void AbrirTesteGuiado() => Navegar("teste-guiado");
+
+    internal async Task IniciarTesteGuiadoAgoraAsync(TimeSpan duracaoCaptura)
+    {
+        if (_sessao.Etapa == EtapaDesktopPoc.Gravando || _sessao.RecuperacaoPendente)
+        {
+            _diagnosticoGuiado.Falhar(
+                "Desktop",
+                "Preparando",
+                "Já existe uma gravação ativa. Encerre-a antes de iniciar o teste guiado.");
+            _estadoGlobal.Text = "Ação necessária";
+            _estadoGlobal.ForeColor = _paleta.Perigo;
+            AtualizarTelaTesteGuiado();
+            return;
+        }
+
+        _cancelamentoTesteGuiado?.Cancel();
+        _cancelamentoTesteGuiado?.Dispose();
+        var cancelamento = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
+        _cancelamentoTesteGuiado = cancelamento;
+        try
+        {
+            var titulo = $"Teste de áudio • {DateTimeOffset.Now:dd/MM HH:mm}";
+            await _sessao.IniciarGravacaoAsync(titulo, cancelamento.Token);
+            var reuniaoId = _sessao.ReuniaoAtivaId ?? _sessao.ReuniaoAcompanhadaId
+                ?? throw new InvalidOperationException("O teste iniciado não possui correlação de reunião.");
+            _diagnosticoGuiado.Iniciar(reuniaoId);
+            _estadoGlobal.Text = "Teste: gravando";
+            _estadoGlobal.ForeColor = _paleta.Perigo;
+            _timerAudio.Start();
+            AtualizarTelaTesteGuiado();
+
+            await Task.Delay(duracaoCaptura, cancelamento.Token);
+            await _sessao.EncerrarGravacaoAsync(CancellationToken.None);
+            _timerAudio.Stop();
+            _diagnosticoGuiado.MarcarProcessando();
+            _estadoGlobal.Text = "Teste: processando";
+            _estadoGlobal.ForeColor = _paleta.Destaque;
+            AtualizarTelaTesteGuiado();
+        }
+        catch (OperationCanceledException) when (cancelamento.IsCancellationRequested)
+        {
+            if (_sessao.Etapa == EtapaDesktopPoc.Gravando)
+            {
+                try
+                {
+                    await _sessao.EncerrarGravacaoAsync(CancellationToken.None);
+                }
+                catch (Exception exception)
+                {
+                    _diagnosticoGuiado.Falhar("OBS", "Gravando", exception.Message);
+                    AtualizarTelaTesteGuiado();
+                    return;
+                }
+            }
+
+            _timerAudio.Stop();
+            _diagnosticoGuiado.Cancelar();
+            _estadoGlobal.Text = "Tudo funcionando";
+            _estadoGlobal.ForeColor = _paleta.Positivo;
+            AtualizarTelaTesteGuiado();
+        }
+        catch (Exception exception)
+        {
+            _timerAudio.Stop();
+            var componente = exception is WorkerNaoIniciadoException ? "Worker" : "Pipeline";
+            var etapa = _sessao.Etapa == EtapaDesktopPoc.Gravando ? "Gravando" : "Processando";
+            _diagnosticoGuiado.Falhar(componente, etapa, exception.Message);
+            _estadoGlobal.Text = "Ação necessária";
+            _estadoGlobal.ForeColor = _paleta.Perigo;
+            await _sessao.RegistrarFalhaOperacionalAsync(
+                "teste_guiado",
+                exception,
+                CancellationToken.None);
+            AtualizarTelaTesteGuiado();
+        }
+        finally
+        {
+            if (ReferenceEquals(_cancelamentoTesteGuiado, cancelamento))
+            {
+                _cancelamentoTesteGuiado = null;
+            }
+
+            cancelamento.Dispose();
+        }
+    }
+
+    private void CancelarTesteGuiado() => _cancelamentoTesteGuiado?.Cancel();
+
+    private async Task AtualizarDiagnosticoGuiadoAsync()
+    {
+        if (_diagnosticoGuiado.Estado != EstadoDiagnosticoGuiado.Processando ||
+            _diagnosticoGuiado.ReuniaoId is not Guid reuniaoId)
+        {
+            AtualizarTelaTesteGuiado();
+            return;
+        }
+
+        var reuniao = _sessao.Reunioes.FirstOrDefault(item => item.Id == reuniaoId);
+        if (reuniao?.Status == "Falha")
+        {
+            var evento = _sessao.EventosOperacionais.FirstOrDefault(item =>
+                item.Nivel == NivelEventoPoc.Erro &&
+                item.CorrelacaoId.Contains(reuniaoId.ToString("N"), StringComparison.OrdinalIgnoreCase));
+            _diagnosticoGuiado.Falhar(
+                evento?.Componente ?? "Pipeline",
+                reuniao.Status,
+                evento?.Mensagem ?? reuniao.MotivoFalha ?? "O processamento do teste falhou.");
+            _estadoGlobal.Text = "Ação necessária";
+            _estadoGlobal.ForeColor = _paleta.Perigo;
+        }
+        else if (reuniao?.Status is "Ata pronta" or "Retenção pendente" or "Gravação removida")
+        {
+            var detalhe = await _sessao.ObterDetalheAsync(reuniaoId, _lifetime.Token);
+            _diagnosticoGuiado.Concluir(detalhe?.Transcricao ?? []);
+            _estadoGlobal.Text = _diagnosticoGuiado.TudoCerto ? "Tudo funcionando" : "Ação necessária";
+            _estadoGlobal.ForeColor = _diagnosticoGuiado.TudoCerto ? _paleta.Positivo : _paleta.Perigo;
+        }
+
+        AtualizarTelaTesteGuiado();
+    }
+
+    internal async Task AtualizarAudioAgoraAsync()
+    {
+        if (_audioEmAndamento || IsDisposed || _sessao.Etapa != EtapaDesktopPoc.Gravando)
+        {
+            return;
+        }
+
+        _audioEmAndamento = true;
+        try
+        {
+            if (!_sessao.ModoDemonstracao)
+            {
+                await _sessao.AtualizarNivelAudioAsync(_lifetime.Token);
+                AplicarNivelAudio();
+            }
+        }
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
+        {
+        }
+        finally
+        {
+            _audioEmAndamento = false;
+        }
+    }
+
+    private void AplicarNivelAudio(NivelAudioLeitura? leitura = null)
+    {
+        leitura ??= _sessao.NivelAudio;
+        AtualizarMedidor(_audioSistema, _audioSistemaTexto, leitura.Sistema);
+        AtualizarMedidor(_microfone, _microfoneTexto, leitura.Microfone);
+    }
+
+    private void AtualizarMedidor(DesktopSignalMeter? medidor, Label? texto, int? valor)
+    {
+        if (medidor is null || texto is null || medidor.IsDisposed || texto.IsDisposed)
+        {
+            return;
+        }
+
+        if (valor is null)
+        {
+            medidor.DefinirSemLeitura();
+            texto.Text = "Sem leitura";
+            texto.ForeColor = _paleta.TextoSecundario;
+            return;
+        }
+
+        medidor.Value = valor.Value;
+        texto.Text = valor.Value > 2 ? $"{valor.Value}%  sinal presente" : $"{valor.Value}%  silêncio";
+        texto.ForeColor = valor.Value > 2 ? _paleta.Positivo : _paleta.TextoSecundario;
+    }
 
     internal void AbrirConfiguracoes() => Navegar("configuracoes");
 

@@ -12,3 +12,4 @@ IAudioSessionManager2
 IAudioSessionEnumerator
 IAudioSessionControl
 IAudioSessionControl2
+IAudioMeterInformation

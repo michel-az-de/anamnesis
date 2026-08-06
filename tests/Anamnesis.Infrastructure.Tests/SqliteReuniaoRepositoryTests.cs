@@ -3,6 +3,7 @@ using Anamnesis.Application.Modelos;
 using Anamnesis.Application.UseCases;
 using Anamnesis.Domain.Entidades;
 using Anamnesis.Domain.Tipos;
+using Anamnesis.Infrastructure.Arquivos;
 using Anamnesis.Infrastructure.Persistencia;
 using Microsoft.Data.Sqlite;
 using Xunit;
@@ -64,6 +65,53 @@ public sealed class SqliteReuniaoRepositoryTests : IAsyncLifetime
         Assert.Equal("Preparar proposta.", tarefa.Descricao);
         Assert.Equal("Ana", tarefa.Responsavel);
         Assert.Equal(new DateOnly(2026, 8, 8), tarefa.Prazo);
+    }
+
+    [Fact]
+    public async Task DeveRestaurarEdicaoAposReinicioEAtualizarArquivosArquivados()
+    {
+        var diretorioArquivo = Path.Combine(Path.GetTempPath(), $"anamnesis-edicao-{Guid.NewGuid():N}");
+        try
+        {
+            var reuniao = CriarReuniaoArquivada();
+            var repository = new SqliteReuniaoRepository(_caminhoBanco);
+            await repository.SalvarAsync(reuniao, CancellationToken.None);
+            var handler = new EditarReuniaoHandler(
+                repository,
+                new DiscoArquivador(diretorioArquivo));
+
+            await handler.ExecutarAsync(
+                reuniao.Id,
+                "Retrospectiva do produto",
+                "Transcrição corrigida após revisão.",
+                CancellationToken.None);
+
+            var repositoryAposReinicio = new SqliteReuniaoRepository(_caminhoBanco);
+            var recuperada = await repositoryAposReinicio.ObterAsync(reuniao.Id, CancellationToken.None);
+            var diretorioReuniao = Path.Combine(
+                diretorioArquivo,
+                "2026",
+                "08",
+                reuniao.Id.ToString("N"));
+            var transcricaoMarkdown = await File.ReadAllTextAsync(
+                Path.Combine(diretorioReuniao, "transcricao.md"));
+            var ataMarkdown = await File.ReadAllTextAsync(
+                Path.Combine(diretorioReuniao, "ata.md"));
+
+            Assert.NotNull(recuperada);
+            Assert.Equal("Retrospectiva do produto", recuperada!.Titulo);
+            Assert.Equal("Transcrição corrigida após revisão.", recuperada.Transcricao!.Texto);
+            Assert.Equal(StatusReuniao.Arquivada, recuperada.Status);
+            Assert.Equal("Transcrição corrigida após revisão.", transcricaoMarkdown);
+            Assert.StartsWith("# Retrospectiva do produto", ataMarkdown, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(diretorioArquivo))
+            {
+                Directory.Delete(diretorioArquivo, recursive: true);
+            }
+        }
     }
 
     [Fact]

@@ -4,6 +4,7 @@ using Anamnesis.Application.Modelos;
 using Anamnesis.Application.Observabilidade;
 using Anamnesis.Application.UseCases;
 using Anamnesis.Infrastructure.Arquivos;
+using Anamnesis.Infrastructure.Audio;
 using Anamnesis.Infrastructure.Configuracao;
 using Anamnesis.Infrastructure.Deteccao;
 using Anamnesis.Infrastructure.Fila;
@@ -133,10 +134,15 @@ internal static class Program
                         item.Nome,
                         item.Disponivel,
                         item.Mensagem))
-                    .ToArray()),
+                    .ToArray(),
+                configuracao.Deteccao.Modo.ToString()),
             eventoRepository,
             jobQuery,
-            journal);
+            journal,
+            new WindowsNivelAudioSource(),
+            new EditarReuniaoHandler(
+                reuniaoRepository,
+                new DiscoArquivador(configuracao.DiretorioArquivo)));
 
         if (modoValidacao is not null)
         {

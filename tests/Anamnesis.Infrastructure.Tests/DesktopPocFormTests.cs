@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Runtime.ExceptionServices;
+using Anamnesis.Application.Modelos;
 using Anamnesis.Tray;
 using Xunit;
 
@@ -53,6 +54,8 @@ public sealed class DesktopPocFormTests
             AguardarInterface(() => sessao.Atualizacoes > 0);
 
             Assert.Contains(EncontrarLabels(form), label => label.Text == "DADOS LOCAIS REAIS");
+            Assert.Contains(EncontrarLabels(form), label => label.Text == "Detecção local");
+            Assert.Contains(EncontrarLabels(form), label => label.Text == "Assistido");
             Assert.DoesNotContain(EncontrarLabels(form), label => label.Text.Contains("Planejamento do produto", StringComparison.Ordinal));
             CapturarQuandoSolicitado(form, "ANAMNESIS_REAL_DESKTOP_SCREENSHOT");
 
@@ -105,6 +108,37 @@ public sealed class DesktopPocFormTests
     }
 
     [Fact]
+    public void ModoRealDeveMostrarAudioMedidoESemLeituraSemInventarValores()
+    {
+        ExecutarEmSta(() =>
+        {
+            var sessao = new DesktopSessionAudioRealFake();
+            using var form = new DesktopPocForm(
+                TemaDesktopPoc.Escuro,
+                new DesktopPocEffectsPolicy(AnimacoesAtivas: false),
+                sessao);
+            form.Show();
+            AguardarInterface(() => sessao.Atualizacoes > 0);
+
+            EncontrarBotao(form, "Ao vivo").PerformClick();
+            form.AtualizarAudioAgoraAsync().GetAwaiter().GetResult();
+
+            var medidores = EncontrarControles(form).OfType<DesktopSignalMeter>().ToArray();
+            Assert.Equal(2, medidores.Length);
+            Assert.Contains(medidores, medidor => medidor.Value == 72 && medidor.Disponivel);
+            Assert.Contains(medidores, medidor => medidor.Value == 33 && medidor.Disponivel);
+            Assert.Contains(EncontrarLabels(form), label => label.Text == "72%  sinal presente");
+
+            sessao.NivelAudio = NivelAudioLeitura.SemLeitura("Core Audio indisponível.");
+            form.AtualizarAudioAgoraAsync().GetAwaiter().GetResult();
+
+            Assert.All(medidores, medidor => Assert.False(medidor.Disponivel));
+            Assert.All(medidores, medidor => Assert.Empty(medidor.Historico));
+            Assert.Equal(2, EncontrarLabels(form).Count(label => label.Text == "Sem leitura"));
+        });
+    }
+
+    [Fact]
     public void ModoRealDeveManterDetalheAbertoNaAbaSelecionadaQuandoJobMuda()
     {
         ExecutarEmSta(() =>
@@ -134,6 +168,130 @@ public sealed class DesktopPocFormTests
     }
 
     [Fact]
+    public void EdicaoDaTranscricaoDeveSobreviverAoPollingESalvarExplicitamente()
+    {
+        ExecutarEmSta(() =>
+        {
+            var sessao = new DesktopSessionEdicaoFake();
+            using var form = new DesktopPocForm(
+                TemaDesktopPoc.Escuro,
+                new DesktopPocEffectsPolicy(AnimacoesAtivas: false),
+                sessao);
+            form.Show();
+            AguardarInterface(() => sessao.Atualizacoes > 0);
+            form.AbrirDetalheAgoraAsync(sessao.ReuniaoId, "Transcrição").GetAwaiter().GetResult();
+
+            EncontrarBotao(form, "Editar conteúdo").PerformClick();
+            System.Windows.Forms.Application.DoEvents();
+            var titulo = EncontrarControles(form)
+                .OfType<DesktopTextField>()
+                .Single(control => control.Name == "titulo-editor");
+            var transcricao = EncontrarControles(form)
+                .OfType<TextBox>()
+                .Single(control => control.Name == "transcricao-editor");
+            titulo.Text = "  Título corrigido  ";
+            transcricao.Text = "Transcrição corrigida em UTF-8: reunião e ação.";
+
+            form.AtualizarAgoraAsync().GetAwaiter().GetResult();
+
+            Assert.Same(titulo, EncontrarControles(form).OfType<DesktopTextField>()
+                .Single(control => control.Name == "titulo-editor"));
+            Assert.Equal("Transcrição corrigida em UTF-8: reunião e ação.", transcricao.Text);
+            System.Windows.Forms.Application.DoEvents();
+            CapturarQuandoSolicitado(form, "ANAMNESIS_EDITOR_SCREENSHOT");
+
+            EncontrarBotao(form, "Salvar alterações").PerformClick();
+            AguardarInterface(() => sessao.Salvamentos == 1);
+            Assert.Equal("Título corrigido", sessao.TituloSalvo);
+            Assert.Equal("Transcrição corrigida em UTF-8: reunião e ação.", sessao.TranscricaoSalva);
+        });
+    }
+
+    [Fact]
+    public void TesteGuiadoDeveGravarProcessarMostrarConsoleEConfirmarTranscricao()
+    {
+        ExecutarEmSta(() =>
+        {
+            var sessao = new DesktopSessionTesteGuiadoFake();
+            using var form = new DesktopPocForm(
+                TemaDesktopPoc.Escuro,
+                new DesktopPocEffectsPolicy(AnimacoesAtivas: false),
+                sessao);
+            form.Show();
+            AguardarInterface(() => sessao.Atualizacoes > 0);
+
+            form.AbrirTesteGuiado();
+            form.IniciarTesteGuiadoAgoraAsync(TimeSpan.Zero).GetAwaiter().GetResult();
+
+            Assert.StartsWith("Teste de áudio", sessao.TituloIniciado, StringComparison.Ordinal);
+            Assert.Equal(1, sessao.Encerramentos);
+            Assert.Contains(EncontrarLabels(form), label => label.Text.Contains("Aguardando transcrição", StringComparison.Ordinal));
+            var console = EncontrarControles(form)
+                .OfType<TextBox>()
+                .Single(control => control.Name == "console-teste");
+            Assert.Contains("worker.transcricao", console.Text, StringComparison.Ordinal);
+            System.Windows.Forms.Application.DoEvents();
+            CapturarQuandoSolicitado(form, "ANAMNESIS_GUIDED_TEST_SCREENSHOT");
+
+            sessao.Concluir();
+            form.AtualizarAgoraAsync().GetAwaiter().GetResult();
+
+            Assert.Contains(EncontrarLabels(form), label => label.Text.StartsWith("Tudo certo", StringComparison.Ordinal));
+            Assert.Contains(EncontrarLabels(form), label => label.Text.Contains("frase reconhecida", StringComparison.Ordinal));
+            Assert.NotNull(EncontrarBotao(form, "Abrir reunião"));
+        });
+    }
+
+    [Fact]
+    public void TesteGuiadoDeveCancelarCapturaEEncerrarGravacaoComSeguranca()
+    {
+        ExecutarEmSta(() =>
+        {
+            var sessao = new DesktopSessionTesteGuiadoFake();
+            using var form = new DesktopPocForm(
+                TemaDesktopPoc.Escuro,
+                new DesktopPocEffectsPolicy(AnimacoesAtivas: false),
+                sessao);
+            form.Show();
+            AguardarInterface(() => sessao.Atualizacoes > 0);
+            form.AbrirTesteGuiado();
+
+            var testeEmAndamento = form.IniciarTesteGuiadoAgoraAsync(TimeSpan.FromMinutes(1));
+            AguardarInterface(() => sessao.Etapa == EtapaDesktopPoc.Gravando);
+            EncontrarBotao(form, "Cancelar teste").PerformClick();
+            AguardarInterface(() => testeEmAndamento.IsCompleted);
+            testeEmAndamento.GetAwaiter().GetResult();
+
+            Assert.Equal(1, sessao.Encerramentos);
+            Assert.Contains(
+                EncontrarLabels(form),
+                label => label.Text.Equals("Teste cancelado", StringComparison.Ordinal));
+        });
+    }
+
+    [Fact]
+    public void TesteGuiadoDeveBloquearNovaCapturaQuandoJaExisteGravacao()
+    {
+        ExecutarEmSta(() =>
+        {
+            using var form = new DesktopPocForm(
+                TemaDesktopPoc.Escuro,
+                new DesktopPocEffectsPolicy(AnimacoesAtivas: false),
+                new DesktopSessionRecuperacaoFake());
+            form.Show();
+            form.AbrirTesteGuiado();
+
+            form.IniciarTesteGuiadoAgoraAsync(TimeSpan.Zero).GetAwaiter().GetResult();
+
+            Assert.Contains(
+                EncontrarLabels(form),
+                label => label.Text.Contains("já existe uma gravação ativa", StringComparison.OrdinalIgnoreCase));
+            Assert.NotNull(EncontrarBotao(form, "Copiar diagnóstico"));
+            Assert.NotNull(EncontrarBotao(form, "Corrigir agora"));
+        });
+    }
+
+    [Fact]
     public void FluxoManualDeveExibirProgressoFiltrarLogsEAbrirTranscricaoAoConcluir()
     {
         ExecutarEmSta(() =>
@@ -157,6 +315,9 @@ public sealed class DesktopPocFormTests
             Assert.Contains(EncontrarLabels(form), label => label.Text.Contains("Whisper transcrevendo", StringComparison.Ordinal));
             var barra = Assert.Single(EncontrarControles(form).OfType<ProgressBar>());
             Assert.Equal(ProgressBarStyle.Marquee, barra.Style);
+            var etapas = Assert.Single(EncontrarControles(form).OfType<DesktopOperationalSteps>());
+            Assert.Equal(EtapaFluxoOperacional.Transcrevendo, etapas.Estado.Atual);
+            Assert.Contains("Transcrevendo", etapas.AccessibleDescription, StringComparison.Ordinal);
             CapturarQuandoSolicitado(form, "ANAMNESIS_POC_PROCESSING_SCREENSHOT");
 
             EncontrarBotao(form, "Ver console de logs").PerformClick();
@@ -476,6 +637,47 @@ public sealed class DesktopPocFormTests
         public Task MostrarNaPastaAsync(string caminho, CancellationToken cancellationToken) => Task.CompletedTask;
     }
 
+    private sealed class DesktopSessionAudioRealFake : IDesktopSession
+    {
+        private readonly ReuniaoDesktopPoc _reuniao = new()
+        {
+            Id = Guid.NewGuid(),
+            Titulo = "Teste de áudio",
+            Data = "Agora",
+            Plataforma = "Captura OBS",
+            Duracao = "00:00:03",
+            Status = "Gravando",
+            Resumo = "Captura real.",
+            PontosPrincipais = [],
+            Transcricao = [],
+            Decisoes = [],
+            Tarefas = []
+        };
+
+        public bool ModoDemonstracao => false;
+        public EtapaDesktopPoc Etapa => EtapaDesktopPoc.Gravando;
+        public TimeSpan DuracaoGravacao => TimeSpan.FromSeconds(3);
+        public IReadOnlyList<ReuniaoDesktopPoc> Reunioes => [_reuniao];
+        public NivelAudioLeitura NivelAudio { get; set; } = new(72, 33);
+        public int Atualizacoes { get; private set; }
+
+        public Task AtualizarAsync(CancellationToken cancellationToken)
+        {
+            Atualizacoes++;
+            return Task.CompletedTask;
+        }
+
+        public Task AtualizarNivelAudioAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task IniciarGravacaoAsync(string titulo, CancellationToken cancellationToken) => Task.CompletedTask;
+        public void AvancarGravacao() { }
+        public Task EncerrarGravacaoAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+        public void ConcluirProcessamentoSimulado() { }
+        public Task<ReuniaoDesktopPoc?> ObterDetalheAsync(Guid reuniaoId, CancellationToken cancellationToken) =>
+            Task.FromResult<ReuniaoDesktopPoc?>(_reuniao);
+        public Task AbrirArquivoAsync(string caminho, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task MostrarNaPastaAsync(string caminho, CancellationToken cancellationToken) => Task.CompletedTask;
+    }
+
     private sealed class DesktopSessionRecuperacaoFake : IDesktopSession
     {
         public bool ModoDemonstracao => false;
@@ -701,6 +903,154 @@ public sealed class DesktopPocFormTests
             Resumo = "A reunião manual está sendo processada localmente.",
             PontosPrincipais = [],
             Transcricao = ["00:00:03  Transcrição final da reunião manual."],
+            Decisoes = [],
+            Tarefas = []
+        };
+    }
+
+    private sealed class DesktopSessionEdicaoFake : IDesktopSession
+    {
+        private readonly ReuniaoDesktopPoc _reuniao;
+
+        public DesktopSessionEdicaoFake()
+        {
+            _reuniao = new ReuniaoDesktopPoc
+            {
+                Id = ReuniaoId,
+                Titulo = "Título original",
+                Data = "Agora",
+                Plataforma = "Captura OBS",
+                Duracao = "00:10:00",
+                Status = "Ata pronta",
+                Resumo = "Resumo",
+                PontosPrincipais = [],
+                Transcricao = ["Transcrição original"],
+                Decisoes = [],
+                Tarefas = []
+            };
+        }
+
+        public Guid ReuniaoId { get; } = Guid.NewGuid();
+        public bool ModoDemonstracao => false;
+        public EtapaDesktopPoc Etapa => EtapaDesktopPoc.Concluido;
+        public TimeSpan DuracaoGravacao => TimeSpan.Zero;
+        public IReadOnlyList<ReuniaoDesktopPoc> Reunioes => [_reuniao];
+        public int Atualizacoes { get; private set; }
+        public int Salvamentos { get; private set; }
+        public string? TituloSalvo { get; private set; }
+        public string? TranscricaoSalva { get; private set; }
+
+        public Task AtualizarAsync(CancellationToken cancellationToken)
+        {
+            Atualizacoes++;
+            return Task.CompletedTask;
+        }
+
+        public Task SalvarEdicaoAsync(
+            Guid reuniaoId,
+            string titulo,
+            string transcricao,
+            CancellationToken cancellationToken)
+        {
+            TituloSalvo = titulo.Trim();
+            TranscricaoSalva = transcricao;
+            Salvamentos++;
+            return Task.CompletedTask;
+        }
+
+        public Task IniciarGravacaoAsync(string titulo, CancellationToken cancellationToken) => Task.CompletedTask;
+        public void AvancarGravacao() { }
+        public Task EncerrarGravacaoAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+        public void ConcluirProcessamentoSimulado() { }
+        public Task<ReuniaoDesktopPoc?> ObterDetalheAsync(Guid reuniaoId, CancellationToken cancellationToken) =>
+            Task.FromResult<ReuniaoDesktopPoc?>(reuniaoId == ReuniaoId ? _reuniao : null);
+        public Task AbrirArquivoAsync(string caminho, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task MostrarNaPastaAsync(string caminho, CancellationToken cancellationToken) => Task.CompletedTask;
+    }
+
+    private sealed class DesktopSessionTesteGuiadoFake : IDesktopSession
+    {
+        private readonly List<ReuniaoDesktopPoc> _reunioes = [];
+
+        public Guid ReuniaoId { get; } = Guid.NewGuid();
+        public bool ModoDemonstracao => false;
+        public EtapaDesktopPoc Etapa { get; private set; } = EtapaDesktopPoc.Pronto;
+        public TimeSpan DuracaoGravacao => TimeSpan.Zero;
+        public IReadOnlyList<ReuniaoDesktopPoc> Reunioes => _reunioes;
+        public Guid? ReuniaoAtivaId => Etapa == EtapaDesktopPoc.Gravando ? ReuniaoId : null;
+        public Guid? ReuniaoAcompanhadaId => _reunioes.Count == 0 ? null : ReuniaoId;
+        public NivelAudioLeitura NivelAudio { get; private set; } = new(41, 68);
+        public int Atualizacoes { get; private set; }
+        public int Encerramentos { get; private set; }
+        public string? TituloIniciado { get; private set; }
+        public IReadOnlyList<EventoObservabilidadePoc> EventosOperacionais =>
+        [
+            new EventoObservabilidadePoc(
+                DateTimeOffset.UtcNow,
+                NivelEventoPoc.Info,
+                "Worker",
+                "worker.transcricao",
+                "Transcrição local em andamento.",
+                $"r:{ReuniaoId:N}",
+                20)
+        ];
+
+        public Task AtualizarAsync(CancellationToken cancellationToken)
+        {
+            Atualizacoes++;
+            return Task.CompletedTask;
+        }
+
+        public Task AtualizarNivelAudioAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public Task IniciarGravacaoAsync(string titulo, CancellationToken cancellationToken)
+        {
+            TituloIniciado = titulo;
+            Etapa = EtapaDesktopPoc.Gravando;
+            _reunioes.Clear();
+            _reunioes.Add(CriarReuniao("Gravando", []));
+            return Task.CompletedTask;
+        }
+
+        public Task EncerrarGravacaoAsync(CancellationToken cancellationToken)
+        {
+            Encerramentos++;
+            Etapa = EtapaDesktopPoc.Processando;
+            _reunioes[0].Status = "Transcrevendo";
+            return Task.CompletedTask;
+        }
+
+        public void Concluir()
+        {
+            Etapa = EtapaDesktopPoc.Concluido;
+            _reunioes[0].Status = "Ata pronta";
+        }
+
+        public void AvancarGravacao() { }
+        public void ConcluirProcessamentoSimulado() { }
+
+        public Task<ReuniaoDesktopPoc?> ObterDetalheAsync(Guid reuniaoId, CancellationToken cancellationToken) =>
+            Task.FromResult<ReuniaoDesktopPoc?>(
+                reuniaoId == ReuniaoId
+                    ? CriarReuniao(
+                        _reunioes[0].Status,
+                        Etapa == EtapaDesktopPoc.Concluido ? ["00:00:01  frase reconhecida no teste"] : [])
+                    : null);
+
+        public Task AbrirArquivoAsync(string caminho, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task MostrarNaPastaAsync(string caminho, CancellationToken cancellationToken) => Task.CompletedTask;
+
+        private ReuniaoDesktopPoc CriarReuniao(string status, IReadOnlyList<string> transcricao) => new()
+        {
+            Id = ReuniaoId,
+            Titulo = TituloIniciado ?? "Teste de áudio",
+            Data = "Agora",
+            Plataforma = "Captura OBS",
+            Duracao = "00:00:05",
+            Status = status,
+            Resumo = "Teste guiado.",
+            PontosPrincipais = [],
+            Transcricao = transcricao,
             Decisoes = [],
             Tarefas = []
         };

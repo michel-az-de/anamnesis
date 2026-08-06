@@ -523,6 +523,99 @@ internal sealed class DesktopNavigationButton : Button
     }
 }
 
+internal sealed class DesktopOperationalSteps : Control
+{
+    private readonly DesktopPocPalette _paleta;
+    private readonly DesktopPocDesignTokens _tokens;
+
+    public DesktopOperationalSteps(DesktopPocPalette paleta, DesktopPocDesignTokens tokens)
+    {
+        _paleta = paleta;
+        _tokens = tokens;
+        Estado = FluxoOperacionalDesktop.Criar(null);
+        DoubleBuffered = true;
+        BackColor = paleta.Superficies.PainelElevado;
+        SetStyle(
+            ControlStyles.AllPaintingInWmPaint |
+            ControlStyles.OptimizedDoubleBuffer |
+            ControlStyles.UserPaint,
+            true);
+        AtualizarAcessibilidade();
+    }
+
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public EstadoFluxoOperacional Estado { get; private set; }
+
+    public void DefinirEstado(EstadoFluxoOperacional estado)
+    {
+        Estado = estado;
+        AtualizarAcessibilidade();
+        Invalidate();
+    }
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        base.OnPaint(e);
+        e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+        var itens = Estado.Itens;
+        if (itens.Count == 0)
+        {
+            return;
+        }
+
+        var larguraCelula = ClientSize.Width / (float)itens.Count;
+        var centroY = 13F;
+        using var fonte = new Font(
+            _tokens.Tipografia.Interface,
+            7.2F,
+            FontStyle.Regular,
+            GraphicsUnit.Point);
+        for (var indice = 0; indice < itens.Count; indice++)
+        {
+            var item = itens[indice];
+            var centroX = larguraCelula * indice + larguraCelula / 2F;
+            if (indice < itens.Count - 1)
+            {
+                var proximoX = larguraCelula * (indice + 1) + larguraCelula / 2F;
+                using var ligacao = new Pen(
+                    item.Estado == EstadoItemEtapa.Concluida ? _paleta.Positivo : _paleta.Borda,
+                    2F);
+                e.Graphics.DrawLine(ligacao, centroX + 7F, centroY, proximoX - 7F, centroY);
+            }
+
+            var cor = item.Estado switch
+            {
+                EstadoItemEtapa.Concluida => _paleta.Positivo,
+                EstadoItemEtapa.Atual when item.Etapa == EtapaFluxoOperacional.Falha => _paleta.Perigo,
+                EstadoItemEtapa.Atual => _paleta.Destaque,
+                _ => _paleta.Borda
+            };
+            using var preenchimento = new SolidBrush(cor);
+            e.Graphics.FillEllipse(preenchimento, centroX - 6F, centroY - 6F, 12F, 12F);
+            var areaTexto = new RectangleF(
+                larguraCelula * indice + 2F,
+                25F,
+                Math.Max(1F, larguraCelula - 4F),
+                Math.Max(1F, ClientSize.Height - 25F));
+            using var texto = new SolidBrush(
+                item.Estado == EstadoItemEtapa.Pendente ? _paleta.TextoSecundario : _paleta.Texto);
+            using var formato = new StringFormat
+            {
+                Alignment = StringAlignment.Center,
+                LineAlignment = StringAlignment.Near,
+                Trimming = StringTrimming.EllipsisWord
+            };
+            e.Graphics.DrawString(item.Nome, fonte, texto, areaTexto, formato);
+        }
+    }
+
+    private void AtualizarAcessibilidade()
+    {
+        AccessibleName = "Etapas da reunião";
+        AccessibleDescription = $"Etapa atual: {Estado.Itens.Single(item => item.Etapa == Estado.Atual).Nome}.";
+    }
+}
+
 internal sealed class DesktopSignalMeter : Control
 {
     private readonly DesktopPocPalette _paleta;
@@ -532,6 +625,7 @@ internal sealed class DesktopSignalMeter : Control
     private System.Windows.Forms.Timer? _timer;
     private double _valorExibido;
     private int _value;
+    private readonly List<int> _historico = [];
 
     public DesktopSignalMeter(
         DesktopPocPalette paleta,
@@ -560,6 +654,13 @@ internal sealed class DesktopSignalMeter : Control
         set
         {
             _value = Math.Clamp(value, 0, 100);
+            Disponivel = true;
+            AccessibleDescription = $"Nível atual: {_value} por cento.";
+            _historico.Add(_value);
+            if (_historico.Count > 48)
+            {
+                _historico.RemoveAt(0);
+            }
             if (!_animacoesAtivas)
             {
                 _valorExibido = _value;
@@ -575,6 +676,23 @@ internal sealed class DesktopSignalMeter : Control
         }
     }
 
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public bool Disponivel { get; private set; }
+
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public IReadOnlyList<int> Historico => _historico;
+
+    public void DefinirSemLeitura()
+    {
+        Disponivel = false;
+        _value = 0;
+        _valorExibido = 0;
+        _historico.Clear();
+        AccessibleDescription = "Sem leitura de nível disponível.";
+        _timer?.Stop();
+        Invalidate();
+    }
+
     protected override void OnPaint(PaintEventArgs e)
     {
         base.OnPaint(e);
@@ -583,6 +701,18 @@ internal sealed class DesktopSignalMeter : Control
         using var caminho = DesktopPocDrawing.CriarCaminhoArredondado(area, _tokens.Geometria.RaioPequeno);
         using var fundo = new SolidBrush(_paleta.Superficies.PainelElevado);
         e.Graphics.FillPath(fundo, caminho);
+
+        if (!Disponivel)
+        {
+            using var indisponivel = new Pen(_paleta.TextoSecundario, 1.5F)
+            {
+                DashStyle = DashStyle.Dash
+            };
+            e.Graphics.DrawLine(indisponivel, 8, area.Height / 2F, area.Width - 8, area.Height / 2F);
+            using var bordaIndisponivel = new Pen(_paleta.Borda, 1F);
+            e.Graphics.DrawPath(bordaIndisponivel, caminho);
+            return;
+        }
 
         var larguraAtiva = Math.Max(0, (int)Math.Round(area.Width * (_valorExibido / 100D)));
         if (larguraAtiva > 0)
@@ -605,6 +735,16 @@ internal sealed class DesktopSignalMeter : Control
 
         using var borda = new Pen(DesktopPocMotion.Misturar(_paleta.Borda, _accentColor, 0.45D), 1F);
         e.Graphics.DrawPath(borda, caminho);
+
+        if (_historico.Count > 1)
+        {
+            var pontos = _historico.Select((valor, indice) => new PointF(
+                indice * area.Width / Math.Max(1F, _historico.Count - 1F),
+                area.Height - 2F - ((area.Height - 4F) * valor / 100F)))
+                .ToArray();
+            using var linha = new Pen(_paleta.Texto, 1.5F);
+            e.Graphics.DrawLines(linha, pontos);
+        }
     }
 
     protected override void Dispose(bool disposing)
