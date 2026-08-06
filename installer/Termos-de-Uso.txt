@@ -1,0 +1,21 @@
+Anamnesis - Termos simples de uso
+Atualizado em 06/08/2026
+
+Ao selecionar "Aceito", você confirma que leu e concorda com estas condições simples.
+
+1. Uso responsável
+Você é responsável por usar o Anamnesis em conformidade com as leis, políticas e acordos aplicáveis. Antes de gravar uma reunião, obtenha os avisos e consentimentos exigidos pelas pessoas e pela organização envolvidas.
+
+2. Seus dados
+O Anamnesis mantém configuração, banco, gravações, transcrições e atas no computador escolhido por você. Atualizar, reparar ou desinstalar o aplicativo não deve apagar esses dados. Faça cópias de segurança quando necessário.
+
+3. Dependências externas
+OBS, Docker, FFmpeg, modelos de transcrição e CLIs de IA são ferramentas separadas. Cada uma possui seus próprios requisitos, licenças e contas. O instalador do Anamnesis não instala nem autentica esses componentes sem sua ação.
+
+4. Versão beta
+Esta é uma versão em evolução. Verifique atas, decisões e tarefas antes de usá-las como registro oficial ou tomar decisões importantes.
+
+5. Licença e limites
+O Anamnesis é distribuído sob a licença MIT, sem garantia expressa ou implícita. Consulte o arquivo LICENSE do projeto para o texto completo. Estes termos são um aviso simples de uso e não substituem as leis aplicáveis.
+
+Se você não concordar, escolha "Não aceito" ou cancele a instalação.

@@ -31,6 +31,7 @@ internal sealed class DesktopRealSession(
     private DateTimeOffset? _gravacaoIniciadaEm;
     private readonly SemaphoreSlim _comandos = new(1, 1);
     private readonly JornalOperacional _journal = journal ?? JornalOperacional.Nulo;
+    private int _operacoesGravacaoEmAndamento;
 
     public bool ModoDemonstracao => false;
 
@@ -59,6 +60,10 @@ internal sealed class DesktopRealSession(
     public bool RecuperacaoPendente { get; private set; }
 
     public bool Inicializada { get; private set; }
+
+    public bool PodeEncerrarParaAtualizacao =>
+        Volatile.Read(ref _operacoesGravacaoEmAndamento) == 0 &&
+        Etapa != EtapaDesktopPoc.Gravando;
 
     public Guid? ReuniaoAtivaId =>
         Etapa == EtapaDesktopPoc.Gravando ? _reuniaoAcompanhadaId : null;
@@ -135,26 +140,34 @@ internal sealed class DesktopRealSession(
 
     public async Task IniciarGravacaoAsync(string titulo, CancellationToken cancellationToken)
     {
-        await _comandos.WaitAsync(cancellationToken);
+        Interlocked.Increment(ref _operacoesGravacaoEmAndamento);
         try
         {
-            if (Etapa == EtapaDesktopPoc.Gravando)
+            await _comandos.WaitAsync(cancellationToken);
+            try
             {
-                throw new InvalidOperationException("Já existe uma gravação em andamento.");
-            }
+                if (Etapa == EtapaDesktopPoc.Gravando)
+                {
+                    throw new InvalidOperationException("Já existe uma gravação em andamento.");
+                }
 
-            var tituloNormalizado = string.IsNullOrWhiteSpace(titulo)
-                ? "Reunião sem título"
-                : titulo.Trim();
-            _reuniaoAcompanhadaId = await controlarGravacao.IniciarAsync(
-                tituloNormalizado,
-                cancellationToken);
-            _gravacaoIniciadaNestaSessaoId = _reuniaoAcompanhadaId;
-            await AtualizarSemTravaAsync(cancellationToken);
+                var tituloNormalizado = string.IsNullOrWhiteSpace(titulo)
+                    ? "Reunião sem título"
+                    : titulo.Trim();
+                _reuniaoAcompanhadaId = await controlarGravacao.IniciarAsync(
+                    tituloNormalizado,
+                    cancellationToken);
+                _gravacaoIniciadaNestaSessaoId = _reuniaoAcompanhadaId;
+                await AtualizarSemTravaAsync(cancellationToken);
+            }
+            finally
+            {
+                _comandos.Release();
+            }
         }
         finally
         {
-            _comandos.Release();
+            Interlocked.Decrement(ref _operacoesGravacaoEmAndamento);
         }
     }
 
@@ -164,30 +177,38 @@ internal sealed class DesktopRealSession(
 
     public async Task EncerrarGravacaoAsync(CancellationToken cancellationToken)
     {
-        await _comandos.WaitAsync(cancellationToken);
+        Interlocked.Increment(ref _operacoesGravacaoEmAndamento);
         try
         {
-            await AtualizarSemTravaAsync(cancellationToken);
-            if (Etapa != EtapaDesktopPoc.Gravando)
-            {
-                throw new InvalidOperationException("Não existe gravação em andamento.");
-            }
-
-            var reuniaoId = _reuniaoAcompanhadaId
-                ?? throw new InvalidOperationException("Não existe gravação em andamento.");
+            await _comandos.WaitAsync(cancellationToken);
             try
             {
-                await controlarGravacao.FinalizarAsync(reuniaoId, cancellationToken);
+                await AtualizarSemTravaAsync(cancellationToken);
+                if (Etapa != EtapaDesktopPoc.Gravando)
+                {
+                    throw new InvalidOperationException("Não existe gravação em andamento.");
+                }
+
+                var reuniaoId = _reuniaoAcompanhadaId
+                    ?? throw new InvalidOperationException("Não existe gravação em andamento.");
+                try
+                {
+                    await controlarGravacao.FinalizarAsync(reuniaoId, cancellationToken);
+                }
+                finally
+                {
+                    _gravacaoIniciadaNestaSessaoId = null;
+                    await AtualizarSemTravaAsync(CancellationToken.None);
+                }
             }
             finally
             {
-                _gravacaoIniciadaNestaSessaoId = null;
-                await AtualizarSemTravaAsync(CancellationToken.None);
+                _comandos.Release();
             }
         }
         finally
         {
-            _comandos.Release();
+            Interlocked.Decrement(ref _operacoesGravacaoEmAndamento);
         }
     }
 

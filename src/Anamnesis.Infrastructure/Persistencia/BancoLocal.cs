@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.Data.Sqlite;
 
@@ -15,11 +16,20 @@ namespace Anamnesis.Infrastructure.Persistencia;
 internal sealed class BancoLocal(
     string caminhoBanco,
     Func<SqliteConnection, CancellationToken, Task> aplicarEsquema,
-    int? timeoutComandoSegundos = null)
+    int? timeoutComandoSegundos = null,
+    TimeSpan? limiteExclusividadePreparacao = null,
+    Func<SqliteConnection, CancellationToken, Task<bool>>? esquemaPreparado = null,
+    Action? aoDetectarContencaoPreparacao = null)
 {
+    private static readonly TimeSpan IntervaloTentativaTrava = TimeSpan.FromMilliseconds(25);
     private readonly string _connectionString = CriarConnectionString(
         caminhoBanco,
         timeoutComandoSegundos);
+    private readonly TimeSpan? _limiteExclusividadePreparacao =
+        ValidarLimiteExclusividade(limiteExclusividadePreparacao);
+    private readonly string? _caminhoTravaPreparacao = limiteExclusividadePreparacao is null
+        ? null
+        : Path.GetFullPath(caminhoBanco) + ".init.lock";
 
     private readonly SemaphoreSlim _preparacao = new(1, 1);
     private int _preparacoes;
@@ -33,11 +43,45 @@ internal sealed class BancoLocal(
 
     public async Task<SqliteConnection> AbrirAsync(CancellationToken cancellationToken)
     {
-        var conexao = new SqliteConnection(_connectionString);
-        await conexao.OpenAsync(cancellationToken);
+        if (_preparado)
+        {
+            return await AbrirConexaoAsync(cancellationToken);
+        }
+
+        await _preparacao.WaitAsync(cancellationToken);
         try
         {
-            await PrepararAsync(conexao, cancellationToken);
+            if (_preparado)
+            {
+                return await AbrirConexaoAsync(cancellationToken);
+            }
+
+            await using var trava = await AdquirirTravaPreparacaoAsync(cancellationToken);
+            var conexao = await AbrirConexaoAsync(cancellationToken);
+            try
+            {
+                await PrepararConexaoAsync(conexao, cancellationToken);
+                return conexao;
+            }
+            catch
+            {
+                await conexao.DisposeAsync();
+                throw;
+            }
+        }
+        finally
+        {
+            _preparacao.Release();
+        }
+    }
+
+    private async Task<SqliteConnection> AbrirConexaoAsync(
+        CancellationToken cancellationToken)
+    {
+        var conexao = new SqliteConnection(_connectionString);
+        try
+        {
+            await conexao.OpenAsync(cancellationToken);
             return conexao;
         }
         catch
@@ -63,36 +107,84 @@ internal sealed class BancoLocal(
         return builder.ToString();
     }
 
-    private async Task PrepararAsync(SqliteConnection conexao, CancellationToken cancellationToken)
+    private async Task PrepararConexaoAsync(
+        SqliteConnection conexao,
+        CancellationToken cancellationToken)
     {
-        if (_preparado)
+        if (esquemaPreparado is not null &&
+            await esquemaPreparado(conexao, cancellationToken))
         {
+            _preparado = true;
             return;
         }
 
-        await _preparacao.WaitAsync(cancellationToken);
-        try
+        // Tray e Worker compartilham o arquivo. Em WAL, leitor e escritor deixam de se
+        // bloquear, o que importa porque o Desktop consulta o banco a cada dois segundos.
+        await using (var wal = conexao.CreateCommand())
         {
-            if (_preparado)
-            {
-                return;
-            }
-
-            // Tray e Worker compartilham o arquivo. Em WAL, leitor e escritor deixam de se
-            // bloquear, o que importa porque o Desktop consulta o banco a cada dois segundos.
-            await using (var wal = conexao.CreateCommand())
-            {
-                wal.CommandText = "PRAGMA journal_mode=WAL;";
-                await wal.ExecuteNonQueryAsync(cancellationToken);
-            }
-
-            await aplicarEsquema(conexao, cancellationToken);
-            _preparacoes++;
-            _preparado = true;
+            wal.CommandText = "PRAGMA journal_mode=WAL;";
+            await wal.ExecuteNonQueryAsync(cancellationToken);
         }
-        finally
+
+        await aplicarEsquema(conexao, cancellationToken);
+        _preparacoes++;
+        _preparado = true;
+    }
+
+    private async Task<FileStream?> AdquirirTravaPreparacaoAsync(
+        CancellationToken cancellationToken)
+    {
+        if (_caminhoTravaPreparacao is null || _limiteExclusividadePreparacao is null)
         {
-            _preparacao.Release();
+            return null;
         }
+
+        var cronometro = Stopwatch.StartNew();
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            try
+            {
+                return new FileStream(
+                    _caminhoTravaPreparacao,
+                    FileMode.OpenOrCreate,
+                    FileAccess.ReadWrite,
+                    FileShare.None,
+                    bufferSize: 1,
+                    FileOptions.None);
+            }
+            catch (IOException exception) when (EhViolacaoDeCompartilhamento(exception))
+            {
+                aoDetectarContencaoPreparacao?.Invoke();
+                var restante = _limiteExclusividadePreparacao.Value - cronometro.Elapsed;
+                if (restante <= TimeSpan.Zero)
+                {
+                    throw new TimeoutException(
+                        "O limite para preparar o banco local foi excedido.",
+                        exception);
+                }
+
+                await Task.Delay(
+                    restante < IntervaloTentativaTrava ? restante : IntervaloTentativaTrava,
+                    cancellationToken);
+            }
+        }
+    }
+
+    private static bool EhViolacaoDeCompartilhamento(IOException exception) =>
+        (exception.HResult & 0xFFFF) is 32 or 33;
+
+    private static TimeSpan? ValidarLimiteExclusividade(TimeSpan? limite)
+    {
+        if (limite is not null &&
+            (limite < TimeSpan.Zero || limite.Value.TotalMilliseconds > int.MaxValue))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(limite),
+                limite,
+                "O limite da exclusividade deve ser finito e nao negativo.");
+        }
+
+        return limite;
     }
 }

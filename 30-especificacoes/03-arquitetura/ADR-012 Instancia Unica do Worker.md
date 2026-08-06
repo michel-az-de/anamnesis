@@ -4,10 +4,10 @@ aliases: [Mutex do Worker, Exclusividade da Fila]
 tags: [adr, worker, fila, concorrencia, windows]
 type: adr
 created: 2026-08-05
-updated: 2026-08-05
+updated: 2026-08-06
 status: accepted
 summary: Apenas um processo Worker por banco local consome a fila, garantido por mutex nomeado derivado do caminho do banco.
-related: ["[[SPEK-040 Concorrencia de Worker e Fila]]", "[[SPEK-006 Worker e Retomada de Processamento]]", "[[SPEK-023 Orquestracao do Worker pelo Tray]]"]
+related: ["[[SPEK-040 Concorrencia de Worker e Fila]]", "[[SPEK-046 Limite da Espera por Exclusividade]]", "[[SPEK-006 Worker e Retomada de Processamento]]", "[[SPEK-023 Orquestracao do Worker pelo Tray]]"]
 ---
 
 # ADR-012 | Instancia unica do Worker
@@ -53,5 +53,6 @@ Deter o mutex passa a ser a invariante documentada que torna correta a liberacao
 - A guarda fica depois do ramo de retencao: `--retencao-simular` e `--retencao-aplicar` sao comandos pontuais que nao tocam na fila e nao podem virar no-op durante um processamento longo.
 - O Tray enfileira o job antes de lancar o Worker. Se o dono atual ja tiver feito sua ultima leitura, o sucessor permanece aguardando, adquire o mutex depois da liberacao e processa o job. Nao existe intervalo entre consulta e liberacao capaz de descartar o aviso.
 - Um sucessor pode permanecer bloqueado enquanto o dono processa. Os limites dos processos externos definidos na SPEK-041 impedem que uma ferramenta travada retenha a exclusividade indefinidamente em operacao normal.
+- A SPEK-046 limita a espera do sucessor e registra a expiracao no journal local. Se o dono permanecer travado alem do teto, a fila continua duravel, mas precisa de um novo acionamento depois que a exclusividade for liberada; a garantia de transferencia da SPEK-040 permanece integral apenas quando o dono termina dentro do limite.
 - Nenhuma dependencia nova: `Mutex` e da biblioteca base.
 - Risco residual aceito: o mesmo usuario em duas sessoes simultaneas do Windows compartilha `%LOCALAPPDATA%` mas nao o espaco `Local\`, e teria dois Workers. Cenario fora do uso previsto do produto.

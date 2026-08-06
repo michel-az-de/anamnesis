@@ -1,5 +1,6 @@
 using System.Drawing.Drawing2D;
 using System.Globalization;
+using System.Diagnostics;
 using Anamnesis.Application.UseCases;
 
 namespace Anamnesis.Tray;
@@ -67,7 +68,7 @@ internal sealed class DesktopPocForm : Form
         _tokens = DesktopPocDesignTokens.Padrao;
         _politicaVisual = politicaVisual;
         Text = "Anamnesis";
-        Icon = SystemIcons.Application;
+        Icon = IconeAnamnesis.Carregar();
         BackColor = _paleta.Fundo;
         ForeColor = _paleta.Texto;
         Font = new Font(_tokens.Tipografia.Interface, _tokens.Tipografia.Corpo, FontStyle.Regular, GraphicsUnit.Point);
@@ -1088,12 +1089,34 @@ internal sealed class DesktopPocForm : Form
 
     private Panel CriarTelaConfiguracoes()
     {
-        var pagina = CriarPagina("Configurações", "Tudo permanece local nesta máquina", null, out var corpo);
+        var ambienteAtual = _sessao.Ambiente;
+        var editarAvancado = !_sessao.ModoDemonstracao && ambienteAtual is not null
+            ? CriarBotaoSecundario("Editar configuração avançada", (_, _) =>
+            {
+                var inicio = new ProcessStartInfo("notepad.exe") { UseShellExecute = true };
+                inicio.ArgumentList.Add(ambienteAtual.CaminhoConfiguracao);
+                Process.Start(inicio);
+            })
+            : null;
+        var pagina = CriarPagina(
+            "Configurações",
+            "Tudo permanece local nesta máquina",
+            editarAvancado,
+            out var corpo);
         if (!_sessao.ModoDemonstracao)
         {
-            var ambiente = _sessao.Ambiente;
-            corpo.Controls.Add(CriarBlocoTexto(
-                "Configuração local em uso (somente leitura)",
+            var ambiente = ambienteAtual;
+            var conteudo = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                FlowDirection = FlowDirection.TopDown,
+                WrapContents = false,
+                AutoScroll = true,
+                BackColor = _paleta.Superficies.Canvas,
+                Padding = new Padding(0, 0, 8, 0)
+            };
+            conteudo.Controls.Add(CriarBlocoTexto(
+                "Configuração local em uso",
                 ambiente is null
                     ? ["A configuração real está ativa, mas seus caminhos não foram fornecidos à janela."]
                     :
@@ -1103,8 +1126,24 @@ internal sealed class DesktopPocForm : Form
                         $"Arquivo de reuniões: {ambiente.DiretorioArquivo}",
                         $"CLI de atas: {ambiente.NomeCli}"
                     ]));
-            corpo.Controls.Add(CriarAviso(
-                "A edição persistente de configuração não faz parte da SPEK-030. Use 'Abrir configuração' no Tray."));
+            var prontidao = ambiente?.Prontidao ?? [];
+            conteudo.Controls.Add(CriarBlocoTexto(
+                "Prontidão do pipeline",
+                prontidao.Count == 0
+                    ? ["Execute Diagnósticos pela bandeja para verificar os componentes locais."]
+                    : prontidao.Select(item =>
+                        $"{(item.Disponivel ? "PRONTO" : "PENDENTE")}  {item.Nome}: {item.Mensagem}")
+                        .ToArray()));
+            if (prontidao.Any(item => !item.Disponivel))
+            {
+                conteudo.Controls.Add(CriarAlerta(
+                    "O aplicativo continuará aberto. Configure apenas os componentes marcados como pendentes."));
+            }
+
+            conteudo.SizeChanged += (_, _) => AjustarLarguraFilhos(conteudo);
+            corpo.Controls.Add(conteudo);
+            AjustarLarguraFilhos(conteudo);
+
             return pagina;
         }
 
@@ -1387,6 +1426,24 @@ internal sealed class DesktopPocForm : Form
             Dock = DockStyle.Left
         });
         return aviso;
+    }
+
+    private DesktopSurfacePanel CriarAlerta(string mensagem)
+    {
+        var alerta = CriarCartao(DesktopSurfaceVariant.Base, accent: _paleta.Destaque);
+        alerta.Dock = DockStyle.Top;
+        alerta.Height = 48;
+        alerta.Padding = new Padding(14);
+        alerta.Margin = new Padding(0, 0, 0, 12);
+        alerta.Controls.Add(new Label
+        {
+            Text = $"Atenção: {mensagem}",
+            AutoSize = true,
+            ForeColor = _paleta.Destaque,
+            BackColor = _paleta.Superficies.Painel,
+            Dock = DockStyle.Left
+        });
+        return alerta;
     }
 
     private DesktopSurfacePanel CriarBlocoTexto(string titulo, IEnumerable<string> linhas)
@@ -1843,6 +1900,8 @@ internal sealed class DesktopPocForm : Form
         AbrirDetalheAsync(reuniaoId);
 
     internal Task AtualizarAgoraAsync() => AtualizarDadosReaisAsync();
+
+    internal void AbrirConfiguracoes() => Navegar("configuracoes");
 
     private static void AjustarLarguraFilhos(FlowLayoutPanel painel, int margem = 8)
     {

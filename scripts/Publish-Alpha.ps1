@@ -1,11 +1,27 @@
 [CmdletBinding()]
 param(
-    [string]$OutputRoot
+    [string]$OutputRoot,
+
+    [string]$Version,
+
+    [string]$NumericVersion
 )
 
 $ErrorActionPreference = "Stop"
 
 $repositorio = Split-Path -Parent $PSScriptRoot
+$versaoFoiInformada = -not [string]::IsNullOrWhiteSpace($Version)
+$versaoNumericaFoiInformada = -not [string]::IsNullOrWhiteSpace($NumericVersion)
+if ($versaoFoiInformada -xor $versaoNumericaFoiInformada) {
+    throw "Informe -Version e -NumericVersion juntos ou use a versao canonica."
+}
+
+if (-not $versaoFoiInformada) {
+    $versaoRelease = & (Join-Path $PSScriptRoot "Obter-VersaoRelease.ps1")
+    $Version = $versaoRelease.Versao
+    $NumericVersion = $versaoRelease.VersaoNumerica
+}
+
 if ([string]::IsNullOrWhiteSpace($OutputRoot)) {
     $OutputRoot = Join-Path $repositorio "artifacts\alpha\win-x64"
 }
@@ -37,10 +53,24 @@ if ($LASTEXITCODE -ne 0) {
 
 foreach ($destino in $destinos) {
     $projeto = Join-Path $repositorio $destino.Projeto
-    & $dotnet publish $projeto --configuration Release --runtime win-x64 --self-contained true --no-restore --output $destino.Diretorio --verbosity minimal
+    & $dotnet publish `
+        $projeto `
+        --configuration Release `
+        --runtime win-x64 `
+        --self-contained true `
+        --no-restore `
+        --output $destino.Diretorio `
+        --verbosity minimal `
+        "-p:Version=$Version" `
+        "-p:AssemblyVersion=$NumericVersion" `
+        "-p:FileVersion=$NumericVersion" `
+        "-p:InformationalVersion=$Version" `
+        "-p:IncludeSourceRevisionInInformationalVersion=false"
     if ($LASTEXITCODE -ne 0) {
         throw "A publicação falhou para $projeto."
     }
 }
+
+Copy-Item -LiteralPath (Join-Path $repositorio "LICENSE") -Destination (Join-Path $saida "LICENSE")
 
 Write-Host "Alpha publicada em: $saida"

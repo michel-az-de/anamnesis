@@ -158,6 +158,17 @@ public sealed class FluxoAlphaE2ETests : IAsyncLifetime
             reuniaoAtivaId: null,
             CancellationToken.None);
         Assert.Equal(TipoDecisaoDeteccao.SugerirInicio, decisaoDeteccao.Tipo);
+        await journal.RegistrarAsync(
+            NivelEventoOperacional.Info,
+            CodigosEventoOperacional.WorkerExclusividadeExpirada,
+            "Worker",
+            "A espera pela exclusividade atingiu o limite; a fila foi preservada.",
+            null,
+            null,
+            new MetadadosEventoOperacional(
+                Operacao: "aguardar_exclusividade",
+                Resultado: "limite"),
+            CancellationToken.None);
         var eventos = await eventoRepository.ListarAsync(
             new EventoOperacionalFiltro(ReuniaoId: reuniaoId),
             CancellationToken.None);
@@ -180,7 +191,7 @@ public sealed class FluxoAlphaE2ETests : IAsyncLifetime
         await File.WriteAllTextAsync(
             Path.Combine(_diretorio, "eventos-operacionais.json"),
             JsonSerializer.Serialize(eventos, OpcoesJsonEvidencia));
-        await RegistrarAsync("Journal persistiu os 13 códigos e passou no canário de conteúdo sensível.");
+        await RegistrarAsync("Journal persistiu os 14 códigos e passou no canário de conteúdo sensível.");
         await CriarResultadoAsync(reuniaoId, excluida.Status, caminhoBanco, caminhoGravacao, diretorioReuniao, caminhoEntradaCli);
         Assert.True(File.Exists(Path.Combine(_diretorio, "e2e.log")));
         Assert.True(File.Exists(Path.Combine(_diretorio, "resultado.md")));

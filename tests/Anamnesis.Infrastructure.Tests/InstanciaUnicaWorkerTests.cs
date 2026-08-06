@@ -32,21 +32,66 @@ public sealed class InstanciaUnicaWorkerTests
     }
 
     [Fact]
-    public void DeveTransferirExclusividadeParaInstanciaAguardando()
+    public void NaoDeveAguardarIndefinidamentePelaExclusividade()
+    {
+        var caminhoBanco = CriarCaminhoBanco();
+        using var primeira = InstanciaUnicaWorker.TentarAdquirir(caminhoBanco)!;
+        InstanciaUnicaWorker? segunda = null;
+        Exception? falha = null;
+        var outroProcesso = new Thread(() =>
+        {
+            try
+            {
+                segunda = InstanciaUnicaWorker.AdquirirAguardando(
+                    caminhoBanco,
+                    TimeSpan.FromMilliseconds(250));
+            }
+            catch (Exception exception)
+            {
+                falha = exception;
+            }
+        });
+
+        outroProcesso.Start();
+        var concluiu = outroProcesso.Join(TimeSpan.FromSeconds(5));
+
+        Assert.True(concluiu, "A espera pela exclusividade nao respeitou o teto.");
+        Assert.Null(falha);
+        Assert.Null(segunda);
+    }
+
+    [Fact]
+    public void NaoDeveAceitarLimiteInfinitoOuInvalido()
+    {
+        var caminhoBanco = CriarCaminhoBanco();
+        TimeSpan[] limitesInvalidos =
+        [
+            Timeout.InfiniteTimeSpan,
+            TimeSpan.FromMilliseconds(-2),
+            TimeSpan.FromMilliseconds((double)int.MaxValue + 1)
+        ];
+
+        Assert.All(limitesInvalidos, limite =>
+            Assert.Throws<ArgumentOutOfRangeException>(() =>
+                InstanciaUnicaWorker.AdquirirAguardando(caminhoBanco, limite)));
+    }
+
+    [Fact]
+    public void DeveTransferirExclusividadeDentroDoLimite()
     {
         var caminhoBanco = CriarCaminhoBanco();
         var primeira = InstanciaUnicaWorker.TentarAdquirir(caminhoBanco)!;
-        using var iniciouEspera = new ManualResetEventSlim();
         using var adquiriu = new ManualResetEventSlim();
         using var liberarSegunda = new ManualResetEventSlim();
         Exception? falha = null;
         var aguardouOutraInstancia = false;
         var outroProcesso = new Thread(() =>
         {
-            iniciouEspera.Set();
             try
             {
-                using var segunda = InstanciaUnicaWorker.AdquirirAguardando(caminhoBanco);
+                using var segunda = InstanciaUnicaWorker.AdquirirAguardando(
+                    caminhoBanco,
+                    TimeSpan.FromSeconds(30))!;
                 aguardouOutraInstancia = segunda.AguardouOutraInstancia;
                 adquiriu.Set();
                 liberarSegunda.Wait();
@@ -59,11 +104,14 @@ public sealed class InstanciaUnicaWorkerTests
         });
 
         outroProcesso.Start();
-        iniciouEspera.Wait();
         var primeiraLiberada = false;
         try
         {
-            Assert.False(adquiriu.Wait(TimeSpan.FromMilliseconds(100)));
+            Assert.True(SpinWait.SpinUntil(
+                () => (outroProcesso.ThreadState & ThreadState.WaitSleepJoin) != 0,
+                TimeSpan.FromSeconds(2)),
+                "A segunda thread nao entrou na espera do mutex.");
+            Assert.False(adquiriu.IsSet);
             primeira.Dispose();
             primeiraLiberada = true;
             Assert.True(adquiriu.Wait(TimeSpan.FromSeconds(2)));
@@ -80,6 +128,25 @@ public sealed class InstanciaUnicaWorkerTests
             liberarSegunda.Set();
             outroProcesso.Join();
         }
+    }
+
+    [Fact]
+    public void DeveAdquirirMutexAbandonadoDentroDoLimite()
+    {
+        var caminhoBanco = CriarCaminhoBanco();
+        InstanciaUnicaWorker? abandonada = null;
+        var donoAnterior = new Thread(() =>
+            abandonada = InstanciaUnicaWorker.TentarAdquirir(caminhoBanco));
+        donoAnterior.Start();
+        donoAnterior.Join();
+
+        using var recuperada = InstanciaUnicaWorker.AdquirirAguardando(
+            caminhoBanco,
+            TimeSpan.FromSeconds(2));
+
+        Assert.NotNull(abandonada);
+        Assert.NotNull(recuperada);
+        GC.KeepAlive(abandonada);
     }
 
     [Fact]

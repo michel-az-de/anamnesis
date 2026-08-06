@@ -33,6 +33,7 @@ public sealed class DiagnosticosLocaisTests
             var configuracao = new ConfiguracaoAnamnesis
             {
                 EnderecoObs = "ws://127.0.0.1:4455",
+                CaminhoExecutavelObs = arquivo,
                 CaminhoExecutavelFfmpeg = arquivo,
                 CaminhoExecutavelWhisper = arquivo,
                 CaminhoModeloWhisper = arquivo,

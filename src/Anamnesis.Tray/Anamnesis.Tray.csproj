@@ -3,7 +3,18 @@
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>
     <UseWindowsForms>true</UseWindowsForms>
+    <ApplicationIcon>Assets\Anamnesis.ico</ApplicationIcon>
+    <Version>0.2.0-beta.1</Version>
+    <AssemblyVersion>0.2.0.0</AssemblyVersion>
+    <FileVersion>0.2.0.0</FileVersion>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
   </PropertyGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Assets\Anamnesis.ico" LogicalName="Anamnesis.Tray.Assets.Anamnesis.ico" />
+    <None Update="Assets\Anamnesis.ico" CopyToOutputDirectory="PreserveNewest" TargetPath="Anamnesis.ico" />
+    <None Update="Assets\Anamnesis.png" CopyToOutputDirectory="PreserveNewest" TargetPath="Anamnesis.png" />
+    <None Update="Assets\ata.schema.json" CopyToOutputDirectory="PreserveNewest" TargetPath="ata.schema.json" />
+  </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Anamnesis.Application\Anamnesis.Application.csproj" />
     <ProjectReference Include="..\Anamnesis.Infrastructure\Anamnesis.Infrastructure.csproj" />

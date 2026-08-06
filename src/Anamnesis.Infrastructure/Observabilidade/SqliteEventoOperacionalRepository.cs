@@ -6,15 +6,30 @@ using Microsoft.Data.Sqlite;
 
 namespace Anamnesis.Infrastructure.Observabilidade;
 
-public sealed class SqliteEventoOperacionalRepository(string caminhoBancoPrincipal) :
+public sealed class SqliteEventoOperacionalRepository :
     IEventoOperacionalSink,
     IEventoOperacionalQuery
 {
     private const int TimeoutComandoSegundos = 1;
-    private readonly BancoLocal _banco = new(
-        ResolverCaminhoJournal(caminhoBancoPrincipal),
-        SqliteSchema.InicializarEventosOperacionaisAsync,
-        TimeoutComandoSegundos);
+    private static readonly TimeSpan LimiteExclusividadePreparacao = TimeSpan.FromSeconds(1);
+    private readonly BancoLocal _banco;
+
+    public SqliteEventoOperacionalRepository(string caminhoBancoPrincipal)
+        : this(caminhoBancoPrincipal, LimiteExclusividadePreparacao)
+    {
+    }
+
+    internal SqliteEventoOperacionalRepository(
+        string caminhoBancoPrincipal,
+        TimeSpan limiteExclusividadePreparacao)
+    {
+        _banco = new BancoLocal(
+            ResolverCaminhoJournal(caminhoBancoPrincipal),
+            SqliteSchema.InicializarEventosOperacionaisAsync,
+            TimeoutComandoSegundos,
+            limiteExclusividadePreparacao,
+            SqliteSchema.EventosOperacionaisEstaoInicializadosAsync);
+    }
 
     public static string ResolverCaminhoJournal(string caminhoBancoPrincipal)
     {

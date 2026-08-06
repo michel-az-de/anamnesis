@@ -4,7 +4,13 @@ internal sealed record DesktopRuntimeInfo(
     string CaminhoConfiguracao,
     string CaminhoBanco,
     string DiretorioArquivo,
-    string NomeCli);
+    string NomeCli,
+    IReadOnlyList<ProntidaoDesktopItem>? Prontidao = null);
+
+internal sealed record ProntidaoDesktopItem(
+    string Nome,
+    bool Disponivel,
+    string Mensagem);
 
 internal interface IDesktopSession
 {

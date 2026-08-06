@@ -4,7 +4,7 @@ aliases: [Índice de Especificações, Indice de SPEKs]
 tags: [especificacao, indice]
 type: moc
 created: 2026-08-04
-updated: 2026-08-05
+updated: 2026-08-06
 status: evergreen
 summary: Fonte de verdade para a ordem de leitura e estado das especificações.
 related: ["[[Especificacoes MOC]]", "[[Protocolo de Agentes]]", "[[Roadmap de Produto]]"]
@@ -58,6 +58,11 @@ related: ["[[Especificacoes MOC]]", "[[Protocolo de Agentes]]", "[[Roadmap de Pr
 | SPEK-042 | [[SPEK-042 Ciclo de Vida e Recuperacao da Reuniao]] | concluído | `Application`, `Tray` |
 | SPEK-043 | [[SPEK-043 Persistencia Local Deterministica]] | concluído | `Infrastructure` |
 | SPEK-044 | [[SPEK-044 Configuracao Local Protegida]] | concluído | `Infrastructure` |
+| SPEK-045 | [[SPEK-045 Experiencia Windows Instalada e Primeiro Uso]] | concluido | `Tray`, `Infrastructure`, `Installer`, `Scripts`, `CI` |
+| SPEK-046 | [[SPEK-046 Limite da Espera por Exclusividade]] | concluido | `Application`, `Infrastructure`, `Worker` |
+| SPEK-047 | [[SPEK-047 Instalador Resiliente com Atualizacao e Reparo]] | concluído | `Tray`, `Installer`, `Scripts`, `CI` |
+| SPEK-048 | [[SPEK-048 Inicializacao Concorrente do Journal SQLite]] | concluido | `Infrastructure` |
+| SPEK-049 | [[SPEK-049 Release Canonico do Instalador Windows]] | em validacao | `Installer`, `Scripts`, `CI`, `Docs` |
 
 ## Fluxo obrigatório
 

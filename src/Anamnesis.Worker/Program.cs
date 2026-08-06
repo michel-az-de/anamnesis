@@ -1,4 +1,5 @@
 using System.Text;
+using Anamnesis.Application.Modelos;
 using Anamnesis.Application.Observabilidade;
 using Anamnesis.Application.UseCases;
 using Anamnesis.Infrastructure.Arquivos;
@@ -24,39 +25,78 @@ internal static class Program
         Console.OutputEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
         try
         {
-            var modoRetencao = ModoRetencaoWorkerOptions.Interpretar(args);
             var caminhoConfiguracao = ObterCaminhoConfiguracao();
-            Console.WriteLine($"Worker iniciado. Configuração: {caminhoConfiguracao}");
-            var configuracao = new ArquivoConfiguracao(caminhoConfiguracao)
-                .CarregarAsync(CancellationToken.None)
-                .GetAwaiter()
-                .GetResult();
-            var reuniaoRepository = new SqliteReuniaoRepository(configuracao.CaminhoBanco);
-            var eventoRepository = new SqliteEventoOperacionalRepository(configuracao.CaminhoBanco);
-            var journal = new JornalOperacional(eventoRepository, TimeProvider.System);
-            if (modoRetencao is not null)
-            {
-                // Retenção é um comando pontual que não toca na fila: exigir exclusividade aqui
-                // faria o comando virar um no-op silencioso durante um processamento longo.
-                return ExecutarRetencaoAsync(modoRetencao, reuniaoRepository, journal)
-                    .GetAwaiter()
-                    .GetResult();
-            }
-
-            using var instanciaUnica = InstanciaUnicaWorker.AdquirirAguardando(configuracao.CaminhoBanco);
-            if (instanciaUnica.AguardouOutraInstancia)
-            {
-                Console.WriteLine(
-                    "Outro Worker estava processando esta fila. Exclusividade transferida; conferindo pendências.");
-            }
-
-            return ConsumirFilaAsync(configuracao, reuniaoRepository, journal).GetAwaiter().GetResult();
+            return Executar(
+                args,
+                caminhoConfiguracao,
+                InstanciaUnicaWorker.AdquirirAguardando,
+                Console.WriteLine);
         }
         catch (Exception exception)
         {
             Console.Error.WriteLine($"Falha do Worker: {exception.Message}");
             return 1;
         }
+    }
+
+    internal static int Executar(
+        string[] args,
+        string caminhoConfiguracao,
+        Func<string, InstanciaUnicaWorker?> adquirirExclusividade,
+        Action<string> escrever)
+    {
+        ArgumentNullException.ThrowIfNull(args);
+        ArgumentException.ThrowIfNullOrWhiteSpace(caminhoConfiguracao);
+        ArgumentNullException.ThrowIfNull(adquirirExclusividade);
+        ArgumentNullException.ThrowIfNull(escrever);
+
+        var modoRetencao = ModoRetencaoWorkerOptions.Interpretar(args);
+        escrever($"Worker iniciado. Configuração: {caminhoConfiguracao}");
+        var configuracao = new ArquivoConfiguracao(caminhoConfiguracao)
+            .CarregarAsync(CancellationToken.None)
+            .GetAwaiter()
+            .GetResult();
+        var reuniaoRepository = new SqliteReuniaoRepository(configuracao.CaminhoBanco);
+        var eventoRepository = new SqliteEventoOperacionalRepository(configuracao.CaminhoBanco);
+        var journal = new JornalOperacional(eventoRepository, TimeProvider.System);
+        if (modoRetencao is not null)
+        {
+            // Retenção é um comando pontual que não toca na fila: exigir exclusividade aqui
+            // faria o comando virar um no-op silencioso durante um processamento longo.
+            return ExecutarRetencaoAsync(modoRetencao, reuniaoRepository, journal)
+                .GetAwaiter()
+                .GetResult();
+        }
+
+        using var instanciaUnica = adquirirExclusividade(configuracao.CaminhoBanco);
+        if (instanciaUnica is null)
+        {
+            journal.RegistrarAsync(
+                    NivelEventoOperacional.Info,
+                    CodigosEventoOperacional.WorkerExclusividadeExpirada,
+                    "Worker",
+                    "A espera pela exclusividade atingiu o limite; a fila foi preservada.",
+                    null,
+                    null,
+                    new MetadadosEventoOperacional(
+                        Operacao: "aguardar_exclusividade",
+                        Resultado: "limite",
+                        DuracaoMs: InstanciaUnicaWorker.LimitePadraoDeEspera.TotalMilliseconds),
+                    CancellationToken.None)
+                .GetAwaiter()
+                .GetResult();
+            escrever(
+                "Outro Worker reteve a exclusividade além do limite. Encerrando sem processar; a fila permanece intacta.");
+            return 0;
+        }
+
+        if (instanciaUnica.AguardouOutraInstancia)
+        {
+            escrever(
+                "Outro Worker estava processando esta fila. Exclusividade transferida; conferindo pendências.");
+        }
+
+        return ConsumirFilaAsync(configuracao, reuniaoRepository, journal).GetAwaiter().GetResult();
     }
 
     private static async Task<int> ConsumirFilaAsync(
