@@ -4,7 +4,7 @@ aliases: [Índice de Especificações, Indice de SPEKs]
 tags: [especificacao, indice]
 type: moc
 created: 2026-08-04
-updated: 2026-08-05
+updated: 2026-08-06
 status: evergreen
 summary: Fonte de verdade para a ordem de leitura e estado das especificações.
 related: ["[[Especificacoes MOC]]", "[[Protocolo de Agentes]]", "[[Roadmap de Produto]]"]
@@ -59,6 +59,7 @@ related: ["[[Especificacoes MOC]]", "[[Protocolo de Agentes]]", "[[Roadmap de Pr
 | SPEK-043 | [[SPEK-043 Persistencia Local Deterministica]] | concluído | `Infrastructure` |
 | SPEK-044 | [[SPEK-044 Configuracao Local Protegida]] | concluído | `Infrastructure` |
 | SPEK-045 | [[SPEK-045 Experiencia Windows Instalada e Primeiro Uso]] | concluido | `Tray`, `Infrastructure`, `Installer`, `Scripts`, `CI` |
+| SPEK-046 | [[SPEK-046 Limite da Espera por Exclusividade]] | concluido | `Application`, `Infrastructure`, `Worker` |
 
 ## Fluxo obrigatório
 

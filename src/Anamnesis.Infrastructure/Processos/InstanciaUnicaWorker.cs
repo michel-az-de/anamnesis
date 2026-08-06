@@ -11,6 +11,13 @@ namespace Anamnesis.Infrastructure.Processos;
 public sealed class InstanciaUnicaWorker : IDisposable
 {
     private const string Prefixo = @"Local\Anamnesis.Worker.";
+
+    /// <summary>
+    /// Teto aplicado pelo Worker em produção. Limites menores existem apenas no overload
+    /// interno usado pelos testes da política de espera.
+    /// </summary>
+    public static TimeSpan LimitePadraoDeEspera { get; } = TimeSpan.FromMinutes(5);
+
     private readonly Mutex _mutex;
     private bool _liberado;
 
@@ -56,12 +63,18 @@ public sealed class InstanciaUnicaWorker : IDisposable
     }
 
     /// <summary>
-    /// Adquire a exclusividade mesmo quando outro Worker ainda a detem. A espera fecha o
-    /// intervalo entre a ultima leitura da fila pelo dono anterior e a liberacao do mutex:
-    /// a instancia lancada para um job ja enfileirado sempre tera sua vez de consultar a fila.
+    /// Aguarda a exclusividade até o teto padrão. A espera fecha o intervalo entre a última
+    /// leitura da fila pelo dono anterior e a liberação do mutex em operação normal; retorna
+    /// <c>null</c> se o dono não liberar dentro do limite.
     /// </summary>
-    public static InstanciaUnicaWorker AdquirirAguardando(string caminhoBanco)
+    public static InstanciaUnicaWorker? AdquirirAguardando(string caminhoBanco) =>
+        AdquirirAguardando(caminhoBanco, LimitePadraoDeEspera);
+
+    internal static InstanciaUnicaWorker? AdquirirAguardando(
+        string caminhoBanco,
+        TimeSpan limite)
     {
+        ValidarLimite(limite);
         var mutex = new Mutex(initiallyOwned: false, ObterNome(caminhoBanco));
         try
         {
@@ -70,14 +83,19 @@ public sealed class InstanciaUnicaWorker : IDisposable
                 return new InstanciaUnicaWorker(mutex, aguardouOutraInstancia: false);
             }
 
-            AdquirirAguardando(mutex);
-            return new InstanciaUnicaWorker(mutex, aguardouOutraInstancia: true);
+            if (AguardarAquisicao(mutex, limite))
+            {
+                return new InstanciaUnicaWorker(mutex, aguardouOutraInstancia: true);
+            }
         }
         catch
         {
             mutex.Dispose();
             throw;
         }
+
+        mutex.Dispose();
+        return null;
     }
 
     public void Dispose()
@@ -105,15 +123,27 @@ public sealed class InstanciaUnicaWorker : IDisposable
         }
     }
 
-    private static void AdquirirAguardando(Mutex mutex)
+    private static bool AguardarAquisicao(Mutex mutex, TimeSpan limite)
     {
         try
         {
-            mutex.WaitOne();
+            return mutex.WaitOne(limite);
         }
         catch (AbandonedMutexException)
         {
             // O mutex abandonado tambem transfere a posse para esta thread.
+            return true;
+        }
+    }
+
+    private static void ValidarLimite(TimeSpan limite)
+    {
+        if (limite < TimeSpan.Zero || limite.TotalMilliseconds > int.MaxValue)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(limite),
+                limite,
+                "O limite da espera deve ser finito, nao negativo e aceito pelo Mutex.");
         }
     }
 }
