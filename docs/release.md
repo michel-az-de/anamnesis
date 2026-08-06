@@ -22,7 +22,7 @@ O resultado contem apenas um pacote canonico em `artifacts/releases/<versao>/ins
 - `SHA256SUMS.txt`
 - `release.json`, com versao, commit, arquivo e hash
 
-Os binarios e payloads sao ignorados pelo Git. Uma compilacao local ou de branch e candidata. O pacote oficial deve ser obtido dos assets imutaveis da GitHub Release ou do espelho byte a byte no GitLab Generic Package Registry. Uma recompilacao da tag nunca substitui esses bytes.
+Os binarios e payloads sao ignorados pelo Git. Uma compilacao local ou de branch e candidata. O pacote oficial deve ser obtido dos assets imutaveis da GitHub Release. Uma recompilacao da tag nunca substitui esses bytes.
 
 O build padrao recusa uma arvore Git suja. `-PermitirArvoreDeTrabalhoSuja` existe apenas para diagnostico local e registra `arvoreDeTrabalhoLimpa: false` no manifesto, portanto nao deve ser usado para distribuir uma release.
 
@@ -43,23 +43,11 @@ Somente uma tag exata `v<versao>` promove os tres arquivos para uma GitHub Relea
 
 A release-base [`v0.2.0-beta.1`](https://github.com/michel-az-de/anamnesis/releases/tag/v0.2.0-beta.1) foi promovida do run `31086786207` e possui atestado imutavel. Seu instalador tem SHA-256 `5852e3e82ab9c80cf72ab85b8cd4425aeab3aa6faf401b3da0a2fc3db23dbecd`.
 
-## GitLab CI
-
-O GitLab nao recompila nem executa o instalador. Depois que a GitHub Release da mesma tag estiver disponivel, ele valida a fonte, baixa EXE, `SHA256SUMS.txt` e `release.json`, confirma commit e hashes e publica exatamente os mesmos bytes no Generic Package Registry.
-
-Configure um runner dedicado com:
-
-- tag `windows-release`;
-- PowerShell 7 e .NET 10;
-- opcoes **Protected** e execucao apenas de jobs com tag;
-- maquina efemera ou descartada apos o job;
-- sem permissao para pipelines de merge request.
-
-A pipeline aceita somente tag Git protegida e usa `CI_JOB_TOKEN`. Configure **Allow duplicates: false** no Generic Package Registry. O job nao e interrompivel: se uma tentativa anterior tiver publicado apenas parte dos assets, ele reutiliza somente arquivos com hash identico, completa os ausentes e baixa novamente os tres para verificar o espelho.
+A release atual [`v0.2.0-beta.5`](https://github.com/michel-az-de/anamnesis/releases/tag/v0.2.0-beta.5) foi promovida pelo run `31116896797`, possui atestado imutavel e EXE com SHA-256 `d9a93b43d65c3ebc85069a8c600ba24f36c8a1d1bde1bccfa2bacf9e36742dc5`.
 
 ## Publicar uma tag
 
-Depois do merge em `main`, atualize `release/versao.json`, revise e publique primeiro no GitHub:
+Depois do merge em `main`, atualize `release/versao.json`, revise e publique no GitHub:
 
 ```powershell
 $versao = Get-Content .\release\versao.json -Raw | ConvertFrom-Json
@@ -68,11 +56,3 @@ git tag -a $tag -m "Anamnesis $($versao.versao)"
 git push origin $tag
 gh release verify $tag --repo michel-az-de/anamnesis
 ```
-
-Somente depois de `gh release verify` ficar verde, envie a mesma tag e o mesmo commit ao GitLab:
-
-```powershell
-git push <remote-gitlab> $tag
-```
-
-Substitua `<remote-gitlab>` por um remoto configurado e autorizado. Proteja previamente o padrao de tag `v*` e o runner `windows-release`. A pipeline rejeita tag divergente, desprotegida ou sem a GitHub Release oficial correspondente.

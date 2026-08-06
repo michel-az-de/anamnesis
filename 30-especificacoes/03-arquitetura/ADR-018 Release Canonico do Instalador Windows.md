@@ -1,12 +1,12 @@
 ---
 title: ADR-018 Release Canonico do Instalador Windows
-aliases: [ADR Release GitLab, ADR Versao Canonica]
-tags: [adr, release, instalador, gitlab, github]
+aliases: [ADR Release GitHub, ADR Versao Canonica]
+tags: [adr, release, instalador, github]
 type: adr
 created: 2026-08-06
 updated: 2026-08-06
 status: accepted
-summary: Define uma fonte unica de versao e um pacote Windows rastreavel para GitHub Actions e GitLab CI.
+summary: Define uma fonte unica de versao e um pacote Windows rastreavel para GitHub Actions.
 related: ["[[SPEK-049 Release Canonico do Instalador Windows]]", "[[ADR-008 Instalador por Usuario com Inno Setup]]"]
 ---
 
@@ -14,7 +14,7 @@ related: ["[[SPEK-049 Release Canonico do Instalador Windows]]", "[[ADR-008 Inst
 
 ## Contexto
 
-O instalador acumulou diretorios locais de auditoria e tentativa, enquanto versoes de produto, versoes numericas, nomes de arquivos e caminhos de artifact foram repetidos em scripts e pipelines. Isso permite que o mesmo numero de versao aponte para bytes diferentes e dificulta levar o fluxo para o GitLab.
+O instalador acumulou diretorios locais de auditoria e tentativa, enquanto versoes de produto, versoes numericas, nomes de arquivos e caminhos de artifact foram repetidos em scripts e pipelines. Isso permite que o mesmo numero de versao aponte para bytes diferentes e dificulta promover uma release rastreavel no GitHub.
 
 ## Decisao
 
@@ -26,13 +26,11 @@ O `GITHUB_TOKEN` nao possui a permissao administrativa de leitura necessaria par
 
 Uma recompilacao da mesma tag pode variar por toolchain, timestamps ou ambiente e serve apenas como candidata de diagnostico. Ela nao e uma origem alternativa do pacote oficial.
 
-O GitLab e espelho byte a byte, nao segunda autoridade de build. Em tag protegida, um runner `windows-release` protegido e efemero valida a fonte, baixa os tres assets imutaveis do GitHub, confirma commit e hashes e os publica no Generic Package Registry com `CI_JOB_TOKEN`. Nenhum pipeline cria ou move tags.
-
 ## Alternativas consideradas
 
 | Alternativa | Probabilidade de adequacao | Motivo |
 | --- | ---: | --- |
-| Fonte unica + GitHub Release imutavel + espelho GitLab | 95% | Preserva bytes e atestado, evita builds oficiais divergentes e mantem o repositorio leve. |
+| Fonte unica + GitHub Release imutavel | 95% | Preserva bytes e atestado, evita builds oficiais divergentes e mantem o repositorio leve. |
 | Builds oficiais independentes nos dois provedores | 10% | Exigiria toolchain deterministica e ainda poderia produzir bytes diferentes para a mesma versao. |
 | Versionar EXEs no Git | 10% | Historico pesado e commits pouco revisaveis, sem resolver a reproducibilidade. |
 | Manter diretorios por tentativa | 5% | Facilita depuracao pontual, mas cria ambiguidade operacional e risco de distribuicao errada. |
@@ -41,7 +39,6 @@ O GitLab e espelho byte a byte, nao segunda autoridade de build. Em tag protegid
 
 - Cada tag publicada corresponde a assets imutaveis com hash e atestado verificaveis.
 - Uma configuracao administrativa indevidamente desativada causa rollback automatico da release mutavel; permanece um intervalo curto entre criacao e compensacao, eliminado apenas com credencial administrativa de leitura ou aprovacao manual.
-- O pacote oficial e obtido da GitHub Release ou do espelho byte a byte no GitLab. Reconstrucao nunca substitui esses bytes.
+- O pacote oficial e obtido da GitHub Release. Reconstrucao nunca substitui esses bytes.
 - O smoke de atualizacao prova compatibilidade com um instalador anterior realmente publicado.
 - A maquina local mantem somente o pacote canonico atual em `artifacts/releases/`.
-- A primeira publicacao no GitLab depende de remoto, tag protegida e runner protegido configurados pelo responsavel do projeto.
