@@ -56,6 +56,41 @@ public sealed class WindowsShellTests
     }
 
     [Fact]
+    public void SinalizacaoDoShellNaoDeveDependerDaDisponibilidadeDoThreadPool()
+    {
+        var chave = $"Anamnesis.Tests.Dedicated.{Guid.NewGuid():N}";
+        using var ativacao = new ManualResetEventSlim();
+        bool? executouNoThreadPool = null;
+        using var primaria = InstanciaUnicaTray.Criar(chave);
+        primaria.ObservarAtivacao(() =>
+        {
+            executouNoThreadPool = Thread.CurrentThread.IsThreadPoolThread;
+            ativacao.Set();
+        });
+
+        using var secundaria = InstanciaUnicaTray.Criar(chave);
+        secundaria.SinalizarPrimeiraInstancia();
+
+        Assert.True(ativacao.Wait(TimeSpan.FromSeconds(2)));
+        Assert.False(executouNoThreadPool);
+    }
+
+    [Fact]
+    public void DescarteDeveEncerrarObservadorSemCallbackTardio()
+    {
+        var chave = $"Anamnesis.Tests.Dispose.{Guid.NewGuid():N}";
+        using var ativacao = new ManualResetEventSlim();
+        using var primaria = InstanciaUnicaTray.Criar(chave);
+        primaria.ObservarAtivacao(() => ativacao.Set());
+        using var secundaria = InstanciaUnicaTray.Criar(chave);
+
+        primaria.Dispose();
+        secundaria.SinalizarPrimeiraInstancia();
+
+        Assert.False(ativacao.Wait(TimeSpan.FromMilliseconds(200)));
+    }
+
+    [Fact]
     public void EncerramentoParaAtualizacaoDeveConsultarProtecaoAtomicaDaSessao()
     {
         var programa = File.ReadAllText(Path.Combine(

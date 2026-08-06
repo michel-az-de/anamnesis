@@ -35,6 +35,7 @@ Instalar -> abrir Anamnesis -> validar prontidao -> permanecer na bandeja
 - O simbolo segue a identidade visual: estrela simplificada de oito pontas, no maximo um anel, fundo profundo e destaque cobre.
 - Um unico `.ico` multirresolucao identifica EXE, janela, barra de tarefas, bandeja, atalhos, instalador e desinstalador.
 - Somente uma instancia do Tray fica ativa por usuario. Uma segunda abertura solicita que a primeira mostre a janela e termina sem criar outro detector ou outro icone.
+- A escuta dos sinais nomeados de ativacao e encerramento para atualizacao usa espera dedicada e nao depende da disponibilidade do `ThreadPool`; assim, a segunda abertura e o instalador continuam responsivos sob carga.
 - Fechar a janela preserva o processo na bandeja. Sair e uma acao explicita e pede confirmacao enquanto houver gravacao ativa.
 - O menu oferece Abrir Anamnesis, estado atual, Iniciar ou Encerrar gravacao, Processar pendencias, silenciar deteccao, Diagnosticos, Abrir configuracoes, Iniciar com o Windows e Sair.
 - Acoes reais nao usam o rotulo "de teste". Os estados habilitados acompanham SQLite e sessao real.
@@ -50,6 +51,7 @@ Instalar -> abrir Anamnesis -> validar prontidao -> permanecer na bandeja
 
 - [x] Icone proprio aparece em todas as superficies Windows do produto e permanece legivel em 16 px.
 - [x] Uma segunda abertura nao cria outro Tray e traz a janela existente para frente.
+- [x] Sinais de ativacao e encerramento cooperativo continuam responsivos quando o `ThreadPool` esta sob contencao.
 - [x] Fechar a janela mantem a bandeja; sair durante gravacao exige confirmacao.
 - [x] Menu dinamico oferece as acoes definitivas e reflete pronto, gravando, processamento pendente e recuperacao.
 - [x] Inicializacao com o Windows pode ser ativada ou desativada por usuario e usa `--background`.
@@ -77,6 +79,9 @@ Instalar -> abrir Anamnesis -> validar prontidao -> permanecer na bandeja
 - Evidencias locais: `artifacts/evidencias/SPEK-045/resultado-final.md`, capturas da janela, configuracoes e menu da bandeja, log do instalador e logs do Worker.
 - Smoke ampliado concluido no runner `windows-2025`: run `31068430123`, job `validar-instalador` verde em 2m44s e artefato `8954751968` com instalador e evidencias.
 - O runner limpo validou payload, icone, versao, atalho publico isolado, startup opcional, primeira configuracao, instancia unica, Worker, desinstalacao, preservacao dos dados e logs de instalacao e desinstalacao.
+- Red de regressao no run `31104316644`: a ativacao da primeira instancia excedeu dois segundos porque `RegisterWaitForSingleObject` aguardava disponibilidade do `ThreadPool` durante a suite concorrente.
+- Green local: ativacao e encerramento usam threads de espera dedicadas, o descarte sinaliza e aguarda os observadores antes de liberar handles e os testes verificam callback fora do pool e ausencia de callback tardio.
+- Suite integrada apos a regressao: 278 de 278 testes verdes em Release, incluindo 13 de 13 `WindowsShellTests`.
 
 ## Decisoes pendentes
 

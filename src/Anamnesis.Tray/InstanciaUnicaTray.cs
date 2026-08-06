@@ -6,9 +6,11 @@ internal sealed class InstanciaUnicaTray : IDisposable
     private readonly Mutex _mutex;
     private readonly EventWaitHandle _ativacao;
     private readonly EventWaitHandle _encerramentoParaAtualizacao;
-    private RegisteredWaitHandle? _observador;
-    private RegisteredWaitHandle? _observadorEncerramento;
+    private readonly ManualResetEvent _encerrarObservadores = new(initialState: false);
+    private Thread? _observador;
+    private Thread? _observadorEncerramento;
     private bool _liberado;
+    private bool _descartado;
 
     private InstanciaUnicaTray(
         Mutex mutex,
@@ -50,12 +52,10 @@ internal sealed class InstanciaUnicaTray : IDisposable
             throw new InvalidOperationException("Somente a instancia primaria observa ativacao.");
         }
 
-        _observador ??= ThreadPool.RegisterWaitForSingleObject(
+        _observador ??= CriarObservador(
             _ativacao,
-            (_, _) => acao(),
-            state: null,
-            Timeout.InfiniteTimeSpan,
-            executeOnlyOnce: false);
+            acao,
+            "Anamnesis.Tray.Ativacao");
     }
 
     public void SinalizarPrimeiraInstancia()
@@ -76,12 +76,10 @@ internal sealed class InstanciaUnicaTray : IDisposable
             throw new InvalidOperationException("Somente a instancia primaria observa o encerramento para atualizacao.");
         }
 
-        _observadorEncerramento ??= ThreadPool.RegisterWaitForSingleObject(
+        _observadorEncerramento ??= CriarObservador(
             _encerramentoParaAtualizacao,
-            (_, _) => acao(),
-            state: null,
-            Timeout.InfiniteTimeSpan,
-            executeOnlyOnce: false);
+            acao,
+            "Anamnesis.Tray.Encerramento");
     }
 
     public void SinalizarEncerramentoParaAtualizacao()
@@ -96,12 +94,20 @@ internal sealed class InstanciaUnicaTray : IDisposable
 
     public void Dispose()
     {
-        _observador?.Unregister(null);
+        if (_descartado)
+        {
+            return;
+        }
+
+        _descartado = true;
+        _encerrarObservadores.Set();
+        AguardarObservador(_observador);
         _observador = null;
-        _observadorEncerramento?.Unregister(null);
+        AguardarObservador(_observadorEncerramento);
         _observadorEncerramento = null;
         _ativacao.Dispose();
         _encerramentoParaAtualizacao.Dispose();
+        _encerrarObservadores.Dispose();
         if (EhPrimaria && !_liberado)
         {
             _liberado = true;
@@ -109,5 +115,38 @@ internal sealed class InstanciaUnicaTray : IDisposable
         }
 
         _mutex.Dispose();
+    }
+
+    private Thread CriarObservador(EventWaitHandle evento, Action acao, string nome)
+    {
+        var observador = new Thread(() => Observar(evento, acao))
+        {
+            IsBackground = true,
+            Name = nome
+        };
+        observador.Start();
+        return observador;
+    }
+
+    private void Observar(EventWaitHandle evento, Action acao)
+    {
+        var sinais = new WaitHandle[] { evento, _encerrarObservadores };
+        while (WaitHandle.WaitAny(sinais) == 0)
+        {
+            if (_encerrarObservadores.WaitOne(TimeSpan.Zero))
+            {
+                return;
+            }
+
+            acao();
+        }
+    }
+
+    private static void AguardarObservador(Thread? observador)
+    {
+        if (observador is not null && observador != Thread.CurrentThread)
+        {
+            observador.Join();
+        }
     }
 }

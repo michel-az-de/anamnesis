@@ -88,7 +88,7 @@ Tray aberto                             -> solicitar encerramento seguro e mante
 - Green adicional: o Tray continua sendo a fonte da versao do produto; o Worker legado da release oficial e aceito como inconsistencia reparavel e precisa terminar alinhado a versao candidata apos a atualizacao.
 - O smoke ampliado usa um probe moderno inferior e nao publicavel nos cenarios de payload integro e Worker ausente, exige a causa `downgrade autom` nos logs, verifica hashes, versoes e reuniao sentinela e restaura o payload com a versao atual.
 - `InstallerContractTests`: 17 de 17 verdes; contratos de instalador e release: 18 de 18 verdes.
-- Suite integrada atual: 276 de 276 testes verdes em Release; `dotnet format --verify-no-changes` e parsers PowerShell verdes.
+- Suite integrada atual: 278 de 278 testes verdes em Release; `dotnet format --verify-no-changes` e parsers PowerShell verdes.
 - Prova de compilacao local: `Build-DowngradeProbe.ps1` reutilizou o payload canonico e gerou o EXE `0.0.1.0` nao publicavel com SHA-256 `ac1d92ae69193ebd47ac7d12e54b8e0387a5332277150959db364d59e9078a09`, igual ao manifesto efemero.
 - Inno Setup 6.7.3 compilou o instalador `0.2.0-beta.2`; SHA-256 local `bf6cfdc55d1c24e752ee6683b5704b2a20364f5221ec13f61f5ae69868d020e0`.
 - A instalacao real deste usuario foi preservada. A validacao instalada deste incremento sera executada somente no runner Windows efemero.
