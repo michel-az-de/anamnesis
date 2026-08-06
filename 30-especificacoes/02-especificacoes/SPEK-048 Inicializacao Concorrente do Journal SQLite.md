@@ -44,6 +44,7 @@ O timeout SQLite de um segundo continua correto para eventos comuns e para a nat
 - O teste de serializacao observa a violacao de compartilhamento por um seam interno minimo; nao usa atraso arbitrario para inferir que a segunda instancia chegou a trava.
 - Cancelar durante a contencao encerra a espera, descarta a conexao e nao impede uma terceira instancia de adquirir a mesma trava.
 - Um teste caixa-preta usa dois processos auxiliares locais, sem OBS, rede ou CLI de modelo, para disputar o mesmo arquivo de trava.
+- O stress de cem journals valida serializacao, schema e primeiras escritas, nao o deadline produtivo. Ele pode injetar por construtor interno um limite maior somente no teste para que preempcao do runner nao simule contencao externa prolongada; o construtor publico e o teste cronometrado continuam protegendo o limite produtivo de um segundo.
 
 ## Criterios de aceite
 
@@ -65,6 +66,7 @@ O timeout SQLite de um segundo continua correto para eventos comuns e para a nat
 - Regressao do protocolo de arquivo: um handle exclusivo impede a preparacao ate ser liberado.
 - `SqliteEventoOperacionalRepositoryTests.DuasInstanciasDevemEscreverConcorrentementeNoMesmoJournal` executado repetidamente.
 - `SqliteEventoOperacionalRepositoryTests.DeveEstabilizarPrimeiraInicializacaoConcorrenteEmCemRepeticoes` cria cem journals novos e disputa schema e primeiro `INSERT` em cada um.
+- O stress usa um seam interno apenas para separar estabilidade do protocolo e deadline; `ContencaoNaTravaDePreparacaoNaoDeveBloquearFluxoObservado` continua exercitando o construtor publico com um segundo.
 - `SqliteEventoOperacionalRepositoryTests.ContencaoNaPrimeiraEscritaNaoDeveBloquearFluxoObservado` preservado.
 - `SqliteEventoOperacionalRepositoryTests.ContencaoNaTravaDePreparacaoNaoDeveBloquearFluxoObservado` prova o teto best-effort com outro handle exclusivo.
 - `BancoLocalTests` cobre sinal deterministico da violacao de compartilhamento e cancelamento seguido por nova aquisicao.
@@ -100,3 +102,6 @@ O timeout SQLite de um segundo continua correto para eventos comuns e para a nat
 - Red estrutural deterministico: com a trava externa ocupada, o SQLite criava o arquivo do banco antes de obter exclusividade.
 - Green estrutural: o cold path agora executa semaforo, `.init.lock`, `OpenAsync` e preparacao do schema nessa ordem; o fast path continua abrindo diretamente depois da primeira preparacao.
 - Validacao local final: os testes de journal e CLI passaram juntos e a suite completa ficou 268 de 268 verde em tres execucoes consecutivas no Windows.
+- Red no runner `31100566863`: mesmo isolado do paralelismo xUnit, o dono da trava foi preemptado na iteracao 40 por mais de um segundo e o stress confundiu o descarte best-effort produtivo com falha do protocolo.
+- Green: o construtor publico continua fixo em um segundo; um overload interno permite cinco segundos somente ao stress de protocolo. Dez execucoes consecutivas cobriram mil journals disputados sem falha.
+- Regressao focada: 15 de 15 testes de `BancoLocal`, processos e journal verdes, incluindo os deadlines produtivos inalterados. Suite completa: 274 de 274 testes Release verdes.

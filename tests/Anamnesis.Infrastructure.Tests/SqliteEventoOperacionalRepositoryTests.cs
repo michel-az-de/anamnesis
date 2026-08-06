@@ -220,11 +220,12 @@ public sealed class SqliteEventoOperacionalRepositoryTests : IAsyncLifetime
     [Fact]
     public async Task DeveEstabilizarPrimeiraInicializacaoConcorrenteEmCemRepeticoes()
     {
+        var limiteStress = TimeSpan.FromSeconds(5);
         for (var iteracao = 0; iteracao < 100; iteracao++)
         {
             var caminhoBanco = Path.Combine(_diretorio, $"corrida-{iteracao}.db");
-            var primeira = new SqliteEventoOperacionalRepository(caminhoBanco);
-            var segunda = new SqliteEventoOperacionalRepository(caminhoBanco);
+            var primeira = new SqliteEventoOperacionalRepository(caminhoBanco, limiteStress);
+            var segunda = new SqliteEventoOperacionalRepository(caminhoBanco, limiteStress);
             var inicio = new TaskCompletionSource(
                 TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -251,9 +252,8 @@ public sealed class SqliteEventoOperacionalRepositoryTests : IAsyncLifetime
             inicio.TrySetResult();
             await Task.WhenAll(escritas);
 
-            var eventos = await new SqliteEventoOperacionalRepository(caminhoBanco).ListarAsync(
-                new EventoOperacionalFiltro(),
-                CancellationToken.None);
+            var eventos = await new SqliteEventoOperacionalRepository(caminhoBanco, limiteStress)
+                .ListarAsync(new EventoOperacionalFiltro(), CancellationToken.None);
             Assert.Equal(2, eventos.Count);
         }
     }
