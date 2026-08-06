@@ -76,11 +76,13 @@ Tray aberto                             -> solicitar encerramento seguro e mante
 - Red: o contrato `DowngradeDeveSerBloqueadoAntesDeClassificarPayloadIncompletoComoReparo` falhou antes da comparacao binaria anteceder a classificacao de reparo.
 - Green: a comparacao canonica avalia o Tray antes de classificar payload incompleto. O Worker so indica divergencia e recomenda reparo.
 - Regressao adicional: um Tray `0.2.0-beta.1` combinado com Worker legado `1.0.0.0` era classificado como falso downgrade.
+- Red E2E real: o run `31099937896` instalou a release oficial `0.2.0-beta.1`, mas o harness rejeitou seu Worker legado `1.0.0.0` antes de exercitar a atualizacao.
+- Green E2E focado: o smoke continua exigindo a versao exata do Tray, registra a divergencia do Worker oficial como evidencia e segue para reparar e atualizar o payload.
 - Red adicional: comparar o Worker instalado com o pacote novo fazia uma atualizacao normal aparecer como inconsistente e o diagnostico afirmava uma divergencia que nem sempre existia.
 - Green adicional: o Tray continua sendo a fonte da versao do produto; o Worker e comparado ao Tray instalado e o smoke substitui somente o Worker efemero por `1.0.0.0` antes de exigir atualizacao bem-sucedida.
 - O smoke ampliado remove o Worker somente na instalacao efemera, prova que o pacote antigo continua bloqueado, verifica a reuniao sentinela no SQLite e restaura o payload com a versao atual.
 - `InstallerContractTests`: 10 de 10 verdes.
-- Suite integrada: 268 de 268 testes verdes em Release, repetidos tres vezes no Windows apos a correcao da concorrencia.
+- Suite integrada atual: 274 de 274 testes verdes em Release; o novo contrato protege a identidade canonica do Tray diante do Worker legado oficial.
 - Inno Setup 6.7.3 compilou o instalador `0.2.0-beta.2`; SHA-256 local `bf6cfdc55d1c24e752ee6683b5704b2a20364f5221ec13f61f5ae69868d020e0`.
 - A instalacao real deste usuario foi preservada. A validacao instalada deste incremento sera executada somente no runner Windows efemero.
 

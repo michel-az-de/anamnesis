@@ -169,6 +169,8 @@ $atalhoInstalado = $false
 $configuracaoCriada = $false
 $inicioWindowsPermaneceuOpcional = $false
 $versaoInstalada = $null
+$versaoWorkerInicial = $null
+$workerInicialLegado = $false
 $versaoAtualizada = $null
 $versoesBinariosAtualizados = $false
 $reuniaoSentinela = [Guid]::NewGuid()
@@ -245,13 +247,17 @@ try {
     $binarioTrayInstalado = [Diagnostics.FileVersionInfo]::GetVersionInfo($caminhoTray)
     $binarioWorkerInstalado = [Diagnostics.FileVersionInfo]::GetVersionInfo($caminhoWorker)
     $versaoInstalada = $binarioTrayInstalado.ProductVersion
+    $versaoWorkerInicial = "$($binarioWorkerInstalado.ProductVersion)/$($binarioWorkerInstalado.FileVersion)"
     if ($binarioTrayInstalado.ProductVersion -ne $ExpectedInitialVersion -or
+        $binarioTrayInstalado.FileVersion -ne $ExpectedInitialNumericVersion) {
+        throw "A versao inicial do Tray e inesperada: " +
+            "$($binarioTrayInstalado.ProductVersion)/$($binarioTrayInstalado.FileVersion)"
+    }
+    $workerInicialLegado =
         $binarioWorkerInstalado.ProductVersion -ne $ExpectedInitialVersion -or
-        $binarioTrayInstalado.FileVersion -ne $ExpectedInitialNumericVersion -or
-        $binarioWorkerInstalado.FileVersion -ne $ExpectedInitialNumericVersion) {
-        throw "As versoes iniciais dos binarios sao inesperadas: " +
-            "Tray=$($binarioTrayInstalado.ProductVersion)/$($binarioTrayInstalado.FileVersion); " +
-            "Worker=$($binarioWorkerInstalado.ProductVersion)/$($binarioWorkerInstalado.FileVersion)"
+        $binarioWorkerInstalado.FileVersion -ne $ExpectedInitialNumericVersion
+    if ($workerInicialLegado) {
+        Write-Warning "Worker divergente na release anterior oficial: $versaoWorkerInicial"
     }
 
     $configuracaoAnterior = $env:ANAMNESIS_CONFIGURACAO
@@ -607,6 +613,8 @@ $resultado = @"
 - Configuracao criada no primeiro uso: ``$configuracaoCriada``
 - Inicializacao com Windows permaneceu opcional: ``$inicioWindowsPermaneceuOpcional``
 - Versao instalada: ``$versaoInstalada``
+- Versao inicial do Worker: ``$versaoWorkerInicial``
+- Worker inicial legado aceito da release oficial: ``$workerInicialLegado``
 - Codigo de reparo: ``$codigoReparo``
 - Log de reparo criado: ``true``
 - Codigo de atualizacao: ``$codigoAtualizacao``

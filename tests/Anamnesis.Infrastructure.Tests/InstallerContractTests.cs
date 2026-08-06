@@ -233,6 +233,34 @@ public sealed partial class InstallerContractTests
     }
 
     [Fact]
+    public void SmokeDeveAceitarWorkerLegadoDaReleaseAnteriorSemRelaxarVersaoDoTray()
+    {
+        var raiz = EncontrarRaizRepositorio();
+        var smoke = File.ReadAllText(Path.Combine(raiz, "scripts", "Test-Installer.ps1"));
+
+        Assert.Contains("workerInicialLegado", smoke, StringComparison.Ordinal);
+        Assert.Contains(
+            "$binarioTrayInstalado.ProductVersion -ne $ExpectedInitialVersion",
+            smoke,
+            StringComparison.Ordinal);
+
+        var inicioValidacaoTray = smoke.IndexOf(
+            "if ($binarioTrayInstalado.ProductVersion -ne $ExpectedInitialVersion",
+            StringComparison.Ordinal);
+        var fimValidacaoTray = smoke.IndexOf(
+            "$workerInicialLegado =",
+            inicioValidacaoTray,
+            StringComparison.Ordinal);
+        Assert.True(inicioValidacaoTray >= 0 && fimValidacaoTray > inicioValidacaoTray);
+        var validacaoTray = smoke[inicioValidacaoTray..fimValidacaoTray];
+        Assert.DoesNotContain(
+            "$binarioWorkerInstalado.ProductVersion",
+            validacaoTray,
+            StringComparison.Ordinal);
+        Assert.Contains("Worker divergente na release anterior oficial", smoke, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void WizardElevadoDeveDiagnosticarVersaoEEvitarAbrirTrayEmReparoOuAtualizacao()
     {
         var raiz = EncontrarRaizRepositorio();
