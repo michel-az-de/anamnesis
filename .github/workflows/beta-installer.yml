@@ -184,8 +184,12 @@ jobs:
             throw 'O manifesto nao vincula corretamente versao, tag, commit, arvore limpa e hash.'
           }
 
-          gh release view $env:ANAMNESIS_TAG --repo $env:GITHUB_REPOSITORY *> $null
-          if ($LASTEXITCODE -eq 0) {
+          $releasesExistentes = gh release list --repo $env:GITHUB_REPOSITORY --limit 1000 --json tagName | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Nao foi possivel listar as releases antes da promocao.'
+          }
+          $tagsExistentes = @($releasesExistentes | ForEach-Object { $_.tagName })
+          if ($tagsExistentes -contains $env:ANAMNESIS_TAG) {
             throw "A release $env:ANAMNESIS_TAG ja existe e nao sera sobrescrita."
           }
 
