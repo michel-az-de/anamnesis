@@ -32,7 +32,7 @@ Eliminar diretorios de tentativa e versoes divergentes do instalador. Cada relea
 
 ## Criterios de aceite
 
-- [x] A versao `0.2.0-beta.5`, sua versao numerica e a identidade verificavel da release anterior estao declaradas uma unica vez em `release/versao.json`.
+- [x] A versao `0.2.0-beta.6`, sua versao numerica e a identidade verificavel da release anterior estao declaradas uma unica vez em `release/versao.json`.
 - [x] `Build-Installer.ps1` usa a configuracao por padrao, falha ao receber apenas uma das versoes e gera manifesto com SHA-256 e commit completo.
 - [x] O build distribuivel exige arvore Git limpa e associa o manifesto ao SHA completo do commit.
 - [x] O Inno Setup e a publicacao autocontida nao carregam uma versao beta fixa como padrao independente.
@@ -40,7 +40,7 @@ Eliminar diretorios de tentativa e versoes divergentes do instalador. Cada relea
 - [x] A promocao GitHub exige releases imutaveis, recusa sobrescrita, compensa a publicacao mutavel e verifica release e assets com atestado.
 - [x] README e runbook explicam build, hash e promocao GitHub.
 - [x] Os contratos cobrem fonte unica, release anterior real, promocao duravel e GitHub como autoridade unica.
-- [x] A tag `v0.2.0-beta.5` conclui o smoke instalado e produz release imutavel verificada no run `31116896797`.
+- [x] A tag `v0.2.0-beta.6` conclui o smoke instalado e produz release imutavel verificada no run `31126791469`.
 - [x] `artifacts/beta/` legado estava ausente na checkout auditada apos existir o pacote canonico verificado.
 
 ## Fora de escopo
@@ -61,6 +61,8 @@ Eliminar diretorios de tentativa e versoes divergentes do instalador. Cada relea
 - Falha controlada da primeira promocao: a tag `v0.2.0-beta.4`, preservada no commit `925c22819de89efe4ec0b6b091f1421382787754`, executou o run `31112674427`. O smoke instalado ficou verde, mas `publicar-release-github` falhou antes de criar a release porque a ausencia esperada em `gh release view` foi tratada como erro terminante pelo PowerShell estrito. A correcao usa uma consulta de lista com retorno de sucesso e promove a proxima versao `0.2.0-beta.5`.
 - Release canonica: a tag `v0.2.0-beta.5` aponta para `bc62897822c5f9777c14c7832b12df74b3cf6be1`. O run `31116896797` terminou verde nos jobs `validar-instalador` e `publicar-release-github`; a release oficial esta em `https://github.com/michel-az-de/anamnesis/releases/tag/v0.2.0-beta.5` com `isImmutable=true`.
 - Atestacao e assets: `gh release verify v0.2.0-beta.5` e `gh release verify-asset` para EXE, `SHA256SUMS.txt` e `release.json` validaram a atestacao Sigstore. A auditoria local dos tres assets confirmou `release.json` com versao `0.2.0-beta.5`, tag esperada, commit completo e arvore limpa. O SHA-256 oficial do EXE e `d9a93b43d65c3ebc85069a8c600ba24f36c8a1d1bde1bccfa2bacf9e36742dc5`, igual ao manifesto e a `SHA256SUMS.txt`.
+- Release corretiva canonica: a tag anotada `v0.2.0-beta.6` aponta para o merge `2fbbb4c98d4f41c3299f5a0f26481cbe502411bf`. Durante a indisponibilidade parcial do GitHub Actions, o workflow foi disparado manualmente com a tag como ref; o run `31126791469` terminou verde nos jobs `validar-instalador` e `publicar-release-github`, incluindo 285 testes Release e o smoke Windows instalado. A release oficial esta em `https://github.com/michel-az-de/anamnesis/releases/tag/v0.2.0-beta.6` com `isImmutable=true`.
+- Atestacao e assets da corretiva: `gh release verify v0.2.0-beta.6` e `gh release verify-asset` validaram os tres assets oficiais. A auditoria em `C:\tmp\anamnesis-release-v0.2.0-beta.6-official` confirmou EXE `0.2.0.5` com 65.269.020 bytes, `release.json` associado ao commit da tag e arvore limpa, e `SHA256SUMS.txt` coerente. O SHA-256 oficial do EXE e `80ca930b38954100d6f733200c4ed7e8cbc291ea3c52a1ea498b0806b0d38cb9`.
 - Limpeza posterior: `artifacts/beta/` nao existe na checkout auditada depois da confirmacao da release canonica, portanto nada foi removido.
 
 ## Decisoes pendentes

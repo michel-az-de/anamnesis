@@ -65,6 +65,10 @@ related: ["[[Especificacoes MOC]]", "[[Protocolo de Agentes]]", "[[Roadmap de Pr
 | SPEK-049 | [[SPEK-049 Release Canonico do Instalador Windows]] | concluído | `Installer`, `Scripts`, `CI`, `Docs` |
 | SPEK-050 | [[SPEK-050 Fluxo de Processamento Assistido no Tray]] | concluído | `Application`, `Infrastructure`, `Tray` |
 
+## Release oficial atual
+
+- [`v0.2.0-beta.6`](https://github.com/michel-az-de/anamnesis/releases/tag/v0.2.0-beta.6), imutável e atestada no run [`31126791469`](https://github.com/michel-az-de/anamnesis/actions/runs/31126791469); SHA-256 do EXE: `80ca930b38954100d6f733200c4ed7e8cbc291ea3c52a1ea498b0806b0d38cb9`.
+
 ## Fluxo obrigatório
 
 ```text

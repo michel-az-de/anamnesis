@@ -28,7 +28,7 @@ Duas limitações continuam registradas: um Worker morto no meio da transcriçã
 | Entrega para a alpha | Peso | Concluído | Avanço | Evidência atual |
 | --- | ---: | ---: | ---: | --- |
 | Especificações, ADRs e protocolo multi-LLM | 5% | 100% | 5% | SPEKs 001–004, ADRs 001–003 e protocolo versionados |
-| Solução .NET, qualidade e TDD inicial | 5% | 100% | 5% | Solução compilável e 284 testes automatizados verdes, incluindo OBS, Docker, Tray, Worker black box, Desktop real, observabilidade, motion, detecção local e release Windows |
+| Solução .NET, qualidade e TDD inicial | 5% | 100% | 5% | Solução compilável e 285 testes automatizados verdes, incluindo OBS, Docker, Tray, Worker black box, Desktop real, observabilidade, motion, detecção local e release Windows |
 | Ciclo de vida de reunião no domínio | 10% | 100% | 10% | Estados, falha, retentativa, arquivamento e retenção cobertos por testes e persistência |
 | Fila local durável | 10% | 100% | 10% | `SqliteJobQueue` com reserva atômica, liberação e conclusão testadas |
 | Persistência de reuniões | 10% | 100% | 10% | `SqliteReuniaoRepository` persiste e restaura o agregado com testes em banco temporário |
@@ -82,8 +82,8 @@ A alpha estará pronta quando, em uma máquina Windows limpa e com pré-requisit
 | Configuração local protegida | SPEK 100% concluída | Senha do OBS protegida por DPAPI com migração transparente do formato em texto claro ([[ADR-014 Protecao de Segredos Locais]]) |
 | Espera finita pela exclusividade do Worker | SPEK 100% concluída | Teto de 5 minutos, saída zero, fila intacta e evento `worker.exclusividade_expirada` persistido no journal ([[SPEK-046 Limite da Espera por Exclusividade]]) |
 | Inicialização concorrente do journal | SPEK 100% concluída | Trava de arquivo entre processos, checagem read-only do schema e cem primeiros acessos concorrentes estabilizados ([[SPEK-048 Inicializacao Concorrente do Journal SQLite]]) |
-| Release canônico do instalador Windows | SPEK 100% concluída | O run [`31116896797`](https://github.com/michel-az-de/anamnesis/actions/runs/31116896797) concluiu o smoke e a promoção. A [release `v0.2.0-beta.5`](https://github.com/michel-az-de/anamnesis/releases/tag/v0.2.0-beta.5) é imutável, atestada por `gh release verify` e tem EXE, `SHA256SUMS.txt` e `release.json` verificados por `gh release verify-asset`; SHA-256 oficial do EXE: `d9a93b43d65c3ebc85069a8c600ba24f36c8a1d1bde1bccfa2bacf9e36742dc5` ([[SPEK-049 Release Canonico do Instalador Windows]]) |
-| Fluxo de processamento assistido no Tray | SPEK 100% concluída | Título manual no Command Deck e no menu do Tray, barra indeterminada, console correlacionado por `ReuniaoId`, abertura direta na aba Transcrição e polling incremental sem recriar a página ativa; 284 testes Release verdes ([[SPEK-050 Fluxo de Processamento Assistido no Tray]]) |
+| Release canônico do instalador Windows | SPEK 100% concluída | O run [`31126791469`](https://github.com/michel-az-de/anamnesis/actions/runs/31126791469) concluiu 285 testes Release, smoke instalado e promoção. A [release `v0.2.0-beta.6`](https://github.com/michel-az-de/anamnesis/releases/tag/v0.2.0-beta.6) é imutável, atestada por `gh release verify` e tem EXE, `SHA256SUMS.txt` e `release.json` verificados por `gh release verify-asset`; SHA-256 oficial do EXE: `80ca930b38954100d6f733200c4ed7e8cbc291ea3c52a1ea498b0806b0d38cb9` ([[SPEK-049 Release Canonico do Instalador Windows]]) |
+| Fluxo de processamento assistido no Tray | SPEK 100% concluída | Título manual no Command Deck e no menu do Tray, barra indeterminada, console correlacionado por `ReuniaoId`, abertura direta na aba Transcrição e polling incremental sem recriar a página ativa; 285 testes Release verdes ([[SPEK-050 Fluxo de Processamento Assistido no Tray]]) |
 
 ## Próximo incremento
 
