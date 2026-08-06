@@ -5,8 +5,8 @@ tags: [especificacao, release, instalador, gitlab, github]
 type: spek
 created: 2026-08-06
 updated: 2026-08-06
-status: validating
-summary: Centraliza a versao do instalador, promove assets imutaveis no GitHub e os espelha byte a byte no GitLab.
+status: completed
+summary: Centraliza a versao do instalador, promove assets imutaveis no GitHub e define o espelho byte a byte no GitLab quando o remoto e o runner forem provisionados.
 related: ["[[SPEK-047 Instalador Resiliente com Atualizacao e Reparo]]", "[[ADR-018 Release Canonico do Instalador Windows]]"]
 ---
 
@@ -42,8 +42,8 @@ Eliminar diretorios de tentativa e versoes divergentes do instalador. Cada relea
 - [x] `.gitlab-ci.yml` aceita somente tag protegida e espelha os bytes oficiais no Generic Package Registry sem executar instalador.
 - [x] README e runbook explicam build, hash, promocao GitHub e espelho GitLab.
 - [x] Os contratos cobrem fonte unica, release anterior real, promocao duravel e isolamento do GitLab.
-- [ ] A tag `v0.2.0-beta.5` conclui o smoke instalado e produz release imutavel verificada.
-- [ ] `artifacts/beta/` legado e removido somente apos existir um pacote canonico verificado em `artifacts/releases/`.
+- [x] A tag `v0.2.0-beta.5` conclui o smoke instalado e produz release imutavel verificada no run `31116896797`.
+- [x] `artifacts/beta/` legado estava ausente na checkout auditada apos existir o pacote canonico verificado; nenhuma remocao foi necessaria nem executada antes da confirmacao.
 
 ## Fora de escopo
 
@@ -60,7 +60,10 @@ Eliminar diretorios de tentativa e versoes divergentes do instalador. Cada relea
 - Green completo local: 281 de 281 testes Release aprovados na branch Windows integrada. Os runs `31099937896`, `31100566863`, `31101580716`, `31104316644`, `31105631929`, `31106730785` e `31108401017` revelaram, respectivamente, rejeicao do Worker legado, flutuacao no stress do journal, uma tentativa invalida de reparo com o instalador legado, contencao do `ThreadPool` no sinal de instancia unica, reutilizacao do caminho `HKCU` depois da migracao elevada para `HKLM`, reativacao indevida da tarefa de startup e ausencia da causa explicita no primeiro ramo de bloqueio de downgrade.
 - Green instalado da candidata: o run `31109639731` confirmou as sete regressoes no runner `windows-2025`, publicou o artifact temporario `candidato-anamnesis-0.2.0-beta.4-31109639731` e produziu EXE com SHA-256 `e1321b5a00f463334841f633353456527558f80f4be7579151bd1ecab9b05ba7`. A promocao imutavel ainda depende da tag exata.
 - Falha controlada da primeira promocao: a tag `v0.2.0-beta.4`, preservada no commit `925c22819de89efe4ec0b6b091f1421382787754`, executou o run `31112674427`. O smoke instalado ficou verde, mas `publicar-release-github` falhou antes de criar a release porque a ausencia esperada em `gh release view` foi tratada como erro terminante pelo PowerShell estrito. A correcao usa uma consulta de lista com retorno de sucesso e promove a proxima versao `0.2.0-beta.5`.
+- Release canonica: a tag `v0.2.0-beta.5` aponta para `bc62897822c5f9777c14c7832b12df74b3cf6be1`. O run `31116896797` terminou verde nos jobs `validar-instalador` e `publicar-release-github`; a release oficial esta em `https://github.com/michel-az-de/anamnesis/releases/tag/v0.2.0-beta.5` com `isImmutable=true`.
+- Atestacao e assets: `gh release verify v0.2.0-beta.5` e `gh release verify-asset` para EXE, `SHA256SUMS.txt` e `release.json` validaram a atestacao Sigstore. A auditoria local dos tres assets confirmou `release.json` com versao `0.2.0-beta.5`, tag esperada, commit completo e arvore limpa. O SHA-256 oficial do EXE e `d9a93b43d65c3ebc85069a8c600ba24f36c8a1d1bde1bccfa2bacf9e36742dc5`, igual ao manifesto e a `SHA256SUMS.txt`.
+- Limpeza posterior: `artifacts/beta/` nao existe na checkout auditada depois da confirmacao da release canonica, portanto nada foi removido.
 
 ## Decisoes pendentes
 
-- URL do remoto GitLab, protecao da tag e cadastro do runner `windows-release` protegido e efemero.
+- URL do remoto GitLab, protecao da tag e cadastro do runner `windows-release` protegido e efemero. Isso nao bloqueia a release oficial do GitHub ja confirmada.
