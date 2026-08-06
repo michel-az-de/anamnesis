@@ -8,6 +8,28 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+function Get-ValorRegistroOpcional {
+    param(
+        [Parameter(Mandatory)]
+        [string]$Caminho,
+
+        [Parameter(Mandatory)]
+        [string]$Nome
+    )
+
+    if (-not (Test-Path -LiteralPath $Caminho)) {
+        return $null
+    }
+
+    $chave = Get-ItemProperty -LiteralPath $Caminho
+    $propriedade = $chave.PSObject.Properties[$Nome]
+    if ($null -eq $propriedade) {
+        return $null
+    }
+
+    return $propriedade.Value
+}
+
 $repositorio = Split-Path -Parent $PSScriptRoot
 $instalador = [IO.Path]::GetFullPath($InstallerPath)
 if (-not (Test-Path -LiteralPath $instalador -PathType Leaf)) {
@@ -16,10 +38,9 @@ if (-not (Test-Path -LiteralPath $instalador -PathType Leaf)) {
 
 $registroProdutoInstalado = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{B762A4D8-3BA7-4FB4-9A0A-A8135AB0DF2E}_is1"
 $registroInicializacao = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
-$inicioExistente = Get-ItemPropertyValue `
-    -LiteralPath $registroInicializacao `
-    -Name "Anamnesis" `
-    -ErrorAction SilentlyContinue
+$inicioExistente = Get-ValorRegistroOpcional `
+    -Caminho $registroInicializacao `
+    -Nome "Anamnesis"
 if ((Test-Path -LiteralPath $registroProdutoInstalado) -or $null -ne $inicioExistente) {
     throw "O smoke foi interrompido para preservar uma instalacao real do Anamnesis neste usuario. Execute em Windows limpo ou no runner efemero da CI."
 }
@@ -108,10 +129,9 @@ try {
     if (-not $atalhoInstalado) {
         throw "O atalho publico unico nao foi criado: $atalhoMenuIniciar"
     }
-    $inicioWindowsPermaneceuOpcional = $null -eq (Get-ItemPropertyValue `
-        -LiteralPath $registroInicializacao `
-        -Name "Anamnesis" `
-        -ErrorAction SilentlyContinue)
+    $inicioWindowsPermaneceuOpcional = $null -eq (Get-ValorRegistroOpcional `
+        -Caminho $registroInicializacao `
+        -Nome "Anamnesis")
     if (-not $inicioWindowsPermaneceuOpcional) {
         throw "A inicializacao com o Windows foi criada mesmo com a tarefa desmarcada."
     }
