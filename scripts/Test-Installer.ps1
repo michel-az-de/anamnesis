@@ -162,6 +162,7 @@ $reuniaoSentinelaPreservada = $false
 $hashConfiguracaoAntes = $null
 $hashBancoAntesAtualizacao = $null
 $atalhoPreservado = $false
+$workerLegadoAtualizado = $false
 $downgradeComPayloadIncompletoBloqueado = $false
 $encerramentoCooperativoDesinstalacao = $false
 $trayDeixadoAtivoParaDesinstalacao = $false
@@ -340,6 +341,22 @@ try {
         }
         $hashBancoAntesAtualizacao = (Get-FileHash -LiteralPath $caminhoBanco -Algorithm SHA256).Hash
 
+        $caminhoWorkerLegado = Join-Path `
+            $repositorio `
+            "src\Anamnesis.Worker\bin\Release\net10.0-windows\Anamnesis.Worker.exe"
+        if (-not (Test-Path -LiteralPath $caminhoWorkerLegado -PathType Leaf)) {
+            throw "O Worker legado de regressao nao foi encontrado: $caminhoWorkerLegado"
+        }
+        $versaoWorkerLegado = [Diagnostics.FileVersionInfo]::GetVersionInfo($caminhoWorkerLegado)
+        if ($versaoWorkerLegado.FileVersion -ne "1.0.0.0") {
+            throw "O Worker legado nao reproduz a versao 1.0.0.0: $($versaoWorkerLegado.FileVersion)"
+        }
+        Copy-Item -LiteralPath $caminhoWorkerLegado -Destination $caminhoWorker -Force
+        $versaoWorkerMisto = [Diagnostics.FileVersionInfo]::GetVersionInfo($caminhoWorker)
+        if ($versaoWorkerMisto.FileVersion -ne "1.0.0.0") {
+            throw "O smoke nao conseguiu simular o Worker legado."
+        }
+
         $processoAtualizacao = Start-Process -FilePath $atualizador -ArgumentList @(
             "/VERYSILENT",
             "/SUPPRESSMSGBOXES",
@@ -368,6 +385,7 @@ try {
                 "Tray=$($versaoTrayAtualizada.ProductVersion)/$($versaoTrayAtualizada.FileVersion); " +
                 "Worker=$($versaoWorkerAtualizada.ProductVersion)/$($versaoWorkerAtualizada.FileVersion)"
         }
+        $workerLegadoAtualizado = $true
         if (-not (Test-Path -LiteralPath $caminhoConfiguracao -PathType Leaf) -or
             -not (Test-Path -LiteralPath $sentinela -PathType Leaf)) {
             throw "A atualizacao nao preservou os dados do usuario."
@@ -575,6 +593,7 @@ $resultado = @"
 - Log de atualizacao criado: ``true``
 - Versao atualizada: ``$versaoAtualizada``
 - Binarios atualizados para a mesma versao: ``$versoesBinariosAtualizados``
+- Worker legado atualizado sem falso downgrade: ``$workerLegadoAtualizado``
 - Codigo do downgrade bloqueado: ``$codigoDowngradeBloqueado``
 - Codigo do downgrade com Worker ausente: ``$codigoDowngradeIncompletoBloqueado``
 - Downgrade com payload incompleto bloqueado: ``$downgradeComPayloadIncompletoBloqueado``

@@ -181,6 +181,40 @@ public sealed partial class InstallerContractTests
     }
 
     [Fact]
+    public void WorkerLegadoNaoDeveBloquearAtualizacaoBaseadaNoTray()
+    {
+        var raiz = EncontrarRaizRepositorio();
+        var inno = File.ReadAllText(Path.Combine(raiz, "installer", "Anamnesis.iss"));
+        var inicioComparacao = inno.IndexOf("function CompararVersoesDisponiveis(", StringComparison.Ordinal);
+        var fimComparacao = inno.IndexOf("procedure DeterminarModoInstalacao;", inicioComparacao, StringComparison.Ordinal);
+
+        Assert.True(inicioComparacao >= 0 && fimComparacao > inicioComparacao);
+        var comparacao = inno[inicioComparacao..fimComparacao];
+
+        Assert.Contains("ExecutavelTray", comparacao, StringComparison.Ordinal);
+        Assert.DoesNotContain("ExecutavelWorker", comparacao, StringComparison.Ordinal);
+        Assert.Contains("WorkerComVersaoDivergente", inno, StringComparison.Ordinal);
+
+        var inicioDivergencia = inno.IndexOf(
+            "function WorkerPossuiVersaoDivergente(",
+            StringComparison.Ordinal);
+        var fimDivergencia = inno.IndexOf(
+            "function CompararVersoesDisponiveis(",
+            inicioDivergencia,
+            StringComparison.Ordinal);
+
+        Assert.True(inicioDivergencia >= 0 && fimDivergencia > inicioDivergencia);
+        var divergencia = inno[inicioDivergencia..fimDivergencia];
+        Assert.Contains("ExecutavelTray", divergencia, StringComparison.Ordinal);
+        Assert.Contains("ExecutavelWorker", divergencia, StringComparison.Ordinal);
+        Assert.DoesNotContain("{srcexe}", divergencia, StringComparison.Ordinal);
+
+        var smoke = File.ReadAllText(Path.Combine(raiz, "scripts", "Test-Installer.ps1"));
+        Assert.Contains("caminhoWorkerLegado", smoke, StringComparison.Ordinal);
+        Assert.Contains("Worker legado", smoke, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void WizardElevadoDeveDiagnosticarVersaoEEvitarAbrirTrayEmReparoOuAtualizacao()
     {
         var raiz = EncontrarRaizRepositorio();

@@ -99,6 +99,7 @@ var
   PaginaAcao: TInputOptionWizardPage;
   DowngradeDetectado: Boolean;
   InstalacaoAnteriorDetectada: Boolean;
+  WorkerComVersaoDivergente: Boolean;
   UltimoDiagnosticoAnterior: String;
 
 function PayloadObrigatorioExiste(const Diretorio: String): Boolean;
@@ -171,13 +172,34 @@ begin
   end;
 end;
 
+function WorkerPossuiVersaoDivergente(const Diretorio: String): Boolean;
+var
+  VersaoBinariaTray: Int64;
+  VersaoBinariaWorker: Int64;
+begin
+  Result := False;
+  if not GetPackedVersion(
+    AddBackslash(Diretorio) + ExecutavelTray,
+    VersaoBinariaTray) then
+  begin
+    Exit;
+  end;
+
+  if not GetPackedVersion(
+    AddBackslash(Diretorio) + ExecutavelWorker,
+    VersaoBinariaWorker) then
+  begin
+    Exit;
+  end;
+
+  Result := ComparePackedVersion(VersaoBinariaWorker, VersaoBinariaTray) <> 0;
+end;
+
 function CompararVersoesDisponiveis(
   const Diretorio: String;
   var ComparacaoAcumulada: Integer): Boolean;
 var
   VersaoBinariaNova: Int64;
-  VersaoTrayEncontrada: Boolean;
-  VersaoWorkerEncontrada: Boolean;
 begin
   Result := False;
   ComparacaoAcumulada := 0;
@@ -186,15 +208,10 @@ begin
     Exit;
   end;
 
-  VersaoTrayEncontrada := CompararVersaoDoExecutavel(
+  Result := CompararVersaoDoExecutavel(
     AddBackslash(Diretorio) + ExecutavelTray,
     VersaoBinariaNova,
     ComparacaoAcumulada);
-  VersaoWorkerEncontrada := CompararVersaoDoExecutavel(
-    AddBackslash(Diretorio) + ExecutavelWorker,
-    VersaoBinariaNova,
-    ComparacaoAcumulada);
-  Result := VersaoTrayEncontrada or VersaoWorkerEncontrada;
 end;
 
 procedure DeterminarModoInstalacao;
@@ -208,6 +225,7 @@ begin
   VersaoInstalada := '';
   DowngradeDetectado := False;
   InstalacaoAnteriorDetectada := False;
+  WorkerComVersaoDivergente := False;
   if not RegQueryStringValue(
     HKLM,
     ChaveDesinstalacao,
@@ -242,6 +260,8 @@ begin
   begin
     ComparacaoDeVersaoDisponivel :=
       CompararVersoesDisponiveis(DiretorioInstalacaoAnterior, ComparacaoDeVersao);
+    WorkerComVersaoDivergente :=
+      WorkerPossuiVersaoDivergente(DiretorioInstalacaoAnterior);
   end;
 
   if not InstalacaoAnteriorDetectada then
@@ -260,6 +280,10 @@ begin
   else if ComparacaoDeVersaoDisponivel and (ComparacaoDeVersao < 0) then
   begin
     ModoInstalacao := miAtualizar;
+  end
+  else if WorkerComVersaoDivergente then
+  begin
+    ModoInstalacao := miReparar;
   end
   else if ComparacaoDeVersaoDisponivel or not VersaoEncontrada or
     (VersaoInstalada = '{#AppVersion}') then
@@ -306,7 +330,7 @@ begin
         '. O Anamnesis será atualizado para a versão {#AppVersion}.';
     miReparar:
       Result :=
-        'Foi encontrada uma instalação desta versão ou um arquivo obrigatório ausente. ' +
+        'Foi encontrada uma instalação desta versão, um componente com versão divergente ou um arquivo obrigatório ausente. ' +
         'Os binários do Anamnesis serão reparados sem apagar seus dados locais.';
   end;
 end;
@@ -315,13 +339,17 @@ function ResumoDiagnostico: String;
 var
   Integridade: String;
 begin
-  if PayloadObrigatorioExiste(DiretorioInstalacaoAnterior) then
-  begin
-    Integridade := 'Íntegra: Tray e Worker foram encontrados.';
-  end
-  else if InstalacaoAnteriorDetectada then
+  if not PayloadObrigatorioExiste(DiretorioInstalacaoAnterior) and InstalacaoAnteriorDetectada then
   begin
     Integridade := 'Incompleta: falta ao menos um executável obrigatório. O reparo é recomendado.';
+  end
+  else if WorkerComVersaoDivergente then
+  begin
+    Integridade := 'Inconsistente: a versão do Worker diverge do Tray e do pacote. O reparo é recomendado.';
+  end
+  else if PayloadObrigatorioExiste(DiretorioInstalacaoAnterior) then
+  begin
+    Integridade := 'Íntegra: Tray e Worker foram encontrados.';
   end
   else
   begin

@@ -38,6 +38,7 @@ Tray aberto                             -> solicitar encerramento seguro e mante
 - O `AppId` permanece estavel. O instalador exige elevacao UAC, mas mantem a instalacao por usuario em `%LocalAppData%\Programs\Anamnesis`; ele nao transforma o produto em instalacao para todos os usuarios.
 - A instalacao elevada reconhece tanto o registro legado por usuario em `HKCU` quanto o registro elevado em `HKLM`. Depois de uma instalacao bem-sucedida, ela migra somente o registro de desinstalacao legado para evitar duas entradas do mesmo produto.
 - O assistente identifica o estado pelo registro do mesmo `AppId`, pela versao de arquivo dos executaveis instalados e pela presenca dos executaveis obrigatorios de Tray e Worker.
+- O Tray e a referencia canonica da versao do produto para bloquear downgrade. Um Worker legado ou com versao divergente nunca bloqueia sozinho a atualizacao: ele torna a instalacao inconsistente e recomenda reparo.
 - Sem registro e sem instalacao anterior, a acao e **Instalar**. Com binarios mais antigos, a acao e **Atualizar**. Com a mesma versao ou payload incompleto, a acao e **Reparar**. Uma versao instalada mais nova bloqueia downgrade automatico.
 - Atualizacao e reparo usam o diretorio ja instalado e reescrevem somente os binarios do produto. Banco, configuracao, reunioes, gravacoes e arquivos do usuario permanecem fora do escopo do instalador.
 - Antes de copiar arquivos, o wizard mostra o diagnostico, a versao instalada, a versao do pacote, a integridade do payload e a acao recomendada. O usuario recebe uma opcao explicita de reparo quando ela for aplicavel.
@@ -71,10 +72,12 @@ Tray aberto                             -> solicitar encerramento seguro e mante
 ## Evidencias locais
 
 - Red: o contrato `DowngradeDeveSerBloqueadoAntesDeClassificarPayloadIncompletoComoReparo` falhou antes da comparacao binaria anteceder a classificacao de reparo.
-- Green: uma unica comparacao avalia Tray e Worker disponiveis e prioriza qualquer binario mais novo antes de considerar payload incompleto.
+- Green: a comparacao canonica avalia o Tray antes de classificar payload incompleto. O Worker so indica divergencia e recomenda reparo.
+- Regressao adicional: um Tray `0.2.0-beta.1` combinado com Worker legado `1.0.0.0` era classificado como falso downgrade.
+- Green adicional: o Tray continua sendo a fonte da versao do produto e o smoke substitui somente o Worker efemero por `1.0.0.0` antes de exigir atualizacao bem-sucedida.
 - O smoke ampliado remove o Worker somente na instalacao efemera, prova que o pacote antigo continua bloqueado, verifica a reuniao sentinela no SQLite e restaura o payload com a versao atual.
-- `InstallerContractTests`: 9 de 9 verdes; conjunto focado do instalador e shell: 30 de 30 verdes.
-- Suite integrada: 266 de 266 testes verdes em Release.
+- `InstallerContractTests`: 10 de 10 verdes.
+- Suite integrada: 268 de 268 testes verdes em Release.
 - Inno Setup 6.7.3 compilou o instalador `0.2.0-beta.2`; SHA-256 local `821f3745dbb1b89fbff5dcfdff0cb93a330bd27d736c69e001ae84cb779d0ed9`.
 - A instalacao real deste usuario foi preservada. A validacao instalada deste incremento sera executada somente no runner Windows efemero.
 
