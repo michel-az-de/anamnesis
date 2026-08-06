@@ -21,7 +21,11 @@ public sealed class ArquivoConfiguracao(string caminhoArquivo)
         await using var arquivo = File.OpenRead(caminhoArquivo);
         var lida = await JsonSerializer.DeserializeAsync<ConfiguracaoAnamnesis>(arquivo, cancellationToken: cancellationToken)
             ?? throw new InvalidDataException("O arquivo de configuração está vazio ou inválido.");
-        return lida with { SenhaObs = SegredoLocal.Revelar(lida.SenhaObs) };
+        return lida with
+        {
+            SenhaObs = SegredoLocal.Revelar(lida.SenhaObs),
+            Deteccao = lida.Deteccao ?? DeteccaoLocalOptions.Padrao
+        };
     }
 
     public async Task SalvarAsync(ConfiguracaoAnamnesis configuracao, CancellationToken cancellationToken)

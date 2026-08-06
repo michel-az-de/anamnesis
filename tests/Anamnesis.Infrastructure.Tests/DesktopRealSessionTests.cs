@@ -27,6 +27,7 @@ public sealed class DesktopRealSessionTests
 
         await sessao.AtualizarAsync(CancellationToken.None);
 
+        Assert.True(sessao.Inicializada);
         Assert.False(sessao.ModoDemonstracao);
         Assert.Empty(sessao.Reunioes);
 
@@ -104,7 +105,7 @@ public sealed class DesktopRealSessionTests
     }
 
     [Fact]
-    public async Task DeveReconciliarGravacaoOrfaNaPrimeiraAtualizacao()
+    public async Task ReinicioComGravacaoDeveExigirAcaoSemConsultarOuAlterarObs()
     {
         var dados = new DadosEmMemoria();
         var reuniao = new Reuniao(Guid.NewGuid(), "Órfã", DateTimeOffset.UtcNow);
@@ -126,12 +127,14 @@ public sealed class DesktopRealSessionTests
 
         await sessao.AtualizarAsync(CancellationToken.None);
 
-        Assert.Equal("Falha", Assert.Single(sessao.Reunioes).Status);
-        Assert.Equal(1, gravador.ConsultasEstado);
+        Assert.Equal("Gravando", Assert.Single(sessao.Reunioes).Status);
+        Assert.True(sessao.RecuperacaoPendente);
+        Assert.Equal(0, gravador.ConsultasEstado);
+        Assert.Equal(0, gravador.Encerramentos);
     }
 
     [Fact]
-    public async Task DeveReconciliarGravacaoOrfaEmAtualizacaoPosterior()
+    public async Task GravacaoExternaPosteriorTambemDeveExigirAcaoExplicita()
     {
         var dados = new DadosEmMemoria();
         var gravador = new GravadorFake(estaGravando: false);
@@ -159,7 +162,9 @@ public sealed class DesktopRealSessionTests
 
         await sessao.AtualizarAsync(CancellationToken.None);
 
-        Assert.Equal("Falha", Assert.Single(sessao.Reunioes).Status);
+        Assert.Equal("Gravando", Assert.Single(sessao.Reunioes).Status);
+        Assert.True(sessao.RecuperacaoPendente);
+        Assert.Equal(0, gravador.ConsultasEstado);
     }
 
     [Fact]

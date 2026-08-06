@@ -17,6 +17,7 @@ public sealed record ConfiguracaoAnamnesis
     public string CaminhoExecutavelCli { get; init; } = string.Empty;
     public IReadOnlyList<string> ArgumentosCli { get; init; } = [];
     public int RetencaoEventosDias { get; init; } = 14;
+    public DeteccaoLocalOptions Deteccao { get; init; } = DeteccaoLocalOptions.Padrao;
 
     public static ConfiguracaoAnamnesis CriarPadrao()
     {

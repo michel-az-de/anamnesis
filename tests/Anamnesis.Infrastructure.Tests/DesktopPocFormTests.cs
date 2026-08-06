@@ -8,6 +8,37 @@ namespace Anamnesis.Infrastructure.Tests;
 public sealed class DesktopPocFormTests
 {
     [Fact]
+    public void RecuperacaoPendenteNaoDeveOferecerNovoInicioNemAfirmarObsAtivo()
+    {
+        ExecutarEmSta(() =>
+        {
+            using var form = new DesktopPocForm(
+                TemaDesktopPoc.Escuro,
+                new DesktopPocEffectsPolicy(AnimacoesAtivas: false),
+                new DesktopSessionRecuperacaoFake());
+            form.Show();
+            System.Windows.Forms.Application.DoEvents();
+            var botoesInicio = EncontrarControles(form).OfType<Button>().ToArray();
+
+            Assert.DoesNotContain(botoesInicio, botao => botao.Text == "Iniciar gravação");
+            var revisar = Assert.Single(
+                botoesInicio,
+                botao => botao.Text == "Revisar gravação anterior");
+            revisar.PerformClick();
+            System.Windows.Forms.Application.DoEvents();
+
+            Assert.Contains(
+                EncontrarLabels(form),
+                label => label.Text.Contains(
+                    "Nenhum comando foi enviado ao OBS",
+                    StringComparison.Ordinal));
+            Assert.Contains(
+                EncontrarControles(form).OfType<Button>(),
+                botao => botao.Text == "Encerrar gravação anterior");
+        });
+    }
+
+    [Fact]
     public void ModoRealNaoDeveRenderizarDadosSimuladosEAtualizaAssincronamente()
     {
         ExecutarEmSta(() =>
@@ -351,6 +382,42 @@ public sealed class DesktopPocFormTests
 
         public Task AbrirArquivoAsync(string caminho, CancellationToken cancellationToken) => Task.CompletedTask;
 
+        public Task MostrarNaPastaAsync(string caminho, CancellationToken cancellationToken) => Task.CompletedTask;
+    }
+
+    private sealed class DesktopSessionRecuperacaoFake : IDesktopSession
+    {
+        public bool ModoDemonstracao => false;
+        public EtapaDesktopPoc Etapa => EtapaDesktopPoc.Gravando;
+        public TimeSpan DuracaoGravacao => TimeSpan.FromMinutes(5);
+        public bool RecuperacaoPendente => true;
+        public IReadOnlyList<ReuniaoDesktopPoc> Reunioes { get; } =
+        [
+            new ReuniaoDesktopPoc
+            {
+                Id = Guid.NewGuid(),
+                Titulo = "Reunião anterior",
+                Data = "Agora",
+                Plataforma = "Captura OBS",
+                Duracao = "00:05:00",
+                Status = "Gravando",
+                Resumo = "Recuperação pendente.",
+                PontosPrincipais = [],
+                Transcricao = [],
+                Decisoes = [],
+                Tarefas = []
+            }
+        ];
+
+        public Task AtualizarAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task IniciarGravacaoAsync(string titulo, CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("Novo início não deve ser oferecido.");
+        public void AvancarGravacao() { }
+        public Task EncerrarGravacaoAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+        public void ConcluirProcessamentoSimulado() { }
+        public Task<ReuniaoDesktopPoc?> ObterDetalheAsync(Guid reuniaoId, CancellationToken cancellationToken) =>
+            Task.FromResult<ReuniaoDesktopPoc?>(null);
+        public Task AbrirArquivoAsync(string caminho, CancellationToken cancellationToken) => Task.CompletedTask;
         public Task MostrarNaPastaAsync(string caminho, CancellationToken cancellationToken) => Task.CompletedTask;
     }
 

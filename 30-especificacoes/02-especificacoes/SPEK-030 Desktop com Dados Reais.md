@@ -32,7 +32,7 @@ Substituir o estado simulado da POC por consultas e comandos reais, permitindo i
 - Iniciar e finalizar usam `ControlarGravacaoHandler` e preservam todas as transicoes existentes.
 - O SQLite possui indice unico parcial para permitir no maximo uma reuniao em estado `Gravando`; o conflito e traduzido para erro de aplicacao seguro.
 - A reserva do estado `Gravando` ocorre antes de chamar o OBS. Em duas inicializacoes concorrentes, somente a vencedora chega ao gravador.
-- Cancelamento durante o inicio compensa a reserva para `Falha`; apos reinicio, uma reuniao `Gravando` e reconciliada com `GetRecordStatus` antes de continuar bloqueando novos inicios.
+- Cancelamento durante o inicio compensa a reserva para `Falha`. A reconciliacao automatica por `GetRecordStatus` descrita na entrega original foi supersedida pela SPEK-032: apos reinicio, uma reuniao `Gravando` aparece como recuperacao pendente e nenhum comando ou consulta com efeito colateral no OBS ocorre sem acao explicita.
 - Ao criar o indice em banco legado, somente a reuniao `Gravando` mais recente permanece ativa; duplicatas antigas viram `Falha` com motivo deterministico.
 - A tela lista as 100 reunioes mais recentes e permite filtrar por texto e status sem carregar arquivos de audio.
 - O detalhe mostra titulo, identificador, tempos, status, falha, job e caminhos de ata, transcricao e gravacao quando existirem.
@@ -67,7 +67,7 @@ flowchart LR
 - [x] O botao finalizar salva o caminho de audio, enfileira o job e inicia o Worker.
 - [x] Uma segunda tentativa de inicio e recusada de forma deterministica.
 - [x] Duas inicializacoes concorrentes deixam exatamente uma reuniao `Gravando` e fazem uma unica chamada ao OBS.
-- [x] Cancelamento, reinicio e banco legado nao deixam uma reserva `Gravando` orfa bloqueando o produto.
+- [x] Cancelamento e banco legado nao deixam uma reserva `Gravando` acidental; reinicio preserva a gravacao anterior como recuperacao pendente conforme a SPEK-032.
 - [x] A interface acompanha as mudancas do Worker sem reiniciar a janela.
 - [x] Ata, transcricao e pasta arquivada podem ser abertas quando existem.
 - [x] Mudar o diretorio configurado depois do arquivamento nao invalida caminhos historicos ja persistidos.

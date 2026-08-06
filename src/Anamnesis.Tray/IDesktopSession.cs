@@ -20,6 +20,12 @@ internal interface IDesktopSession
 
     int JobsNaFila => 0;
 
+    bool RecuperacaoPendente => false;
+
+    bool Inicializada => true;
+
+    Guid? ReuniaoAtivaId => null;
+
     DesktopRuntimeInfo? Ambiente => null;
 
     Task AtualizarAsync(CancellationToken cancellationToken);

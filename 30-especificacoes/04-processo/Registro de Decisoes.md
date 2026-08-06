@@ -29,7 +29,7 @@ Formato: contexto, decisão, consequências e links para SPEKs afetadas.
 
 | Gate | SPEKs | Estado |
 | --- | --- | --- |
-| APIs Windows para detecção local e política contra falsos positivos | 032 | proposto |
+| APIs Windows para detecção local e política contra falsos positivos | 032 | aceito em [[ADR-016 Deteccao Local por Core Audio e User32]] |
 | OAuth desktop, credenciais protegidas e sincronização de agenda | 033, 034, 035 | proposto |
 | Publicação Markdown segura em vault Obsidian | 036 | proposto |
 | Aprovação humana, idempotência e propriedade de campos externos | 037, 038, 039 | proposto |

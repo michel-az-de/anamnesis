@@ -14,6 +14,7 @@ public static class CodigosEventoOperacional
     public const string RetencaoAvaliada = "retencao.avaliada";
     public const string RetencaoAplicada = "retencao.aplicada";
     public const string OperacaoFalhou = "operacao.falhou";
+    public const string DeteccaoDecidida = "deteccao.decidida";
 
     public static IReadOnlyList<string> Todos { get; } =
     [
@@ -28,6 +29,7 @@ public static class CodigosEventoOperacional
         JobConcluido,
         RetencaoAvaliada,
         RetencaoAplicada,
-        OperacaoFalhou
+        OperacaoFalhou,
+        DeteccaoDecidida
     ];
 }
