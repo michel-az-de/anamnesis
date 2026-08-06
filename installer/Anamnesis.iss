@@ -1,8 +1,8 @@
 #ifndef AppVersion
-  #define AppVersion "0.2.0-beta.1"
+  #error AppVersion deve ser informado pelo Build-Installer.ps1.
 #endif
 #ifndef AppNumericVersion
-  #define AppNumericVersion "0.2.0.0"
+  #error AppNumericVersion deve ser informado pelo Build-Installer.ps1.
 #endif
 #ifndef SourceRoot
   #error SourceRoot deve ser informado ao compilador.
@@ -21,7 +21,7 @@ AppSupportURL=https://github.com/michel-az-de/anamnesis/issues
 AppUpdatesURL=https://github.com/michel-az-de/anamnesis/releases
 DefaultDirName={localappdata}\Programs\Anamnesis
 DefaultGroupName=Anamnesis
-DisableProgramGroupPage=auto
+DisableProgramGroupPage=yes
 PrivilegesRequired=admin
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
@@ -69,8 +69,8 @@ Source: "{#SourceRoot}\worker\*"; DestDir: "{app}\worker"; Flags: ignoreversion 
 Source: "{#SourceRoot}\LICENSE"; DestDir: "{app}"; DestName: "LICENSE"; Flags: ignoreversion
 
 [Icons]
-Name: "{group}\Anamnesis"; Filename: "{app}\tray\Anamnesis.Tray.exe"; WorkingDir: "{app}\tray"; IconFilename: "{app}\tray\Anamnesis.ico"
-Name: "{autodesktop}\Anamnesis"; Filename: "{app}\tray\Anamnesis.Tray.exe"; WorkingDir: "{app}\tray"; IconFilename: "{app}\tray\Anamnesis.ico"; Tasks: desktopicon
+Name: "{userprograms}\Anamnesis\Anamnesis"; Filename: "{app}\tray\Anamnesis.Tray.exe"; WorkingDir: "{app}\tray"; IconFilename: "{app}\tray\Anamnesis.ico"
+Name: "{userdesktop}\Anamnesis"; Filename: "{app}\tray\Anamnesis.Tray.exe"; WorkingDir: "{app}\tray"; IconFilename: "{app}\tray\Anamnesis.ico"; Tasks: desktopicon
 
 [Registry]
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "Anamnesis"; ValueData: """{app}\tray\Anamnesis.Tray.exe"" --background"; Flags: uninsdeletevalue; Tasks: startup

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using Xunit;
 
@@ -19,7 +20,13 @@ public sealed partial class InstallerContractTests
         Assert.Contains("SetupIconFile={#SourceRoot}\\tray\\Anamnesis.ico", inno, StringComparison.Ordinal);
         Assert.Contains("Name: \"startup\"", inno, StringComparison.Ordinal);
         Assert.Contains("--background", inno, StringComparison.Ordinal);
-        Assert.Contains("Name: \"{group}\\Anamnesis\"", inno, StringComparison.Ordinal);
+        Assert.Contains(
+            "Name: \"{userprograms}\\Anamnesis\\Anamnesis\"",
+            inno,
+            StringComparison.Ordinal);
+        Assert.Contains("Name: \"{userdesktop}\\Anamnesis\"", inno, StringComparison.Ordinal);
+        Assert.DoesNotContain("Name: \"{group}\\Anamnesis\"", inno, StringComparison.Ordinal);
+        Assert.DoesNotContain("{autodesktop}", inno, StringComparison.Ordinal);
         Assert.DoesNotContain("Anamnesis Worker", inno, StringComparison.Ordinal);
         Assert.Single(AtalhosMenuIniciar().Matches(inno).Cast<Match>());
         Assert.Contains("<ApplicationIcon>Assets\\Anamnesis.ico</ApplicationIcon>", projetoTray, StringComparison.Ordinal);
@@ -55,15 +62,18 @@ public sealed partial class InstallerContractTests
     }
 
     [Fact]
-    public void SmokeDevePoderIsolarOGrupoDoMenuIniciar()
+    public void InstaladorElevadoDeveManterAtalhosNoPerfilDoUsuario()
     {
         var raiz = EncontrarRaizRepositorio();
         var inno = File.ReadAllText(Path.Combine(raiz, "installer", "Anamnesis.iss"));
         var script = File.ReadAllText(Path.Combine(raiz, "scripts", "Test-Installer.ps1"));
 
-        Assert.Contains("/GROUP=$grupoAtalhos", script, StringComparison.Ordinal);
-        Assert.Contains("DisableProgramGroupPage=auto", inno, StringComparison.Ordinal);
-        Assert.DoesNotContain("DisableProgramGroupPage=yes", inno, StringComparison.Ordinal);
+        Assert.DoesNotContain("/GROUP=", script, StringComparison.Ordinal);
+        Assert.Contains("DisableProgramGroupPage=yes", inno, StringComparison.Ordinal);
+        Assert.Contains("SpecialFolder]::Programs", script, StringComparison.Ordinal);
+        Assert.Contains("SpecialFolder]::CommonPrograms", script, StringComparison.Ordinal);
+        Assert.Contains("Anamnesis\\Anamnesis.lnk", script, StringComparison.Ordinal);
+        Assert.Contains("atalhoMenuIniciarComum", script, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -245,6 +255,164 @@ public sealed partial class InstallerContractTests
         Assert.Contains("Get-CaminhoRegistroProdutoInstalado", File.ReadAllText(Path.Combine(raiz, "scripts", "Test-Installer.ps1")), StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void ReleaseCanonicoDeveCentralizarVersaoEAutomacao()
+    {
+        var raiz = EncontrarRaizRepositorio();
+        var caminhoVersao = Path.Combine(raiz, "release", "versao.json");
+
+        Assert.True(File.Exists(caminhoVersao));
+        using var documento = JsonDocument.Parse(File.ReadAllText(caminhoVersao));
+        var raizVersao = documento.RootElement;
+
+        var versao = raizVersao.GetProperty("versao").GetString()
+            ?? throw new InvalidDataException("A versao canonica esta ausente.");
+        var versaoNumerica = raizVersao.GetProperty("versaoNumerica").GetString()
+            ?? throw new InvalidDataException("A versao numerica esta ausente.");
+        var canal = raizVersao.GetProperty("canal").GetString()
+            ?? throw new InvalidDataException("O canal da release esta ausente.");
+        var versaoAnterior = raizVersao.GetProperty("versaoAnteriorParaSmoke").GetString()
+            ?? throw new InvalidDataException("A versao anterior esta ausente.");
+        var versaoNumericaAnterior = raizVersao
+            .GetProperty("versaoNumericaAnteriorParaSmoke")
+            .GetString()
+            ?? throw new InvalidDataException("A versao numerica anterior esta ausente.");
+        var urlInstaladorAnterior = raizVersao
+            .GetProperty("urlInstaladorAnterior")
+            .GetString()
+            ?? throw new InvalidDataException("A URL do instalador anterior esta ausente.");
+        var sha256InstaladorAnterior = raizVersao
+            .GetProperty("sha256InstaladorAnterior")
+            .GetString()
+            ?? throw new InvalidDataException("O SHA-256 do instalador anterior esta ausente.");
+
+        Assert.Matches(@"^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$", versao);
+        Assert.Matches(@"^\d+\.\d+\.\d+\.\d+$", versaoNumerica);
+        Assert.False(string.IsNullOrWhiteSpace(canal));
+        Assert.Matches(@"^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$", versaoAnterior);
+        Assert.True(Version.Parse(versaoNumericaAnterior) < Version.Parse(versaoNumerica));
+        Assert.True(Uri.TryCreate(urlInstaladorAnterior, UriKind.Absolute, out var uriAnterior));
+        Assert.Equal(Uri.UriSchemeHttps, uriAnterior!.Scheme);
+        Assert.EndsWith(
+            $"/v{versaoAnterior}/Anamnesis-{versaoAnterior}-win-x64-setup.exe",
+            uriAnterior.AbsolutePath,
+            StringComparison.Ordinal);
+        Assert.Matches("^[0-9a-f]{64}$", sha256InstaladorAnterior);
+
+        var obterVersao = File.ReadAllText(Path.Combine(raiz, "scripts", "Obter-VersaoRelease.ps1"));
+        var build = File.ReadAllText(Path.Combine(raiz, "scripts", "Build-Installer.ps1"));
+        var publicar = File.ReadAllText(Path.Combine(raiz, "scripts", "Publish-Alpha.ps1"));
+        var smoke = File.ReadAllText(Path.Combine(raiz, "scripts", "Test-Installer.ps1"));
+        var inno = File.ReadAllText(Path.Combine(raiz, "installer", "Anamnesis.iss"));
+        var github = File.ReadAllText(Path.Combine(raiz, ".github", "workflows", "beta-installer.yml"));
+        var gitlab = File.ReadAllText(Path.Combine(raiz, ".gitlab-ci.yml"));
+        var gitignore = File.ReadAllText(Path.Combine(raiz, ".gitignore"));
+        var readme = File.ReadAllText(Path.Combine(raiz, "README.md"));
+        var caminhoObterAnterior = Path.Combine(raiz, "scripts", "Obter-InstaladorAnterior.ps1");
+
+        Assert.Contains("release\\versao.json", obterVersao, StringComparison.Ordinal);
+        Assert.Contains("urlInstaladorAnterior", obterVersao, StringComparison.Ordinal);
+        Assert.Contains("sha256InstaladorAnterior", obterVersao, StringComparison.Ordinal);
+        Assert.Contains("Obter-VersaoRelease.ps1", build, StringComparison.Ordinal);
+        Assert.Contains("artifacts\\releases\\$Version", build, StringComparison.Ordinal);
+        Assert.Contains("release.json", build, StringComparison.Ordinal);
+        Assert.DoesNotContain(versao, build, StringComparison.Ordinal);
+        Assert.Contains("Obter-VersaoRelease.ps1", publicar, StringComparison.Ordinal);
+        Assert.DoesNotContain(versao, publicar, StringComparison.Ordinal);
+        Assert.Contains("ExpectedInitialVersion", smoke, StringComparison.Ordinal);
+        Assert.Contains("ExpectedInitialNumericVersion", smoke, StringComparison.Ordinal);
+        Assert.DoesNotContain(versaoAnterior, smoke, StringComparison.Ordinal);
+        Assert.Contains("#error AppVersion deve ser informado", inno, StringComparison.Ordinal);
+        Assert.DoesNotContain($"#define AppVersion \"{versao}\"", inno, StringComparison.Ordinal);
+        Assert.Contains("Obter-VersaoRelease.ps1", github, StringComparison.Ordinal);
+        Assert.Contains("ANAMNESIS_VERSION", github, StringComparison.Ordinal);
+        Assert.Contains("-ExpectedInitialVersion $env:ANAMNESIS_PREVIOUS_VERSION", github, StringComparison.Ordinal);
+        Assert.Contains("if: success()", github, StringComparison.Ordinal);
+        Assert.Contains("diagnostico-falha", github, StringComparison.Ordinal);
+        Assert.DoesNotContain("if: always()", github, StringComparison.Ordinal);
+        Assert.Contains("Obter-VersaoRelease.ps1", gitlab, StringComparison.Ordinal);
+        Assert.Contains("windows-release", gitlab, StringComparison.Ordinal);
+        Assert.Contains("resource_group: anamnesis-release-windows", gitlab, StringComparison.Ordinal);
+        Assert.Contains("packages/generic/anamnesis-windows", gitlab, StringComparison.Ordinal);
+        Assert.Contains(".ci/", gitignore, StringComparison.Ordinal);
+        Assert.Contains("docs/release.md", readme, StringComparison.Ordinal);
+        Assert.True(File.Exists(caminhoObterAnterior));
+    }
+
+    [Fact]
+    public void SmokeDeAtualizacaoDeveUsarReleaseAnteriorOficial()
+    {
+        var raiz = EncontrarRaizRepositorio();
+        var github = File.ReadAllText(Path.Combine(raiz, ".github", "workflows", "beta-installer.yml"));
+        var gitlab = File.ReadAllText(Path.Combine(raiz, ".gitlab-ci.yml"));
+        var caminhoScript = Path.Combine(raiz, "scripts", "Obter-InstaladorAnterior.ps1");
+
+        Assert.True(File.Exists(caminhoScript));
+        var script = File.ReadAllText(caminhoScript);
+
+        Assert.Contains("UrlInstaladorAnterior", script, StringComparison.Ordinal);
+        Assert.Contains("Sha256InstaladorAnterior", script, StringComparison.Ordinal);
+        Assert.Contains("Invoke-WebRequest", script, StringComparison.Ordinal);
+        Assert.Contains("Get-FileHash", script, StringComparison.Ordinal);
+        Assert.Contains(".download", script, StringComparison.Ordinal);
+
+        Assert.Contains("Obter-InstaladorAnterior.ps1", github, StringComparison.Ordinal);
+        Assert.DoesNotContain("Construir versao anterior", github, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("-Version $env:ANAMNESIS_PREVIOUS_VERSION", github, StringComparison.Ordinal);
+        Assert.Single(Regex.Matches(github, @"Build-Installer\.ps1"));
+
+        Assert.DoesNotContain("Build-Installer.ps1", gitlab, StringComparison.Ordinal);
+        Assert.DoesNotContain("Test-Installer.ps1", gitlab, StringComparison.Ordinal);
+        Assert.DoesNotContain("Instalar-InnoSetup.ps1", gitlab, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void GitHubDevePromoverReleaseImutavelSomenteDepoisDoSmoke()
+    {
+        var raiz = EncontrarRaizRepositorio();
+        var github = File.ReadAllText(Path.Combine(raiz, ".github", "workflows", "beta-installer.yml"));
+
+        Assert.Contains("candidato-anamnesis-", github, StringComparison.Ordinal);
+        Assert.Contains("publicar-release-github", github, StringComparison.Ordinal);
+        Assert.Contains("if: startsWith(github.ref, 'refs/tags/v')", github, StringComparison.Ordinal);
+        Assert.Contains("contents: write", github, StringComparison.Ordinal);
+        Assert.Contains("isImmutable", github, StringComparison.Ordinal);
+        Assert.Contains("gh release create", github, StringComparison.Ordinal);
+        Assert.Contains("gh release delete", github, StringComparison.Ordinal);
+        Assert.DoesNotContain("--cleanup-tag", github, StringComparison.Ordinal);
+        Assert.Contains("--verify-tag", github, StringComparison.Ordinal);
+        Assert.Contains("gh release verify", github, StringComparison.Ordinal);
+        Assert.Contains("gh release verify-asset", github, StringComparison.Ordinal);
+        Assert.Contains("linhaSomas", github, StringComparison.Ordinal);
+        Assert.Contains(
+            "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+            github,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain("Publicar instalador aprovado e evidencias", github, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void GitLabDeveEspelharBytesOficiaisSomenteEmTagProtegida()
+    {
+        var raiz = EncontrarRaizRepositorio();
+        var gitlab = File.ReadAllText(Path.Combine(raiz, ".gitlab-ci.yml"));
+
+        Assert.DoesNotContain("merge_request_event", gitlab, StringComparison.Ordinal);
+        Assert.Contains("$CI_COMMIT_REF_PROTECTED == \"true\"", gitlab, StringComparison.Ordinal);
+        Assert.Contains("windows-release", gitlab, StringComparison.Ordinal);
+        Assert.Contains("github.com/michel-az-de/anamnesis/releases/download", gitlab, StringComparison.Ordinal);
+        Assert.Contains("/packages/generic/", gitlab, StringComparison.Ordinal);
+        Assert.Contains("CI_JOB_TOKEN", gitlab, StringComparison.Ordinal);
+        Assert.Contains("Get-FileHash", gitlab, StringComparison.Ordinal);
+        Assert.Contains("interruptible: false", gitlab, StringComparison.Ordinal);
+        Assert.Contains("hashExistente", gitlab, StringComparison.Ordinal);
+        Assert.Contains("release.json", gitlab, StringComparison.Ordinal);
+        Assert.Contains("resource_group: anamnesis-release-windows", gitlab, StringComparison.Ordinal);
+        Assert.DoesNotContain("Build-Installer.ps1", gitlab, StringComparison.Ordinal);
+        Assert.DoesNotContain("Test-Installer.ps1", gitlab, StringComparison.Ordinal);
+        Assert.DoesNotContain("Instalar-InnoSetup.ps1", gitlab, StringComparison.Ordinal);
+    }
+
     private static string EncontrarRaizRepositorio()
     {
         var atual = new DirectoryInfo(AppContext.BaseDirectory);
@@ -257,6 +425,6 @@ public sealed partial class InstallerContractTests
             ?? throw new DirectoryNotFoundException("A raiz do repositorio nao foi encontrada.");
     }
 
-    [GeneratedRegex("^Name: \\\"\\{group\\}\\\\Anamnesis(?:\\\\|\\\")", RegexOptions.Multiline)]
+    [GeneratedRegex("^Name: \\\"\\{userprograms\\}\\\\Anamnesis\\\\Anamnesis\\\"", RegexOptions.Multiline)]
     private static partial Regex AtalhosMenuIniciar();
 }

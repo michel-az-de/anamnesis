@@ -36,6 +36,8 @@ Tray aberto                             -> solicitar encerramento seguro e mante
 ## Regras
 
 - O `AppId` permanece estavel. O instalador exige elevacao UAC, mas mantem a instalacao por usuario em `%LocalAppData%\Programs\Anamnesis`; ele nao transforma o produto em instalacao para todos os usuarios.
+- Mesmo em modo elevado, os atalhos do Menu Iniciar e da area de trabalho permanecem no perfil do usuario que instala. Nenhum atalho comum pode apontar para um executavel em `%LocalAppData%`.
+- Nesta beta, a elevacao e suportada quando a propria conta administradora aprova o consentimento. Informar credenciais de outra conta administrativa pode direcionar `%LocalAppData%`, HKCU e atalhos para essa outra identidade; suporte completo a conta padrao exige uma decisao posterior entre instalacao `lowest` por usuario e instalacao machine-wide.
 - A instalacao elevada reconhece tanto o registro legado por usuario em `HKCU` quanto o registro elevado em `HKLM`. Depois de uma instalacao bem-sucedida, ela migra somente o registro de desinstalacao legado para evitar duas entradas do mesmo produto.
 - O assistente identifica o estado pelo registro do mesmo `AppId`, pela versao de arquivo dos executaveis instalados e pela presenca dos executaveis obrigatorios de Tray e Worker.
 - O Tray e a referencia canonica da versao do produto para bloquear downgrade. Um Worker legado ou com versao divergente nunca bloqueia sozinho a atualizacao: ele torna a instalacao inconsistente e recomenda reparo.

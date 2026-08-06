@@ -29,7 +29,7 @@ Abra esta pasta no Obsidian e comece por `00-home.md`.
 
 ## Status da alpha
 
-O escopo ponderado da alpha e os fluxos E2E hermético e real estão em **100%**. A suíte Release possui **268 testes verdes**. O aplicativo Windows `0.2.0-beta.1` possui Desktop real, ícone próprio, menu na bandeja, instância única, Worker interno e instalador por usuário validado em runner Windows limpo. Consulte o [painel de alpha](10-painel/Status%20Alpha.md) para evidências e limitações atuais.
+O escopo ponderado da alpha e os fluxos E2E hermético e real estão em **100%**. A suíte Release possui **289 testes verdes**. A versão canônica declarada em [`release/versao.json`](release/versao.json) possui Desktop real, ícone próprio, menu na bandeja, instância única, Worker interno e instalador por usuário validado por contratos e preparado para o smoke isolado. Consulte o [painel de alpha](10-painel/Status%20Alpha.md) para evidências e limitações atuais.
 
 ## Instalar no Windows
 
@@ -37,13 +37,17 @@ O instalador é autocontido para o Anamnesis, solicita elevação UAC e mantém 
 
 OBS, Docker Desktop, FFmpeg, modelo Whisper e uma CLI autenticada continuam dependências locais separadas e aparecem na tela de Configurações como `PRONTO` ou `PENDENTE`.
 
-Para construir o instalador localmente:
+Para construir o instalador canônico localmente:
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\Build-Installer.ps1
 ```
 
-Depois, execute `artifacts\beta\0.2.0-beta.1\installer\Anamnesis-0.2.0-beta.1-win-x64-setup.exe`. O instalador cria somente o atalho **Anamnesis**; o Worker permanece interno. Fechar a janela mantém o aplicativo na bandeja e **Sair** encerra o processo.
+Depois, execute `artifacts\releases\<versao>\installer\Anamnesis-<versao>-win-x64-setup.exe`. O instalador cria somente o atalho **Anamnesis**; o Worker permanece interno. Fechar a janela mantém o aplicativo na bandeja e **Sair** encerra o processo.
+
+## Release do instalador
+
+A versão canônica está em [`release/versao.json`](release/versao.json). Cada pacote produz `SHA256SUMS.txt` e `release.json`; binários não entram no Git. O GitHub executa o smoke com uma release anterior real e promove assets imutáveis somente por tag. O GitLab espelha os mesmos bytes em tag protegida. Consulte o [runbook de release](docs/release.md) para gerar, verificar e publicar.
 
 ## Validar
 

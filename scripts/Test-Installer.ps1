@@ -6,9 +6,21 @@ param(
     [Parameter(Mandatory)]
     [string]$UpdateInstallerPath,
 
-    [string]$ExpectedUpdateVersion = "0.2.0-beta.2",
+    [Parameter(Mandatory = $true)]
+    [ValidateNotNullOrEmpty()]
+    [string]$ExpectedInitialVersion,
 
-    [string]$ExpectedUpdateNumericVersion = "0.2.0.1",
+    [Parameter(Mandatory = $true)]
+    [ValidateNotNullOrEmpty()]
+    [string]$ExpectedInitialNumericVersion,
+
+    [Parameter(Mandatory = $true)]
+    [ValidateNotNullOrEmpty()]
+    [string]$ExpectedUpdateVersion,
+
+    [Parameter(Mandatory = $true)]
+    [ValidateNotNullOrEmpty()]
+    [string]$ExpectedUpdateNumericVersion,
 
     [string]$ProbePath,
 
@@ -132,10 +144,12 @@ $caminhoConfiguracao = Join-Path $diretorioDados "config.json"
 $caminhoBanco = Join-Path $diretorioDados "anamnesis.db"
 $diretorioArquivo = Join-Path $diretorioDados "arquivo"
 $sentinela = Join-Path $diretorioDados "preservar.txt"
-$grupoAtalhos = "AnamnesisSmoke-$([Guid]::NewGuid().ToString('N'))"
 $atalhoMenuIniciar = Join-Path `
     ([Environment]::GetFolderPath([Environment+SpecialFolder]::Programs)) `
-    "$grupoAtalhos\Anamnesis.lnk"
+    "Anamnesis\Anamnesis.lnk"
+$atalhoMenuIniciarComum = Join-Path `
+    ([Environment]::GetFolderPath([Environment+SpecialFolder]::CommonPrograms)) `
+    "Anamnesis\Anamnesis.lnk"
 New-Item -ItemType Directory -Path $diretorioDados | Out-Null
 Set-Content -LiteralPath $sentinela -Value "Dados do usuario devem sobreviver a desinstalacao."
 
@@ -182,7 +196,6 @@ try {
         "/SUPPRESSMSGBOXES",
         "/NORESTART",
         "/SP-",
-        "/GROUP=$grupoAtalhos",
         "/MERGETASKS=!startup,!desktopicon",
         "/DIR=$diretorioInstalacao",
         "/LOG=$(Join-Path $evidencias 'instalacao.log')"
@@ -220,18 +233,25 @@ try {
     if (-not $atalhoInstalado) {
         throw "O atalho publico unico nao foi criado: $atalhoMenuIniciar"
     }
+    if (Test-Path -LiteralPath $atalhoMenuIniciarComum -PathType Leaf) {
+        throw "O instalador por usuario criou um atalho comum indevido: $atalhoMenuIniciarComum"
+    }
     $inicioWindowsPermaneceuOpcional = $null -eq (Get-ValorRegistroOpcional `
         -Caminho $registroInicializacao `
         -Nome "Anamnesis")
     if (-not $inicioWindowsPermaneceuOpcional) {
         throw "A inicializacao com o Windows foi criada mesmo com a tarefa desmarcada."
     }
-    $versaoTrayInstalada = [Diagnostics.FileVersionInfo]::GetVersionInfo($caminhoTray).ProductVersion
-    $versaoWorkerInstalada = [Diagnostics.FileVersionInfo]::GetVersionInfo($caminhoWorker).ProductVersion
-    $versaoInstalada = $versaoTrayInstalada
-    if ($versaoTrayInstalada -ne "0.2.0-beta.1" -or
-        $versaoWorkerInstalada -ne "0.2.0-beta.1") {
-        throw "As versoes iniciais dos binarios sao inesperadas: Tray=$versaoTrayInstalada; Worker=$versaoWorkerInstalada"
+    $binarioTrayInstalado = [Diagnostics.FileVersionInfo]::GetVersionInfo($caminhoTray)
+    $binarioWorkerInstalado = [Diagnostics.FileVersionInfo]::GetVersionInfo($caminhoWorker)
+    $versaoInstalada = $binarioTrayInstalado.ProductVersion
+    if ($binarioTrayInstalado.ProductVersion -ne $ExpectedInitialVersion -or
+        $binarioWorkerInstalado.ProductVersion -ne $ExpectedInitialVersion -or
+        $binarioTrayInstalado.FileVersion -ne $ExpectedInitialNumericVersion -or
+        $binarioWorkerInstalado.FileVersion -ne $ExpectedInitialNumericVersion) {
+        throw "As versoes iniciais dos binarios sao inesperadas: " +
+            "Tray=$($binarioTrayInstalado.ProductVersion)/$($binarioTrayInstalado.FileVersion); " +
+            "Worker=$($binarioWorkerInstalado.ProductVersion)/$($binarioWorkerInstalado.FileVersion)"
     }
 
     $configuracaoAnterior = $env:ANAMNESIS_CONFIGURACAO

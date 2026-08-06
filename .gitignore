@@ -3,6 +3,7 @@ obj/
 .vs/
 .idea/
 .obsidian/
+.ci/
 TestResults/
 data/
 artifacts/

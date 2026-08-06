@@ -1,0 +1,145 @@
+stages:
+  - validar
+  - espelhar
+
+default:
+  tags:
+    - windows-release
+  interruptible: false
+
+workflow:
+  rules:
+    - if: '$CI_COMMIT_TAG && $CI_COMMIT_REF_PROTECTED == "true"'
+    - when: never
+
+validar-fonte:
+  stage: validar
+  script:
+    - |
+      $ErrorActionPreference = 'Stop'
+      $versao = & .\scripts\Obter-VersaoRelease.ps1
+      if ($env:CI_COMMIT_TAG -ne $versao.Tag) {
+        throw "A tag $env:CI_COMMIT_TAG diverge da tag esperada $($versao.Tag)."
+      }
+      dotnet restore Anamnesis.sln --runtime win-x64 --verbosity minimal
+      if ($LASTEXITCODE -ne 0) { throw 'A restauracao .NET falhou.' }
+      dotnet test Anamnesis.sln --configuration Release --no-restore --verbosity minimal
+      if ($LASTEXITCODE -ne 0) { throw 'Os testes Release falharam.' }
+  rules:
+    - if: '$CI_COMMIT_TAG && $CI_COMMIT_REF_PROTECTED == "true"'
+
+espelhar-release-github:
+  stage: espelhar
+  needs: [validar-fonte]
+  resource_group: anamnesis-release-windows
+  script:
+    - |
+      $ErrorActionPreference = 'Stop'
+      $versao = & .\scripts\Obter-VersaoRelease.ps1
+      $diretorio = Join-Path $env:CI_PROJECT_DIR 'artifacts\gitlab-release-mirror'
+      $verificacao = Join-Path $diretorio 'verificacao'
+      New-Item -ItemType Directory -Path $diretorio, $verificacao -Force | Out-Null
+
+      function Receber-Arquivo {
+        param(
+          [Parameter(Mandatory)] [string]$Uri,
+          [Parameter(Mandatory)] [string]$Destino,
+          [hashtable]$Headers
+        )
+
+        for ($tentativa = 1; $tentativa -le 5; $tentativa++) {
+          try {
+            $parametros = @{
+              Uri = $Uri
+              OutFile = $Destino
+              UseBasicParsing = $true
+            }
+            if ($Headers) { $parametros.Headers = $Headers }
+            Invoke-WebRequest @parametros
+            return
+          }
+          catch {
+            if ($tentativa -eq 5) { throw }
+            Start-Sleep -Seconds (3 * $tentativa)
+          }
+        }
+      }
+
+      $nomeExe = "Anamnesis-$($versao.Versao)-win-x64-setup.exe"
+      $nomes = @($nomeExe, 'SHA256SUMS.txt', 'release.json')
+      $baseGithub = "https://github.com/michel-az-de/anamnesis/releases/download/$($versao.Tag)"
+      foreach ($nome in $nomes) {
+        Receber-Arquivo `
+          -Uri "$baseGithub/$nome" `
+          -Destino (Join-Path $diretorio $nome)
+      }
+
+      $manifesto = Get-Content -LiteralPath (Join-Path $diretorio 'release.json') -Raw | ConvertFrom-Json
+      $caminhoExe = Join-Path $diretorio $nomeExe
+      $hashExe = (Get-FileHash -LiteralPath $caminhoExe -Algorithm SHA256).Hash.ToLowerInvariant()
+      $linhaSomas = (Get-Content -LiteralPath (Join-Path $diretorio 'SHA256SUMS.txt') -Raw).Trim()
+      if ($manifesto.versao -ne $versao.Versao -or
+          $manifesto.tagEsperada -ne $versao.Tag -or
+          $manifesto.commit -ne $env:CI_COMMIT_SHA -or
+          $manifesto.arvoreDeTrabalhoLimpa -ne $true -or
+          $manifesto.sha256 -ne $hashExe -or
+          $linhaSomas -ne "$hashExe  $nomeExe") {
+        throw 'Os assets oficiais do GitHub nao correspondem a tag, commit e hash esperados.'
+      }
+
+      $headers = @{ 'JOB-TOKEN' = $env:CI_JOB_TOKEN }
+      $versaoPacote = [Uri]::EscapeDataString("$($versao.Versao)-$($env:CI_COMMIT_SHA)")
+      $basePacote = "$env:CI_API_V4_URL/projects/$env:CI_PROJECT_ID/packages/generic/anamnesis-windows/$versaoPacote"
+      foreach ($nome in $nomes) {
+        $assetExiste = $false
+        try {
+          $respostaExistente = Invoke-WebRequest `
+            -Uri "$basePacote/$nome" `
+            -Headers $headers `
+            -Method Head `
+            -UseBasicParsing
+          $assetExiste = $respostaExistente.StatusCode -eq 200
+        }
+        catch {
+          $status = [int]$_.Exception.Response.StatusCode
+          if ($status -ne 404) { throw }
+        }
+        if ($assetExiste) {
+          $existente = Join-Path $verificacao "existente-$nome"
+          Receber-Arquivo `
+            -Uri "$basePacote/$nome" `
+            -Destino $existente `
+            -Headers $headers
+          $hashOrigem = (Get-FileHash -LiteralPath (Join-Path $diretorio $nome) -Algorithm SHA256).Hash
+          $hashExistente = (Get-FileHash -LiteralPath $existente -Algorithm SHA256).Hash
+          if ($hashOrigem -ne $hashExistente) {
+            throw "O asset $nome ja existe no pacote, mas possui bytes diferentes."
+          }
+          continue
+        }
+
+        $resposta = Invoke-WebRequest `
+          -Uri "$basePacote/$nome" `
+          -Headers $headers `
+          -Method Put `
+          -InFile (Join-Path $diretorio $nome) `
+          -UseBasicParsing
+        if ($resposta.StatusCode -ne 201) {
+          throw "O GitLab nao aceitou o asset ${nome}: HTTP $($resposta.StatusCode)."
+        }
+      }
+
+      foreach ($nome in $nomes) {
+        $destinoVerificacao = Join-Path $verificacao $nome
+        Receber-Arquivo `
+          -Uri "$basePacote/$nome" `
+          -Destino $destinoVerificacao `
+          -Headers $headers
+        $hashOrigem = (Get-FileHash -LiteralPath (Join-Path $diretorio $nome) -Algorithm SHA256).Hash
+        $hashEspelho = (Get-FileHash -LiteralPath $destinoVerificacao -Algorithm SHA256).Hash
+        if ($hashOrigem -ne $hashEspelho) {
+          throw "O asset $nome divergiu depois da publicacao no GitLab."
+        }
+      }
+  rules:
+    - if: '$CI_COMMIT_TAG && $CI_COMMIT_REF_PROTECTED == "true"'

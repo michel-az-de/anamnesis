@@ -2,14 +2,26 @@
 param(
     [string]$OutputRoot,
 
-    [string]$Version = "0.2.0-beta.1",
+    [string]$Version,
 
-    [string]$NumericVersion = "0.2.0.0"
+    [string]$NumericVersion
 )
 
 $ErrorActionPreference = "Stop"
 
 $repositorio = Split-Path -Parent $PSScriptRoot
+$versaoFoiInformada = -not [string]::IsNullOrWhiteSpace($Version)
+$versaoNumericaFoiInformada = -not [string]::IsNullOrWhiteSpace($NumericVersion)
+if ($versaoFoiInformada -xor $versaoNumericaFoiInformada) {
+    throw "Informe -Version e -NumericVersion juntos ou use a versao canonica."
+}
+
+if (-not $versaoFoiInformada) {
+    $versaoRelease = & (Join-Path $PSScriptRoot "Obter-VersaoRelease.ps1")
+    $Version = $versaoRelease.Versao
+    $NumericVersion = $versaoRelease.VersaoNumerica
+}
+
 if ([string]::IsNullOrWhiteSpace($OutputRoot)) {
     $OutputRoot = Join-Path $repositorio "artifacts\alpha\win-x64"
 }

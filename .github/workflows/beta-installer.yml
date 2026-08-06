@@ -1,11 +1,14 @@
-name: Beta installer
+name: Instalador Windows
 
 on:
   workflow_dispatch:
   push:
     branches: [main]
+    tags: ['v*']
     paths:
       - '.github/workflows/beta-installer.yml'
+      - '.gitlab-ci.yml'
+      - 'release/**'
       - 'installer/**'
       - 'scripts/**'
       - 'src/**'
@@ -14,6 +17,8 @@ on:
   pull_request:
     paths:
       - '.github/workflows/beta-installer.yml'
+      - '.gitlab-ci.yml'
+      - 'release/**'
       - 'installer/**'
       - 'scripts/**'
       - 'src/**'
@@ -26,7 +31,12 @@ permissions:
 jobs:
   validar-instalador:
     runs-on: windows-2025
-    timeout-minutes: 30
+    timeout-minutes: 35
+    outputs:
+      versao: ${{ steps.versao.outputs.versao }}
+      canal: ${{ steps.versao.outputs.canal }}
+      tag: ${{ steps.versao.outputs.tag }}
+      artifact: ${{ steps.versao.outputs.artifact }}
 
     steps:
       - name: Obter codigo
@@ -37,6 +47,25 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      - name: Resolver versao canonica
+        id: versao
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $versao = & .\scripts\Obter-VersaoRelease.ps1
+          if ($env:GITHUB_REF_TYPE -eq 'tag' -and $env:GITHUB_REF_NAME -ne $versao.Tag) {
+            throw "A tag $env:GITHUB_REF_NAME diverge da tag esperada $($versao.Tag)."
+          }
+          $artifact = "candidato-anamnesis-$($versao.Versao)-$env:GITHUB_RUN_ID"
+          "ANAMNESIS_VERSION=$($versao.Versao)" | Add-Content -LiteralPath $env:GITHUB_ENV
+          "ANAMNESIS_NUMERIC_VERSION=$($versao.VersaoNumerica)" | Add-Content -LiteralPath $env:GITHUB_ENV
+          "ANAMNESIS_PREVIOUS_VERSION=$($versao.VersaoAnteriorParaSmoke)" | Add-Content -LiteralPath $env:GITHUB_ENV
+          "ANAMNESIS_PREVIOUS_NUMERIC_VERSION=$($versao.VersaoNumericaAnteriorParaSmoke)" | Add-Content -LiteralPath $env:GITHUB_ENV
+          "versao=$($versao.Versao)" | Add-Content -LiteralPath $env:GITHUB_OUTPUT
+          "canal=$($versao.Canal)" | Add-Content -LiteralPath $env:GITHUB_OUTPUT
+          "tag=$($versao.Tag)" | Add-Content -LiteralPath $env:GITHUB_OUTPUT
+          "artifact=$artifact" | Add-Content -LiteralPath $env:GITHUB_OUTPUT
+
       - name: Restaurar dependencias
         shell: pwsh
         run: dotnet restore Anamnesis.sln --runtime win-x64 --verbosity minimal
@@ -45,66 +74,178 @@ jobs:
         shell: pwsh
         run: dotnet test Anamnesis.sln --configuration Release --no-restore --verbosity minimal
 
+      - name: Baixar release anterior oficial
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $anterior = & .\scripts\Obter-InstaladorAnterior.ps1 `
+            -OutputRoot (Join-Path $env:RUNNER_TEMP 'anamnesis-release-anterior')
+          "ANAMNESIS_PREVIOUS_INSTALLER=$anterior" | Add-Content -LiteralPath $env:GITHUB_ENV
+
       - name: Instalar Inno Setup verificado
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $url = 'https://github.com/jrsoftware/issrc/releases/download/is-6_7_3/innosetup-6.7.3.exe'
-          $shaEsperado = '9c73c3bae7ed48d44112a0f48e66742c00090bdb5bef71d9d3c056c66e97b732'
-          $instaladorInno = Join-Path $env:RUNNER_TEMP 'innosetup-6.7.3.exe'
-          $diretorioInno = Join-Path $env:RUNNER_TEMP 'inno-setup'
-          Invoke-WebRequest -Uri $url -OutFile $instaladorInno
-          $shaObtido = (Get-FileHash -LiteralPath $instaladorInno -Algorithm SHA256).Hash.ToLowerInvariant()
-          if ($shaObtido -ne $shaEsperado) {
-            throw "SHA-256 inesperado para Inno Setup: $shaObtido"
-          }
-          $processo = Start-Process -FilePath $instaladorInno -ArgumentList @(
-            '/VERYSILENT',
-            '/SUPPRESSMSGBOXES',
-            '/NORESTART',
-            '/SP-',
-            "/DIR=$diretorioInno"
-          ) -Wait -PassThru
-          if ($processo.ExitCode -ne 0) {
-            throw "Instalacao do Inno Setup falhou com codigo $($processo.ExitCode)."
-          }
-          if (-not (Test-Path -LiteralPath (Join-Path $diretorioInno 'ISCC.exe') -PathType Leaf)) {
-            throw 'ISCC.exe nao foi instalado no destino esperado.'
-          }
+          $iscc = & .\scripts\Instalar-InnoSetup.ps1 -OutputRoot (Join-Path $env:RUNNER_TEMP 'inno-setup')
+          "INNO_ISCC=$iscc" | Add-Content -LiteralPath $env:GITHUB_ENV
 
-      - name: Construir instalador da beta
+      - name: Construir instalador canonico
         shell: pwsh
         run: |
           .\scripts\Build-Installer.ps1 `
-            -OutputRoot (Join-Path $env:RUNNER_TEMP 'anamnesis-beta') `
-            -IsccPath (Join-Path $env:RUNNER_TEMP 'inno-setup\ISCC.exe')
+            -OutputRoot (Join-Path $env:RUNNER_TEMP "anamnesis-release\$env:ANAMNESIS_VERSION") `
+            -IsccPath $env:INNO_ISCC
 
-      - name: Construir instalador de atualizacao para o smoke
-        shell: pwsh
-        run: |
-          .\scripts\Build-Installer.ps1 `
-            -Version '0.2.0-beta.2' `
-            -NumericVersion '0.2.0.1' `
-            -OutputRoot (Join-Path $env:RUNNER_TEMP 'anamnesis-beta-update') `
-            -IsccPath (Join-Path $env:RUNNER_TEMP 'inno-setup\ISCC.exe')
-
-      - name: Validar instalacao e desinstalacao
+      - name: Validar instalacao, atualizacao e desinstalacao
         shell: pwsh
         run: |
           .\scripts\Test-Installer.ps1 `
-            -InstallerPath (Join-Path $env:RUNNER_TEMP 'anamnesis-beta\installer\Anamnesis-0.2.0-beta.1-win-x64-setup.exe') `
-            -UpdateInstallerPath (Join-Path $env:RUNNER_TEMP 'anamnesis-beta-update\installer\Anamnesis-0.2.0-beta.2-win-x64-setup.exe') `
-            -ExpectedUpdateVersion '0.2.0-beta.2' `
+            -InstallerPath $env:ANAMNESIS_PREVIOUS_INSTALLER `
+            -UpdateInstallerPath (Join-Path $env:RUNNER_TEMP "anamnesis-release\$env:ANAMNESIS_VERSION\installer\Anamnesis-$env:ANAMNESIS_VERSION-win-x64-setup.exe") `
+            -ExpectedInitialVersion $env:ANAMNESIS_PREVIOUS_VERSION `
+            -ExpectedInitialNumericVersion $env:ANAMNESIS_PREVIOUS_NUMERIC_VERSION `
+            -ExpectedUpdateVersion $env:ANAMNESIS_VERSION `
+            -ExpectedUpdateNumericVersion $env:ANAMNESIS_NUMERIC_VERSION `
             -EvidenceRoot (Join-Path $env:RUNNER_TEMP 'installer-e2e')
 
-      - name: Publicar instalador e evidencias
-        if: always()
+      - name: Publicar candidato e evidencias
+        if: success()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: anamnesis-0.2.0-beta.1-win-x64
+          name: ${{ steps.versao.outputs.artifact }}
           path: |
-            ${{ runner.temp }}\anamnesis-beta\installer\*
-            ${{ runner.temp }}\anamnesis-beta-update\installer\*
+            ${{ runner.temp }}\anamnesis-release\${{ env.ANAMNESIS_VERSION }}\installer\*
             ${{ runner.temp }}\installer-e2e\**
           if-no-files-found: error
+          retention-days: 30
+
+      - name: Publicar diagnostico da falha
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: anamnesis-diagnostico-falha-${{ github.run_id }}
+          path: ${{ runner.temp }}\installer-e2e\**
+          if-no-files-found: warn
           retention-days: 14
+
+  publicar-release-github:
+    needs: validar-instalador
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+
+    steps:
+      - name: Baixar candidato aprovado pelo smoke
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.0
+        with:
+          name: ${{ needs.validar-instalador.outputs.artifact }}
+          path: pacote
+
+      - name: Validar manifesto e ausencia de release anterior
+        id: pacote
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ANAMNESIS_VERSION: ${{ needs.validar-instalador.outputs.versao }}
+          ANAMNESIS_TAG: ${{ needs.validar-instalador.outputs.tag }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exe = @(Get-ChildItem pacote -Recurse -File -Filter "Anamnesis-$env:ANAMNESIS_VERSION-win-x64-setup.exe")
+          $somas = @(Get-ChildItem pacote -Recurse -File -Filter 'SHA256SUMS.txt')
+          $manifestos = @(Get-ChildItem pacote -Recurse -File -Filter 'release.json')
+          if ($exe.Count -ne 1 -or $somas.Count -ne 1 -or $manifestos.Count -ne 1) {
+            throw 'O candidato nao contem exatamente um EXE, um SHA256SUMS.txt e um release.json.'
+          }
+
+          $manifesto = Get-Content -LiteralPath $manifestos[0].FullName -Raw | ConvertFrom-Json
+          $hash = (Get-FileHash -LiteralPath $exe[0].FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          $linhaSomas = (Get-Content -LiteralPath $somas[0].FullName -Raw).Trim()
+          if ($manifesto.versao -ne $env:ANAMNESIS_VERSION -or
+              $manifesto.tagEsperada -ne $env:ANAMNESIS_TAG -or
+              $manifesto.commit -ne $env:GITHUB_SHA -or
+              $manifesto.arvoreDeTrabalhoLimpa -ne $true -or
+              $manifesto.sha256 -ne $hash -or
+              $linhaSomas -ne "$hash  $($exe[0].Name)") {
+            throw 'O manifesto nao vincula corretamente versao, tag, commit, arvore limpa e hash.'
+          }
+
+          gh release view $env:ANAMNESIS_TAG --repo $env:GITHUB_REPOSITORY *> $null
+          if ($LASTEXITCODE -eq 0) {
+            throw "A release $env:ANAMNESIS_TAG ja existe e nao sera sobrescrita."
+          }
+
+          "exe=$($exe[0].FullName)" | Add-Content -LiteralPath $env:GITHUB_OUTPUT
+          "somas=$($somas[0].FullName)" | Add-Content -LiteralPath $env:GITHUB_OUTPUT
+          "manifesto=$($manifestos[0].FullName)" | Add-Content -LiteralPath $env:GITHUB_OUTPUT
+
+      - name: Promover release imutavel
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ANAMNESIS_VERSION: ${{ needs.validar-instalador.outputs.versao }}
+          ANAMNESIS_CHANNEL: ${{ needs.validar-instalador.outputs.canal }}
+          ANAMNESIS_TAG: ${{ needs.validar-instalador.outputs.tag }}
+          EXE: ${{ steps.pacote.outputs.exe }}
+          SOMAS: ${{ steps.pacote.outputs.somas }}
+          MANIFESTO: ${{ steps.pacote.outputs.manifesto }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $argumentos = @(
+            $env:ANAMNESIS_TAG,
+            $env:EXE, $env:SOMAS, $env:MANIFESTO,
+            '--repo', $env:GITHUB_REPOSITORY,
+            '--verify-tag',
+            '--latest=false',
+            '--title', "Anamnesis $env:ANAMNESIS_VERSION",
+            '--notes', "Instalador Windows aprovado pelo smoke instalado da execucao $env:GITHUB_RUN_ID."
+          )
+          if ($env:ANAMNESIS_CHANNEL -ne 'estavel') {
+            gh release create @argumentos --prerelease
+          }
+          else {
+            gh release create @argumentos
+          }
+          if ($LASTEXITCODE -ne 0) {
+            throw 'A criacao da release falhou.'
+          }
+
+          $release = gh release view $env:ANAMNESIS_TAG `
+            --repo $env:GITHUB_REPOSITORY `
+            --json isImmutable | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Nao foi possivel confirmar a imutabilidade da release publicada.'
+          }
+          if (-not $release.isImmutable) {
+            gh release delete $env:ANAMNESIS_TAG --repo $env:GITHUB_REPOSITORY --yes
+            if ($LASTEXITCODE -ne 0) {
+              throw 'A release foi publicada mutavel e a compensacao automatica falhou. Intervencao imediata necessaria.'
+            }
+
+            gh release view $env:ANAMNESIS_TAG --repo $env:GITHUB_REPOSITORY *> $null
+            if ($LASTEXITCODE -eq 0) {
+              throw 'A release mutavel continuou visivel depois da compensacao automatica.'
+            }
+
+            throw 'A release mutavel foi removida automaticamente. A tag foi preservada e a promocao deve ser repetida somente depois de reativar Immutable releases.'
+          }
+
+          $verificada = $false
+          for ($tentativa = 1; $tentativa -le 5 -and -not $verificada; $tentativa++) {
+            gh release verify $env:ANAMNESIS_TAG --repo $env:GITHUB_REPOSITORY
+            $verificada = $LASTEXITCODE -eq 0
+            if (-not $verificada) {
+              Start-Sleep -Seconds 3
+            }
+          }
+          if (-not $verificada) {
+            throw 'O atestado da release imutavel nao foi confirmado.'
+          }
+
+          gh release verify-asset $env:ANAMNESIS_TAG $env:EXE --repo $env:GITHUB_REPOSITORY
+          if ($LASTEXITCODE -ne 0) { throw 'O EXE publicado diverge do candidato.' }
+          gh release verify-asset $env:ANAMNESIS_TAG $env:SOMAS --repo $env:GITHUB_REPOSITORY
+          if ($LASTEXITCODE -ne 0) { throw 'O arquivo de hashes publicado diverge do candidato.' }
+          gh release verify-asset $env:ANAMNESIS_TAG $env:MANIFESTO --repo $env:GITHUB_REPOSITORY
+          if ($LASTEXITCODE -ne 0) { throw 'O manifesto publicado diverge do candidato.' }

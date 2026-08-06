@@ -42,7 +42,7 @@ Instalar -> abrir Anamnesis -> validar prontidao -> permanecer na bandeja
 - O Worker permanece interno e nao recebe atalho publico.
 - Primeira execucao cria configuracao e dados em `%LocalAppData%\Anamnesis`, descobre somente caminhos locais padrao existentes e nunca sobrescreve configuracao anterior.
 - Ausencia de dependencia externa nao derruba o shell. O diagnostico explica a pendencia; com pre-requisitos ja presentes e configurados, o produto fica pronto sem executar Worker ou editar JSON separadamente.
-- O instalador continua por usuario, autocontido e sem UAC. Atualizacao e desinstalacao preservam banco, configuracao e reunioes.
+- Neste corte original, o instalador era por usuario, autocontido e sem UAC. A [[SPEK-047 Instalador Resiliente com Atualizacao e Reparo]] supersede somente a regra de elevacao; atualizacao e desinstalacao continuam preservando banco, configuracao e reunioes.
 - O smoke instalado valida payload, versao, icone, atalho publico unico, inicializacao opcional, processo do Tray, criacao de configuracao e desinstalacao com logs.
 - A validacao local usa o aplicativo realmente instalado e coleta captura da janela, menu da bandeja e evidencias de processo/configuracao, sem iniciar ou encerrar uma gravacao sem acao explicita.
 
