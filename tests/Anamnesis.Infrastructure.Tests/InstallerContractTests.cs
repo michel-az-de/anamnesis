@@ -383,6 +383,71 @@ public sealed partial class InstallerContractTests
     }
 
     [Fact]
+    public void AtualizacaoElevadaDevePreservarStartupDesativadoDaInstalacaoLegada()
+    {
+        var inno = File.ReadAllText(Path.Combine(
+            EncontrarRaizRepositorio(),
+            "installer",
+            "Anamnesis.iss"));
+
+        var inicioPreservacao = inno.IndexOf(
+            "procedure DeterminarPreservacaoTarefaStartup;",
+            StringComparison.Ordinal);
+        var fimPreservacao = inicioPreservacao < 0
+            ? -1
+            : inno.IndexOf("procedure InitializeWizard;", inicioPreservacao, StringComparison.Ordinal);
+
+        Assert.True(inicioPreservacao >= 0);
+        Assert.True(fimPreservacao > inicioPreservacao);
+        var preservacao = inno[inicioPreservacao..fimPreservacao];
+        Assert.Contains("InstalacaoAnteriorDetectada", preservacao, StringComparison.Ordinal);
+        Assert.Contains("RegValueExists(HKCU, ChaveInicializacao, 'Anamnesis')", preservacao, StringComparison.Ordinal);
+        Assert.Contains("PreservarStartupDesativado :=", preservacao, StringComparison.Ordinal);
+        Assert.DoesNotContain("WizardSelectTasks", preservacao, StringComparison.Ordinal);
+
+        var inicioWizard = inno.IndexOf("procedure InitializeWizard;", StringComparison.Ordinal);
+        var fimWizard = inno.IndexOf("function ShouldSkipPage", inicioWizard, StringComparison.Ordinal);
+        Assert.True(inicioWizard >= 0 && fimWizard > inicioWizard);
+        var wizard = inno[inicioWizard..fimWizard];
+        var determinarModo = wizard.IndexOf("DeterminarModoInstalacao;", StringComparison.Ordinal);
+        var preservarStartup = wizard.IndexOf(
+            "DeterminarPreservacaoTarefaStartup;",
+            StringComparison.Ordinal);
+        Assert.True(determinarModo >= 0);
+        Assert.True(preservarStartup > determinarModo);
+        Assert.DoesNotContain("WizardSelectTasks", wizard, StringComparison.Ordinal);
+
+        var inicioMudancaPagina = inno.IndexOf(
+            "procedure CurPageChanged(CurPageID: Integer);",
+            StringComparison.Ordinal);
+        var fimMudancaPagina = inno.IndexOf(
+            "function PrepareToInstall",
+            inicioMudancaPagina,
+            StringComparison.Ordinal);
+        Assert.True(inicioMudancaPagina >= 0 && fimMudancaPagina > inicioMudancaPagina);
+        var mudancaPagina = inno[inicioMudancaPagina..fimMudancaPagina];
+        Assert.Contains("CurPageID = wpSelectTasks", mudancaPagina, StringComparison.Ordinal);
+        Assert.Contains("PreservarStartupDesativado", mudancaPagina, StringComparison.Ordinal);
+        Assert.Contains("PreservacaoStartupAplicada", mudancaPagina, StringComparison.Ordinal);
+        Assert.Contains("WizardSelectTasks('!startup')", mudancaPagina, StringComparison.Ordinal);
+        Assert.Contains("WizardIsTaskSelected('startup')", mudancaPagina, StringComparison.Ordinal);
+
+        var inicioPreflight = inno.IndexOf(
+            "function ValidarProntidaoParaInstalar",
+            StringComparison.Ordinal);
+        var fimPreflight = inno.IndexOf(
+            "function NextButtonClick",
+            inicioPreflight,
+            StringComparison.Ordinal);
+        Assert.True(inicioPreflight >= 0 && fimPreflight > inicioPreflight);
+        var preflight = inno[inicioPreflight..fimPreflight];
+        Assert.Contains(
+            "PreservarStartupDesativado and not PreservacaoStartupAplicada",
+            preflight,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void WizardElevadoDeveDiagnosticarVersaoEEvitarAbrirTrayEmReparoOuAtualizacao()
     {
         var raiz = EncontrarRaizRepositorio();

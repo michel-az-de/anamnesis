@@ -81,6 +81,7 @@ Filename: "{app}\tray\Anamnesis.Tray.exe"; Description: "Iniciar Anamnesis"; Fla
 [Code]
 const
   ChaveDesinstalacao = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{B762A4D8-3BA7-4FB4-9A0A-A8135AB0DF2E}_is1';
+  ChaveInicializacao = 'Software\Microsoft\Windows\CurrentVersion\Run';
   ChaveDiagnostico = 'Software\Anamnesis\Instalador';
   NomeValorUltimoDiagnostico = 'UltimoDiagnostico';
   ExecutavelTray = 'tray\Anamnesis.Tray.exe';
@@ -101,6 +102,8 @@ var
   InstalacaoAnteriorDetectada: Boolean;
   WorkerComVersaoDivergente: Boolean;
   UltimoDiagnosticoAnterior: String;
+  PreservarStartupDesativado: Boolean;
+  PreservacaoStartupAplicada: Boolean;
 
 function PayloadObrigatorioExiste(const Diretorio: String): Boolean;
 begin
@@ -487,9 +490,17 @@ begin
   Result := False;
 end;
 
+procedure DeterminarPreservacaoTarefaStartup;
+begin
+  PreservarStartupDesativado := InstalacaoAnteriorDetectada and
+    not RegValueExists(HKCU, ChaveInicializacao, 'Anamnesis');
+  PreservacaoStartupAplicada := not PreservarStartupDesativado;
+end;
+
 procedure InitializeWizard;
 begin
   DeterminarModoInstalacao;
+  DeterminarPreservacaoTarefaStartup;
   if InstalacaoAnteriorDetectada and (DiretorioInstalacaoAnterior <> '') then
   begin
     WizardForm.DirEdit.Text := DiretorioInstalacaoAnterior;
@@ -549,6 +560,15 @@ begin
       'Este instalador é mais antigo que a versão já instalada. Baixe uma versão igual ou mais recente; ' +
       'o Anamnesis não executa downgrade automático.';
     RegistrarDiagnostico('AVISO', Mensagem);
+    Exit;
+  end;
+
+  if PreservarStartupDesativado and not PreservacaoStartupAplicada then
+  begin
+    Mensagem :=
+      'O instalador não conseguiu preservar a opção de inicialização com o Windows. ' +
+      'Nenhuma alteração foi feita; execute o instalador novamente.';
+    RegistrarDiagnostico('ERRO', Mensagem);
     Exit;
   end;
 
@@ -616,6 +636,20 @@ end;
 
 procedure CurPageChanged(CurPageID: Integer);
 begin
+  if (CurPageID = wpSelectTasks) and
+     PreservarStartupDesativado and
+     not PreservacaoStartupAplicada then
+  begin
+    WizardSelectTasks('!startup');
+    PreservacaoStartupAplicada := not WizardIsTaskSelected('startup');
+    if PreservacaoStartupAplicada then
+    begin
+      RegistrarDiagnostico(
+        'INFO',
+        'A tarefa de inicialização com o Windows foi aberta desativada como na instalação anterior.');
+    end;
+  end;
+
   if CurPageID = wpReady then
   begin
     if TrayEstaEmExecucao then

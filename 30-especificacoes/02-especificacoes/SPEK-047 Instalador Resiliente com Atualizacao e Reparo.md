@@ -40,6 +40,7 @@ Tray aberto                             -> solicitar encerramento seguro e mante
 - Nesta beta, a elevacao e suportada quando a propria conta administradora aprova o consentimento. Informar credenciais de outra conta administrativa pode direcionar `%LocalAppData%`, HKCU e atalhos para essa outra identidade; suporte completo a conta padrao exige uma decisao posterior entre instalacao `lowest` por usuario e instalacao machine-wide.
 - A instalacao elevada reconhece tanto o registro legado por usuario em `HKCU` quanto o registro elevado em `HKLM`. Depois de uma instalacao bem-sucedida, ela migra somente o registro de desinstalacao legado para evitar duas entradas do mesmo produto.
 - O smoke redescobre o registro de desinstalacao depois de cada instalacao bem-sucedida que pode migrar `HKCU` para `HKLM`; um caminho capturado antes da atualizacao nao pode ser reutilizado para validar a versao final.
+- Ao migrar uma instalacao legada de `HKCU` para `HKLM`, o wizard inicializa a tarefa `startup` com o estado real da chave `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`; a atualizacao nao pode reativar uma preferencia que o usuario deixou desmarcada.
 - O assistente identifica o estado pelo registro do mesmo `AppId`, pela versao de arquivo dos executaveis instalados e pela presenca dos executaveis obrigatorios de Tray e Worker.
 - O Tray e a referencia canonica da versao do produto para bloquear downgrade. Um Worker legado ou com versao divergente nunca bloqueia sozinho a atualizacao: ele torna a instalacao inconsistente e recomenda reparo.
 - Sem registro e sem instalacao anterior, a acao e **Instalar**. Com binarios mais antigos, a acao e **Atualizar**. Com a mesma versao ou payload incompleto, a acao e **Reparar**. Uma versao instalada mais nova bloqueia downgrade automatico.
@@ -67,6 +68,7 @@ Tray aberto                             -> solicitar encerramento seguro e mante
 - [ ] O smoke em diretorio isolado instala, abre o Tray, repara um payload incompleto, atualiza para uma versao de teste e preserva dados do usuario.
 - [ ] A atualizacao e o reparo preservam o atalho publico, a configuracao, o banco e a desinstalacao posterior.
 - [x] O smoke valida a versao registrada no hive efetivamente vigente depois da migracao elevada de `HKCU` para `HKLM`.
+- [ ] Uma atualizacao elevada preserva a opcao de inicializacao com o Windows que estava desativada na instalacao legada.
 - [x] A instalacao nova oferece abrir o Anamnesis ao concluir; atualizacao e reparo nao o abrem.
 
 ## Testes associados
@@ -89,10 +91,12 @@ Tray aberto                             -> solicitar encerramento seguro e mante
 - Red adicional: comparar o Worker instalado com o pacote novo fazia uma atualizacao normal aparecer como inconsistente e o diagnostico afirmava uma divergencia que nem sempre existia.
 - Green adicional: o Tray continua sendo a fonte da versao do produto; o Worker legado da release oficial e aceito como inconsistencia reparavel e precisa terminar alinhado a versao candidata apos a atualizacao.
 - O smoke ampliado usa um probe moderno inferior e nao publicavel nos cenarios de payload integro e Worker ausente, exige a causa `downgrade autom` nos logs, verifica hashes, versoes e reuniao sentinela e restaura o payload com a versao atual.
-- `InstallerContractTests`: 18 de 18 verdes; contratos de instalador e release: 19 de 19 verdes.
-- Suite integrada atual: 279 de 279 testes verdes em Release; `dotnet format --verify-no-changes` e parsers PowerShell verdes.
+- `InstallerContractTests`: 19 de 19 verdes; contratos de instalador e release: 20 de 20 verdes.
+- Suite integrada atual: 280 de 280 testes verdes em Release; `dotnet format --verify-no-changes` e parsers PowerShell verdes.
 - Red E2E real no run `31105631929`: a atualizacao concluiu e migrou o registro legado para `HKLM`, mas o harness reutilizou o caminho `HKCU` capturado antes do update e leu `DisplayVersion` vazio.
 - Green de regressao: o smoke redescobre o registro depois do exit code zero, falha se nenhum hive vigente existir e so entao valida `DisplayVersion`; o contrato dedicado passou em Release.
+- Red E2E real no run `31106730785`: a versao e os dados foram preservados, mas o modo elevado nao recuperou as tarefas da instalacao `HKCU` e recriou a chave de startup que estava desativada.
+- Green de regressao: a necessidade de preservar o startup e calculada depois do diagnostico, aplicada uma unica vez em `CurPageChanged(wpSelectTasks)`, confirmada por `WizardIsTaskSelected` e protegida pelo preflight; instalacoes novas nao entram nesse guard. O contrato dedicado passou e o instalador `0.2.0-beta.4` compilou com Inno Setup 6.7.3, SHA-256 `98e646f76a436eb55095d7575c18bcd080c773a32e8da5b681b6936e7c84ee5b`.
 - Prova de compilacao local: `Build-DowngradeProbe.ps1` reutilizou o payload canonico e gerou o EXE `0.0.1.0` nao publicavel com SHA-256 `ac1d92ae69193ebd47ac7d12e54b8e0387a5332277150959db364d59e9078a09`, igual ao manifesto efemero.
 - Inno Setup 6.7.3 compilou o instalador `0.2.0-beta.2`; SHA-256 local `bf6cfdc55d1c24e752ee6683b5704b2a20364f5221ec13f61f5ae69868d020e0`.
 - A instalacao real deste usuario foi preservada. A validacao instalada deste incremento sera executada somente no runner Windows efemero.
