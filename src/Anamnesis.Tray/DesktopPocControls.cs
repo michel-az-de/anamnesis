@@ -567,7 +567,7 @@ internal sealed class DesktopOperationalSteps : Control
         var centroY = 13F;
         using var fonte = new Font(
             _tokens.Tipografia.Interface,
-            7.2F,
+            8F,
             FontStyle.Regular,
             GraphicsUnit.Point);
         for (var indice = 0; indice < itens.Count; indice++)
@@ -728,7 +728,7 @@ internal sealed class DesktopSignalMeter : Control
         using var grade = new Pen(
             DesktopPocMotion.Misturar(_paleta.Superficies.PainelElevado, _paleta.Fundo, 0.72D),
             1F);
-        for (var x = 12; x < area.Width; x += 14)
+        for (var x = 42; x < area.Width; x += 48)
         {
             e.Graphics.DrawLine(grade, x, 2, x, area.Height - 2);
         }

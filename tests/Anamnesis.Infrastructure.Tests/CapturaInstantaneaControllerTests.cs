@@ -87,6 +87,8 @@ public sealed class CapturaInstantaneaControllerTests
     public async Task AutomaticoDeveIniciarExatamenteUmaVezENotificar()
     {
         var contexto = Criar(ModoDeteccaoReuniao.Automatico);
+        GravacaoAutomaticaInfo? gravacaoExibida = null;
+        contexto.Controller.GravacaoAutomaticaIniciada += info => gravacaoExibida = info;
 
         await contexto.Controller.ProcessarAsync(CancellationToken.None);
         contexto.Relogio.Avancar(TimeSpan.FromSeconds(5));
@@ -99,6 +101,28 @@ public sealed class CapturaInstantaneaControllerTests
         Assert.Equal(1, contexto.Sessao.Inicios);
         Assert.Equal(1, contexto.Prompt.IniciosNotificados);
         Assert.Equal(EtapaDesktopPoc.Gravando, contexto.Sessao.Etapa);
+        Assert.NotNull(gravacaoExibida);
+        Assert.Equal(contexto.Sessao.ReuniaoAtivaId, gravacaoExibida.ReuniaoId);
+        Assert.Equal("Google Meet", gravacaoExibida.Plataforma);
+        Assert.Equal("Reunião detectada • Google Meet", gravacaoExibida.Titulo);
+    }
+
+    [Fact]
+    public async Task FalhaVisualDoIndicadorNaoDeveTransformarCapturaIniciadaEmFalha()
+    {
+        var contexto = Criar(ModoDeteccaoReuniao.Automatico);
+        contexto.Controller.GravacaoAutomaticaIniciada += _ =>
+            throw new InvalidOperationException("Falha apenas na presença visual.");
+
+        await contexto.Controller.ProcessarAsync(CancellationToken.None);
+        contexto.Relogio.Avancar(TimeSpan.FromSeconds(5));
+        await contexto.Controller.ProcessarAsync(CancellationToken.None);
+        contexto.Relogio.Avancar(TimeSpan.FromSeconds(5));
+        await contexto.Controller.ProcessarAsync(CancellationToken.None);
+
+        Assert.Equal(1, contexto.Sessao.Inicios);
+        Assert.Equal(EtapaDesktopPoc.Gravando, contexto.Sessao.Etapa);
+        Assert.Equal(0, contexto.Prompt.FalhasSeguras);
     }
 
     [Fact]
@@ -158,6 +182,8 @@ public sealed class CapturaInstantaneaControllerTests
         contexto.Sessao.Etapa = EtapaDesktopPoc.Gravando;
         contexto.Sessao.ReuniaoAtivaId = Guid.NewGuid();
         contexto.Detector.ConfirmarInicioAutomatico(contexto.Sessao.ReuniaoAtivaId.Value);
+        var encerramentosExibidos = 0;
+        contexto.Controller.GravacaoAutomaticaEncerrada += () => encerramentosExibidos++;
 
         await contexto.Controller.ProcessarAsync(CancellationToken.None);
         contexto.Relogio.Avancar(TimeSpan.FromMinutes(2));
@@ -168,6 +194,7 @@ public sealed class CapturaInstantaneaControllerTests
 
         Assert.Equal(1, contexto.Sessao.Encerramentos);
         Assert.Equal(EtapaDesktopPoc.Processando, contexto.Sessao.Etapa);
+        Assert.Equal(1, encerramentosExibidos);
     }
 
     [Fact]
@@ -284,6 +311,7 @@ public sealed class CapturaInstantaneaControllerTests
         public int AvisosEncerramento { get; private set; }
         public int AvisosFechados { get; private set; }
         public int AcoesFechadas { get; private set; }
+        public int FalhasSeguras { get; private set; }
 
         public Task<AcaoSugestaoDeteccao> SugerirInicioAsync(
             PlataformaLocal plataforma,
@@ -323,6 +351,7 @@ public sealed class CapturaInstantaneaControllerTests
 
         public void MostrarFalhaSegura()
         {
+            FalhasSeguras++;
         }
 
         public void Fechar() => AcoesFechadas++;

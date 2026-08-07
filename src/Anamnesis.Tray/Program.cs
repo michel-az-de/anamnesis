@@ -158,6 +158,7 @@ internal static class Program
         ApplicationConfiguration.Initialize();
         DesktopPocTheme.HerdarDoWindows();
         using var iconeAplicacao = IconeAnamnesis.Carregar();
+        using var iconeGravando = IconeEstadoTray.CriarGravando(iconeAplicacao);
         using var icone = new NotifyIcon
         {
             Icon = iconeAplicacao,
@@ -188,6 +189,10 @@ internal static class Program
             CheckOnClick = true
         };
         DesktopPocForm? janela = null;
+        GravacaoAutomaticaWidget? indicadorAutomatico = null;
+        Action? abrirContextoNotificacao = null;
+        var notificacoesDesktop = new NotificacoesDesktopState();
+        var iconeMostraGravacao = false;
         var saindo = false;
         var avisoBandejaExibido = false;
 
@@ -209,11 +214,11 @@ internal static class Program
                 if (!avisoBandejaExibido)
                 {
                     avisoBandejaExibido = true;
-                    icone.ShowBalloonTip(
-                        3000,
+                    ExibirNotificacao(
                         "Anamnesis continua ativo",
-                        "Use o ícone da bandeja para abrir ou sair.",
-                        ToolTipIcon.Info);
+                        "Use o ícone da área de notificação para abrir ou sair.",
+                        ToolTipIcon.Info,
+                        AbrirJanela);
                 }
             };
             novaJanela.FormClosed += (_, _) => janela = null;
@@ -233,6 +238,116 @@ internal static class Program
             janela.Activate();
         }
 
+        void OcultarIndicadorAutomatico()
+        {
+            if (indicadorAutomatico is null)
+            {
+                return;
+            }
+
+            var atual = indicadorAutomatico;
+            indicadorAutomatico = null;
+            atual.Close();
+            atual.Dispose();
+        }
+
+        void DefinirIconeGravacao(bool gravando)
+        {
+            if (iconeMostraGravacao == gravando)
+            {
+                return;
+            }
+
+            iconeMostraGravacao = gravando;
+            icone.Icon = gravando ? iconeGravando : iconeAplicacao;
+        }
+
+        void ExibirNotificacao(
+            string titulo,
+            string mensagem,
+            ToolTipIcon tipo,
+            Action abrirContexto)
+        {
+            abrirContextoNotificacao = abrirContexto;
+            icone.ShowBalloonTip(4500, titulo, mensagem, tipo);
+        }
+
+        void AbrirReuniaoNotificada(Guid reuniaoId, string aba)
+        {
+            AbrirJanela();
+            _ = janela!.AbrirDetalheAgoraAsync(reuniaoId, aba);
+        }
+
+        async Task EncerrarPeloIndicadorAsync()
+        {
+            try
+            {
+                await sessaoDesktop.EncerrarGravacaoAsync(CancellationToken.None);
+            }
+            catch (WorkerNaoIniciadoException exception)
+            {
+                await sessaoDesktop.RegistrarFalhaOperacionalAsync(
+                    "widget.iniciar_worker",
+                    exception,
+                    CancellationToken.None);
+                DefinirIconeGravacao(gravando: false);
+                ExibirNotificacao(
+                    "Processamento pendente",
+                    "A gravação foi salva. Abra o Anamnesis para retomar o Worker local.",
+                    ToolTipIcon.Warning,
+                    () =>
+                    {
+                        AbrirJanela();
+                        janela!.AbrirAtividade();
+                    });
+            }
+            catch (Exception exception)
+            {
+                await sessaoDesktop.RegistrarFalhaOperacionalAsync(
+                    "widget.encerrar_gravacao_automatica",
+                    exception,
+                    CancellationToken.None);
+                ExibirNotificacao(
+                    "Não foi possível encerrar",
+                    "A gravação continua ativa. Abra o Anamnesis para ver o diagnóstico.",
+                    ToolTipIcon.Warning,
+                    () =>
+                    {
+                        AbrirJanela();
+                        janela!.AbrirAoVivo();
+                    });
+                throw;
+            }
+        }
+
+        capturaInstantanea.GravacaoAutomaticaIniciada += info =>
+        {
+            OcultarIndicadorAutomatico();
+            DefinirIconeGravacao(gravando: true);
+            abrirContextoNotificacao = () =>
+            {
+                AbrirJanela();
+                janela!.AbrirAoVivo();
+            };
+            indicadorAutomatico = new GravacaoAutomaticaWidget(
+                DesktopPocTheme.ObterAtual(),
+                DesktopPocSystemPreferences.Obter(),
+                info,
+                () => sessaoDesktop.DuracaoGravacao,
+                abrirContextoNotificacao,
+                EncerrarPeloIndicadorAsync);
+            indicadorAutomatico.Show();
+        };
+        capturaInstantanea.GravacaoAutomaticaEncerrada += OcultarIndicadorAutomatico;
+        capturaInstantanea.FalhaDeteccao += () =>
+        {
+            abrirContextoNotificacao = () =>
+            {
+                AbrirJanela();
+                janela!.AbrirObservabilidade();
+            };
+        };
+
         bool TentarEncerrarAplicativo(bool permitirRecuperacaoDeGravacao)
         {
             if (!permitirRecuperacaoDeGravacao &&
@@ -250,6 +365,7 @@ internal static class Program
             }
 
             saindo = true;
+            OcultarIndicadorAutomatico();
             icone.Visible = false;
             janela?.Close();
             System.Windows.Forms.Application.Exit();
@@ -265,6 +381,8 @@ internal static class Program
             }
         };
         icone.DoubleClick += (_, _) => AbrirJanela();
+        icone.BalloonTipClicked += (_, _) =>
+            (abrirContextoNotificacao ?? AbrirJanela)();
 
         icone.ContextMenuStrip.Items.Add(estado);
         icone.ContextMenuStrip.Items.Add(new ToolStripMenuItem(
@@ -275,11 +393,15 @@ internal static class Program
         icone.ContextMenuStrip.Items.Add("Silenciar detecção por 1 h", null, async (_, _) =>
         {
             await capturaInstantanea.SilenciarAsync(CancellationToken.None);
-            icone.ShowBalloonTip(
-                3000,
+            ExibirNotificacao(
                 "Detecção silenciada",
                 "O início manual continua disponível.",
-                ToolTipIcon.Info);
+                ToolTipIcon.Info,
+                () =>
+                {
+                    AbrirJanela();
+                    janela!.AbrirConfiguracoes();
+                });
         });
 
         icone.ContextMenuStrip.Items.Add("Diagnósticos", null, (_, _) =>
@@ -353,7 +475,16 @@ internal static class Program
                 await sessaoDesktop.IniciarGravacaoAsync(titulo, CancellationToken.None);
                 iniciar.Enabled = false;
                 encerrar.Enabled = true;
-                icone.ShowBalloonTip(3000, "Anamnesis", "Gravação iniciada.", ToolTipIcon.Info);
+                DefinirIconeGravacao(gravando: true);
+                ExibirNotificacao(
+                    "Gravação iniciada",
+                    "A captura local está ativa.",
+                    ToolTipIcon.Info,
+                    () =>
+                    {
+                        AbrirJanela();
+                        janela!.AbrirAoVivo();
+                    });
             }
             catch (Exception exception)
             {
@@ -365,12 +496,24 @@ internal static class Program
             try
             {
                 await sessaoDesktop.EncerrarGravacaoAsync(CancellationToken.None);
+                OcultarIndicadorAutomatico();
+                DefinirIconeGravacao(gravando: false);
                 iniciar.Enabled = true;
                 encerrar.Enabled = false;
-                icone.ShowBalloonTip(3000, "Anamnesis", "Gravação enviada para processamento.", ToolTipIcon.Info);
+                ExibirNotificacao(
+                    "Gravação salva",
+                    "O processamento local foi iniciado.",
+                    ToolTipIcon.Info,
+                    () =>
+                    {
+                        AbrirJanela();
+                        janela!.AbrirAtividade();
+                    });
             }
             catch (WorkerNaoIniciadoException exception)
             {
+                OcultarIndicadorAutomatico();
+                DefinirIconeGravacao(gravando: false);
                 iniciar.Enabled = true;
                 encerrar.Enabled = false;
                 MessageBox.Show(
@@ -390,7 +533,15 @@ internal static class Program
             try
             {
                 await workerLauncher.IniciarAsync(CancellationToken.None);
-                icone.ShowBalloonTip(3000, "Anamnesis", "Worker iniciado para processar pendências.", ToolTipIcon.Info);
+                ExibirNotificacao(
+                    "Processamento retomado",
+                    "O Worker local está processando as pendências.",
+                    ToolTipIcon.Info,
+                    () =>
+                    {
+                        AbrirJanela();
+                        janela!.AbrirAtividade();
+                    });
             }
             catch (Exception exception)
             {
@@ -402,9 +553,17 @@ internal static class Program
         {
             workerLauncher.IniciarAsync(CancellationToken.None).GetAwaiter().GetResult();
         }
-        catch (Exception exception)
+        catch (Exception)
         {
-            icone.ShowBalloonTip(5000, "Anamnesis", $"Worker não iniciado: {exception.Message}", ToolTipIcon.Warning);
+            ExibirNotificacao(
+                "Worker não iniciado",
+                "As pendências continuam salvas. Abra o Anamnesis para corrigir.",
+                ToolTipIcon.Warning,
+                () =>
+                {
+                    AbrirJanela();
+                    janela!.AbrirObservabilidade();
+                });
         }
 
         var atualizandoMenu = false;
@@ -431,6 +590,36 @@ internal static class Program
                     : sessaoDesktop.Etapa == EtapaDesktopPoc.Gravando
                         ? "Anamnesis • Gravando"
                         : "Anamnesis • Pronto";
+                DefinirIconeGravacao(sessaoDesktop.Etapa == EtapaDesktopPoc.Gravando);
+                if (indicadorAutomatico is not null &&
+                    sessaoDesktop.Etapa != EtapaDesktopPoc.Gravando)
+                {
+                    OcultarIndicadorAutomatico();
+                }
+
+                var notificacao = notificacoesDesktop
+                    .Observar(sessaoDesktop.Reunioes)
+                    .OrderByDescending(item => item.Tipo == TipoNotificacaoDesktop.Falha)
+                    .FirstOrDefault();
+                if (notificacao is not null)
+                {
+                    if (notificacao.Tipo == TipoNotificacaoDesktop.ProcessamentoConcluido)
+                    {
+                        ExibirNotificacao(
+                            notificacao.Titulo,
+                            notificacao.Mensagem,
+                            ToolTipIcon.Info,
+                            () => AbrirReuniaoNotificada(notificacao.ReuniaoId, "Transcrição"));
+                    }
+                    else
+                    {
+                        ExibirNotificacao(
+                            notificacao.Titulo,
+                            notificacao.Mensagem,
+                            ToolTipIcon.Warning,
+                            () => AbrirReuniaoNotificada(notificacao.ReuniaoId, "Resumo"));
+                    }
+                }
             }
             catch (Exception exception)
             {

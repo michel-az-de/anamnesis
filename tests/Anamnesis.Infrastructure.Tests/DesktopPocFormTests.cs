@@ -226,6 +226,10 @@ public sealed class DesktopPocFormTests
             Assert.StartsWith("Teste de áudio", sessao.TituloIniciado, StringComparison.Ordinal);
             Assert.Equal(1, sessao.Encerramentos);
             Assert.Contains(EncontrarLabels(form), label => label.Text.Contains("Aguardando transcrição", StringComparison.Ordinal));
+            var cartaoGuiado = EncontrarControles(form)
+                .OfType<DesktopSurfacePanel>()
+                .Single(control => control.Name == "cartao-teste-guiado");
+            Assert.True(cartaoGuiado.Height < 400);
             var console = EncontrarControles(form)
                 .OfType<TextBox>()
                 .Single(control => control.Name == "console-teste");
@@ -239,6 +243,39 @@ public sealed class DesktopPocFormTests
             Assert.Contains(EncontrarLabels(form), label => label.Text.StartsWith("Tudo certo", StringComparison.Ordinal));
             Assert.Contains(EncontrarLabels(form), label => label.Text.Contains("frase reconhecida", StringComparison.Ordinal));
             Assert.NotNull(EncontrarBotao(form, "Abrir reunião"));
+            Assert.True(cartaoGuiado.Height >= 440);
+        });
+    }
+
+    [Fact]
+    public void PolimentoDeveManterNavegacaoEFluxoGuiadoLegiveisEm1180Por760()
+    {
+        ExecutarEmSta(() =>
+        {
+            using var form = new DesktopPocForm(
+                TemaDesktopPoc.Escuro,
+                new DesktopPocEffectsPolicy(AnimacoesAtivas: false));
+            form.ClientSize = new Size(1180, 760);
+            form.Show();
+            System.Windows.Forms.Application.DoEvents();
+
+            var configuracoes = EncontrarBotao(form, "Configurações");
+            Assert.True(configuracoes.Visible);
+            Assert.True(configuracoes.Bottom <= configuracoes.Parent!.ClientSize.Height -
+                        configuracoes.Parent.Padding.Bottom);
+            Assert.True(configuracoes.RectangleToScreen(configuracoes.ClientRectangle).Bottom <=
+                        form.RectangleToScreen(form.ClientRectangle).Bottom);
+
+            form.AbrirTesteGuiado();
+            System.Windows.Forms.Application.DoEvents();
+            var cartao = EncontrarControles(form)
+                .OfType<DesktopSurfacePanel>()
+                .Single(control => control.Name == "cartao-teste-guiado");
+            var etapas = Assert.Single(EncontrarControles(cartao).OfType<DesktopOperationalSteps>());
+
+            Assert.Equal(DockStyle.Top, cartao.Dock);
+            Assert.InRange(cartao.Height, 440, 500);
+            Assert.True(etapas.Height >= 68);
         });
     }
 
@@ -414,6 +451,8 @@ public sealed class DesktopPocFormTests
             form.IniciarGravacaoAgoraAsync().GetAwaiter().GetResult();
             System.Windows.Forms.Application.DoEvents();
             Assert.Contains(EncontrarLabels(form), label => label.Text.Contains("GRAVANDO AGORA", StringComparison.Ordinal));
+            var estadoGravando = EncontrarLabels(form).Single(label => label.Text == "Gravando");
+            Assert.NotEqual(paleta.FundoPositivo, estadoGravando.BackColor);
             CapturarQuandoSolicitado(form, "ANAMNESIS_POC_LIVE_SCREENSHOT");
 
             EncontrarBotao(form, "Encerrar e transcrever").PerformClick();

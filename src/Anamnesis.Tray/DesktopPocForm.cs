@@ -48,6 +48,7 @@ internal sealed class DesktopPocForm : Form
     private DesktopActionButton? _abrirLogsProcessamento;
     private DesktopActionButton? _abrirTranscricaoProcessamento;
     private DesktopOperationalSteps? _etapasOperacionais;
+    private DesktopSurfacePanel? _cartaoTesteGuiado;
     private Action? _atualizarConsoleObservabilidade;
     private Label? _tituloTesteGuiado;
     private Label? _mensagemTesteGuiado;
@@ -225,12 +226,10 @@ internal sealed class DesktopPocForm : Form
             Padding = new Padding(10, 6, 0, 0)
         };
 
-        _estadoGlobal.Text = "Tudo funcionando";
         _estadoGlobal.AutoSize = true;
-        _estadoGlobal.ForeColor = _paleta.Positivo;
-        _estadoGlobal.BackColor = _paleta.FundoPositivo;
         _estadoGlobal.Dock = DockStyle.Right;
         _estadoGlobal.Padding = new Padding(12, 7, 12, 7);
+        DefinirEstadoGlobal("Tudo funcionando", _paleta.Positivo);
         AplicarRegiaoArredondada(_estadoGlobal, _tokens.Geometria.RaioMedio);
 
         var legenda = new Label
@@ -266,7 +265,7 @@ internal sealed class DesktopPocForm : Form
         var principal = new FlowLayoutPanel
         {
             Dock = DockStyle.Top,
-            Height = 306,
+            Height = 280,
             FlowDirection = FlowDirection.TopDown,
             WrapContents = false,
             BackColor = _paleta.Navegacao
@@ -296,7 +295,7 @@ internal sealed class DesktopPocForm : Form
         {
             Text = texto,
             Width = 176,
-            Height = 42,
+            Height = 40,
             Margin = new Padding(0, 0, 0, 4),
             Font = new Font(_tokens.Tipografia.Interface, 9.5F, FontStyle.Regular, GraphicsUnit.Point)
         };
@@ -380,6 +379,7 @@ internal sealed class DesktopPocForm : Form
         _abrirLogsProcessamento = null;
         _abrirTranscricaoProcessamento = null;
         _etapasOperacionais = null;
+        _cartaoTesteGuiado = null;
         _atualizarConsoleObservabilidade = null;
         _tituloTesteGuiado = null;
         _mensagemTesteGuiado = null;
@@ -1486,8 +1486,12 @@ internal sealed class DesktopPocForm : Form
             voltar,
             out var corpo);
         var cartao = CriarCartao(DesktopSurfaceVariant.Elevated, accent: _paleta.Destaque);
-        cartao.Dock = DockStyle.Fill;
+        _cartaoTesteGuiado = cartao;
+        cartao.Name = "cartao-teste-guiado";
+        cartao.Dock = DockStyle.Top;
+        cartao.Height = 468;
         cartao.Padding = new Padding(24);
+        corpo.AutoScroll = true;
 
         _tituloTesteGuiado = CriarLabel(
             "Pronto para testar",
@@ -1503,37 +1507,37 @@ internal sealed class DesktopPocForm : Form
         _mensagemTesteGuiado.MaximumSize = new Size(760, 42);
         _etapasOperacionais = new DesktopOperationalSteps(_paleta, _tokens)
         {
-            Location = new Point(24, 92),
-            Size = new Size(820, 58),
+            Location = new Point(24, 90),
+            Size = new Size(820, 70),
             Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
         };
         _barraTesteGuiado = new ProgressBar
         {
-            Location = new Point(24, 158),
+            Location = new Point(24, 168),
             Size = new Size(820, 12),
             Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
             Style = ProgressBarStyle.Marquee,
             MarqueeAnimationSpeed = 30
         };
 
-        var sistemaTitulo = CriarLabel("Áudio do sistema", 9F, _paleta.Texto, new Point(24, 190));
-        _audioSistemaTexto = CriarLabel("Sem leitura", 9F, _paleta.TextoSecundario, new Point(430, 190));
+        var sistemaTitulo = CriarLabel("Áudio do sistema", 9F, _paleta.Texto, new Point(24, 196));
+        _audioSistemaTexto = CriarLabel("Sem leitura", 9F, _paleta.TextoSecundario, new Point(430, 196));
         _audioSistema = new DesktopSignalMeter(_paleta, _tokens, _politicaVisual, _paleta.Destaque)
         {
             AccessibleName = "Nível do áudio do sistema no teste",
-            Location = new Point(24, 216),
+            Location = new Point(24, 222),
             Size = new Size(520, 32)
         };
-        var microfoneTitulo = CriarLabel("Microfone", 9F, _paleta.Texto, new Point(24, 262));
-        _microfoneTexto = CriarLabel("Sem leitura", 9F, _paleta.TextoSecundario, new Point(430, 262));
+        var microfoneTitulo = CriarLabel("Microfone", 9F, _paleta.Texto, new Point(24, 268));
+        _microfoneTexto = CriarLabel("Sem leitura", 9F, _paleta.TextoSecundario, new Point(430, 268));
         _microfone = new DesktopSignalMeter(_paleta, _tokens, _politicaVisual, _paleta.Positivo)
         {
             AccessibleName = "Nível do microfone no teste",
-            Location = new Point(24, 288),
+            Location = new Point(24, 294),
             Size = new Size(520, 32)
         };
 
-        var consoleTitulo = CriarLabel("Console seguro do teste", 9F, _paleta.Texto, new Point(570, 190), FontStyle.Bold);
+        var consoleTitulo = CriarLabel("Console seguro do teste", 9F, _paleta.Texto, new Point(570, 196), FontStyle.Bold);
         _consoleTesteGuiado = new TextBox
         {
             Name = "console-teste",
@@ -1544,26 +1548,26 @@ internal sealed class DesktopPocForm : Form
             ForeColor = _paleta.ConsoleTexto,
             BorderStyle = BorderStyle.FixedSingle,
             Font = new Font(_tokens.Tipografia.Mono, 8F, FontStyle.Regular, GraphicsUnit.Point),
-            Location = new Point(570, 216),
+            Location = new Point(570, 222),
             Size = new Size(310, 104),
             Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
         };
-        _trechoTesteGuiado = CriarLabel("", 9.5F, _paleta.Texto, new Point(24, 338));
+        _trechoTesteGuiado = CriarLabel("", 9.5F, _paleta.Texto, new Point(24, 342));
         _trechoTesteGuiado.MaximumSize = new Size(840, 48);
 
         _iniciarTesteGuiado = CriarBotaoPrimario(
             "Iniciar teste de 5 s",
             async (_, _) => await IniciarTesteGuiadoAgoraAsync(TimeSpan.FromSeconds(5)));
-        _iniciarTesteGuiado.Location = new Point(24, 400);
+        _iniciarTesteGuiado.Location = new Point(24, 404);
         _cancelarTesteGuiado = CriarBotaoSecundario("Cancelar teste", (_, _) => CancelarTesteGuiado());
-        _cancelarTesteGuiado.Location = new Point(190, 400);
+        _cancelarTesteGuiado.Location = new Point(190, 404);
         _copiarDiagnosticoTeste = CriarBotaoSecundario("Copiar diagnóstico", (_, _) =>
         {
             Clipboard.SetText(_diagnosticoGuiado.CriarDiagnosticoCopiavel());
         });
-        _copiarDiagnosticoTeste.Location = new Point(330, 400);
+        _copiarDiagnosticoTeste.Location = new Point(330, 404);
         _corrigirTesteGuiado = CriarBotaoPrimario("Corrigir agora", (_, _) => Navegar("configuracoes"));
-        _corrigirTesteGuiado.Location = new Point(486, 400);
+        _corrigirTesteGuiado.Location = new Point(486, 404);
         _abrirReuniaoTeste = CriarBotaoPrimario("Abrir reunião", async (_, _) =>
         {
             if (_diagnosticoGuiado.ReuniaoId is Guid reuniaoId)
@@ -1571,7 +1575,7 @@ internal sealed class DesktopPocForm : Form
                 await AbrirDetalheAsync(reuniaoId, "Transcrição");
             }
         });
-        _abrirReuniaoTeste.Location = new Point(626, 400);
+        _abrirReuniaoTeste.Location = new Point(626, 404);
 
         cartao.Controls.Add(_abrirReuniaoTeste);
         cartao.Controls.Add(_corrigirTesteGuiado);
@@ -1633,6 +1637,12 @@ internal sealed class DesktopPocForm : Form
             : $"Reconhecido: {_diagnosticoGuiado.TrechoReconhecido}";
         var emAndamento = _diagnosticoGuiado.Estado is
             EstadoDiagnosticoGuiado.Capturando or EstadoDiagnosticoGuiado.Processando;
+        if (_cartaoTesteGuiado is not null)
+        {
+            _cartaoTesteGuiado.Height = _diagnosticoGuiado.Estado == EstadoDiagnosticoGuiado.Processando
+                ? 368
+                : 468;
+        }
         _barraTesteGuiado.Visible = emAndamento;
         _barraTesteGuiado.MarqueeAnimationSpeed = emAndamento ? 30 : 0;
         _iniciarTesteGuiado.Visible = !emAndamento;
@@ -2221,8 +2231,7 @@ internal sealed class DesktopPocForm : Form
             _timerProcessamento.Stop();
             _timerGravacao.Start();
             _timerAudio.Start();
-            _estadoGlobal.Text = "Gravando";
-            _estadoGlobal.ForeColor = _paleta.Perigo;
+            DefinirEstadoGlobal("Gravando", _paleta.Perigo);
             Navegar("ao-vivo");
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -2280,8 +2289,7 @@ internal sealed class DesktopPocForm : Form
             }
 
             AtualizarReuniaoAcompanhada();
-            _estadoGlobal.Text = "Processando localmente";
-            _estadoGlobal.ForeColor = _paleta.Destaque;
+            DefinirEstadoGlobal("Processando localmente", _paleta.Destaque);
             Navegar("atividade");
             if (_sessao.ModoDemonstracao)
             {
@@ -2297,8 +2305,7 @@ internal sealed class DesktopPocForm : Form
 
             _timerGravacao.Stop();
             _timerAudio.Stop();
-            _estadoGlobal.Text = "Processamento pendente";
-            _estadoGlobal.ForeColor = _paleta.Destaque;
+            DefinirEstadoGlobal("Processamento pendente", _paleta.Destaque);
             AtualizarReuniaoAcompanhada();
             Navegar("atividade");
             MostrarFalhaSegura(
@@ -2330,8 +2337,7 @@ internal sealed class DesktopPocForm : Form
         {
             _observabilidade.RegistrarConclusaoProcessamento();
         }
-        _estadoGlobal.Text = "Tudo funcionando";
-        _estadoGlobal.ForeColor = _paleta.Positivo;
+        DefinirEstadoGlobal("Tudo funcionando", _paleta.Positivo);
         AtualizarReuniaoAcompanhada();
         AtualizarAcompanhamentoProcessamento();
         _atualizarConsoleObservabilidade?.Invoke();
@@ -2417,9 +2423,7 @@ internal sealed class DesktopPocForm : Form
         }
         catch (Exception exception)
         {
-            _estadoGlobal.Text = "Ação necessária";
-            _estadoGlobal.ForeColor = _paleta.Perigo;
-            _estadoGlobal.AccessibleDescription = exception.Message;
+            DefinirEstadoGlobal("Ação necessária", _paleta.Perigo, exception.Message);
             await _sessao.RegistrarFalhaOperacionalAsync(
                 "atualizar_desktop",
                 exception,
@@ -2435,26 +2439,26 @@ internal sealed class DesktopPocForm : Form
     {
         if (_sessao.RecuperacaoPendente)
         {
-            _estadoGlobal.Text = "Recuperação pendente";
-            _estadoGlobal.ForeColor = _paleta.Destaque;
-            _estadoGlobal.AccessibleDescription =
-                "Uma gravação anterior exige que você escolha encerrar ou manter.";
+            DefinirEstadoGlobal(
+                "Recuperação pendente",
+                _paleta.Destaque,
+                "Uma gravação anterior exige que você escolha encerrar ou manter.");
             return;
         }
 
         if (_sessao.Reunioes.Any(reuniao => string.Equals(reuniao.Status, "Falha", StringComparison.Ordinal)))
         {
-            _estadoGlobal.Text = "Ação necessária";
-            _estadoGlobal.ForeColor = _paleta.Perigo;
+            DefinirEstadoGlobal("Ação necessária", _paleta.Perigo);
             return;
         }
 
-        (_estadoGlobal.Text, _estadoGlobal.ForeColor) = _sessao.Etapa switch
+        var estado = _sessao.Etapa switch
         {
             EtapaDesktopPoc.Gravando => ("Gravando", _paleta.Perigo),
             EtapaDesktopPoc.Processando => ("Processando localmente", _paleta.Destaque),
             _ => ("Tudo funcionando", _paleta.Positivo)
         };
+        DefinirEstadoGlobal(estado.Item1, estado.Item2);
     }
 
     private void MostrarFalhaSegura(
@@ -2468,8 +2472,7 @@ internal sealed class DesktopPocForm : Form
             return;
         }
 
-        _estadoGlobal.Text = "Ação necessária";
-        _estadoGlobal.ForeColor = _paleta.Perigo;
+        DefinirEstadoGlobal("Ação necessária", _paleta.Perigo);
         if (!_sessao.ModoDemonstracao && exception is not null)
         {
             _ = _sessao.RegistrarFalhaOperacionalAsync(
@@ -2492,6 +2495,12 @@ internal sealed class DesktopPocForm : Form
 
     internal void AbrirTesteGuiado() => Navegar("teste-guiado");
 
+    internal void AbrirAoVivo() => Navegar("ao-vivo");
+
+    internal void AbrirAtividade() => Navegar("atividade");
+
+    internal void AbrirObservabilidade() => Navegar("observabilidade");
+
     internal async Task IniciarTesteGuiadoAgoraAsync(TimeSpan duracaoCaptura)
     {
         if (_sessao.Etapa == EtapaDesktopPoc.Gravando || _sessao.RecuperacaoPendente)
@@ -2500,8 +2509,7 @@ internal sealed class DesktopPocForm : Form
                 "Desktop",
                 "Preparando",
                 "Já existe uma gravação ativa. Encerre-a antes de iniciar o teste guiado.");
-            _estadoGlobal.Text = "Ação necessária";
-            _estadoGlobal.ForeColor = _paleta.Perigo;
+            DefinirEstadoGlobal("Ação necessária", _paleta.Perigo);
             AtualizarTelaTesteGuiado();
             return;
         }
@@ -2517,8 +2525,7 @@ internal sealed class DesktopPocForm : Form
             var reuniaoId = _sessao.ReuniaoAtivaId ?? _sessao.ReuniaoAcompanhadaId
                 ?? throw new InvalidOperationException("O teste iniciado não possui correlação de reunião.");
             _diagnosticoGuiado.Iniciar(reuniaoId);
-            _estadoGlobal.Text = "Teste: gravando";
-            _estadoGlobal.ForeColor = _paleta.Perigo;
+            DefinirEstadoGlobal("Teste: gravando", _paleta.Perigo);
             _timerAudio.Start();
             AtualizarTelaTesteGuiado();
 
@@ -2526,8 +2533,7 @@ internal sealed class DesktopPocForm : Form
             await _sessao.EncerrarGravacaoAsync(CancellationToken.None);
             _timerAudio.Stop();
             _diagnosticoGuiado.MarcarProcessando();
-            _estadoGlobal.Text = "Teste: processando";
-            _estadoGlobal.ForeColor = _paleta.Destaque;
+            DefinirEstadoGlobal("Teste: processando", _paleta.Destaque);
             AtualizarTelaTesteGuiado();
         }
         catch (OperationCanceledException) when (cancelamento.IsCancellationRequested)
@@ -2548,8 +2554,7 @@ internal sealed class DesktopPocForm : Form
 
             _timerAudio.Stop();
             _diagnosticoGuiado.Cancelar();
-            _estadoGlobal.Text = "Tudo funcionando";
-            _estadoGlobal.ForeColor = _paleta.Positivo;
+            DefinirEstadoGlobal("Tudo funcionando", _paleta.Positivo);
             AtualizarTelaTesteGuiado();
         }
         catch (Exception exception)
@@ -2558,8 +2563,7 @@ internal sealed class DesktopPocForm : Form
             var componente = exception is WorkerNaoIniciadoException ? "Worker" : "Pipeline";
             var etapa = _sessao.Etapa == EtapaDesktopPoc.Gravando ? "Gravando" : "Processando";
             _diagnosticoGuiado.Falhar(componente, etapa, exception.Message);
-            _estadoGlobal.Text = "Ação necessária";
-            _estadoGlobal.ForeColor = _paleta.Perigo;
+            DefinirEstadoGlobal("Ação necessária", _paleta.Perigo);
             await _sessao.RegistrarFalhaOperacionalAsync(
                 "teste_guiado",
                 exception,
@@ -2598,15 +2602,15 @@ internal sealed class DesktopPocForm : Form
                 evento?.Componente ?? "Pipeline",
                 reuniao.Status,
                 evento?.Mensagem ?? reuniao.MotivoFalha ?? "O processamento do teste falhou.");
-            _estadoGlobal.Text = "Ação necessária";
-            _estadoGlobal.ForeColor = _paleta.Perigo;
+            DefinirEstadoGlobal("Ação necessária", _paleta.Perigo);
         }
         else if (reuniao?.Status is "Ata pronta" or "Retenção pendente" or "Gravação removida")
         {
             var detalhe = await _sessao.ObterDetalheAsync(reuniaoId, _lifetime.Token);
             _diagnosticoGuiado.Concluir(detalhe?.Transcricao ?? []);
-            _estadoGlobal.Text = _diagnosticoGuiado.TudoCerto ? "Tudo funcionando" : "Ação necessária";
-            _estadoGlobal.ForeColor = _diagnosticoGuiado.TudoCerto ? _paleta.Positivo : _paleta.Perigo;
+            DefinirEstadoGlobal(
+                _diagnosticoGuiado.TudoCerto ? "Tudo funcionando" : "Ação necessária",
+                _diagnosticoGuiado.TudoCerto ? _paleta.Positivo : _paleta.Perigo);
         }
 
         AtualizarTelaTesteGuiado();
@@ -2662,6 +2666,17 @@ internal sealed class DesktopPocForm : Form
         medidor.Value = valor.Value;
         texto.Text = valor.Value > 2 ? $"{valor.Value}%  sinal presente" : $"{valor.Value}%  silêncio";
         texto.ForeColor = valor.Value > 2 ? _paleta.Positivo : _paleta.TextoSecundario;
+    }
+
+    private void DefinirEstadoGlobal(string texto, Color cor, string? descricao = null)
+    {
+        _estadoGlobal.Text = texto;
+        _estadoGlobal.ForeColor = cor;
+        _estadoGlobal.BackColor = DesktopPocMotion.Misturar(
+            _paleta.Superficies.PainelElevado,
+            cor,
+            _tema == TemaDesktopPoc.Escuro ? 0.16D : 0.10D);
+        _estadoGlobal.AccessibleDescription = descricao ?? texto;
     }
 
     internal void AbrirConfiguracoes() => Navegar("configuracoes");

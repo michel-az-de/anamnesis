@@ -10,6 +10,12 @@ internal sealed class CapturaInstantaneaController(
 {
     private int _processando;
 
+    public event Action<GravacaoAutomaticaInfo>? GravacaoAutomaticaIniciada;
+
+    public event Action? GravacaoAutomaticaEncerrada;
+
+    public event Action? FalhaDeteccao;
+
     public async Task ProcessarAsync(CancellationToken cancellationToken)
     {
         if (Interlocked.Exchange(ref _processando, 1) != 0)
@@ -54,6 +60,7 @@ internal sealed class CapturaInstantaneaController(
                 "processar_deteccao",
                 exception,
                 CancellationToken.None);
+            await PublicarFalhaDeteccaoAsync();
             prompt.MostrarFalhaSegura();
         }
         finally
@@ -146,6 +153,11 @@ internal sealed class CapturaInstantaneaController(
                     ?? throw new InvalidOperationException(
                         "A gravação iniciada não possui identificador ativo.");
                 detector.ConfirmarInicioAutomatico(reuniaoId);
+                await PublicarInicioAutomaticoAsync(
+                    new GravacaoAutomaticaInfo(
+                        reuniaoId,
+                        $"Reunião detectada • {plataforma.Nome}",
+                        plataforma.Nome));
                 prompt.NotificarInicioAutomatico();
             }
         }
@@ -156,6 +168,7 @@ internal sealed class CapturaInstantaneaController(
                 "iniciar_gravacao_detectada",
                 exception,
                 CancellationToken.None);
+            await PublicarFalhaDeteccaoAsync();
             prompt.MostrarFalhaSegura();
         }
     }
@@ -170,6 +183,7 @@ internal sealed class CapturaInstantaneaController(
         try
         {
             await sessao.EncerrarGravacaoAsync(cancellationToken);
+            await PublicarEncerramentoAutomaticoAsync();
         }
         catch (Exception exception)
         {
@@ -178,7 +192,90 @@ internal sealed class CapturaInstantaneaController(
                 "encerrar_gravacao_detectada",
                 exception,
                 CancellationToken.None);
+            await PublicarFalhaDeteccaoAsync();
             prompt.MostrarFalhaSegura();
+        }
+    }
+
+    private async Task PublicarInicioAutomaticoAsync(GravacaoAutomaticaInfo info)
+    {
+        if (GravacaoAutomaticaIniciada is null)
+        {
+            return;
+        }
+
+        foreach (Action<GravacaoAutomaticaInfo> observador in
+                 GravacaoAutomaticaIniciada.GetInvocationList())
+        {
+            try
+            {
+                observador(info);
+            }
+            catch (Exception exception)
+            {
+                await RegistrarFalhaVisualAsync(
+                    "exibir_indicador_gravacao_automatica",
+                    exception);
+            }
+        }
+    }
+
+    private async Task PublicarEncerramentoAutomaticoAsync()
+    {
+        if (GravacaoAutomaticaEncerrada is null)
+        {
+            return;
+        }
+
+        foreach (Action observador in GravacaoAutomaticaEncerrada.GetInvocationList())
+        {
+            try
+            {
+                observador();
+            }
+            catch (Exception exception)
+            {
+                await RegistrarFalhaVisualAsync(
+                    "ocultar_indicador_gravacao_automatica",
+                    exception);
+            }
+        }
+    }
+
+    private async Task PublicarFalhaDeteccaoAsync()
+    {
+        if (FalhaDeteccao is null)
+        {
+            return;
+        }
+
+        foreach (Action observador in FalhaDeteccao.GetInvocationList())
+        {
+            try
+            {
+                observador();
+            }
+            catch (Exception exception)
+            {
+                await RegistrarFalhaVisualAsync(
+                    "abrir_contexto_falha_deteccao",
+                    exception);
+            }
+        }
+    }
+
+    private async Task RegistrarFalhaVisualAsync(string operacao, Exception exception)
+    {
+        try
+        {
+            await sessao.RegistrarFalhaOperacionalAsync(
+                operacao,
+                exception,
+                CancellationToken.None);
+        }
+        catch (Exception)
+        {
+            // Presença visual é best-effort e nunca altera o resultado da captura.
         }
     }
 }

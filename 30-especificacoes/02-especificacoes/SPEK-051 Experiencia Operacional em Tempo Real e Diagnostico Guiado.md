@@ -4,7 +4,7 @@ aliases: [SPEK-051, Fluxo Operacional, Diagnostico Guiado]
 tags: [especificacao, desktop, ux, audio, transcricao, diagnostico]
 type: spek
 created: 2026-08-06
-updated: 2026-08-06
+updated: 2026-08-07
 status: em validação
 summary: Unifica captura, processamento, edição, áudio real e diagnóstico em um fluxo estável, observável e sem refresh visível.
 related: ["[[SPEK-024 Captura Universal de Audio pelo OBS]]", "[[SPEK-029 Polimento Visual e Motion Desktop]]", "[[SPEK-032 Captura Instantanea e Deteccao Local]]", "[[SPEK-050 Fluxo de Processamento Assistido no Tray]]"]
@@ -32,6 +32,15 @@ Transformar o Command Deck em uma experiência operacional coerente: a pessoa en
 - A interface real nunca usa valores animados, aleatórios ou simulados. Quando a leitura não estiver disponível, exibe `Sem leitura` e uma ação para diagnóstico.
 - A amostragem não grava conteúdo, não persiste níveis e não envia telemetria. Testes automatizados usam uma fonte falsa e determinística.
 - O estado da detecção local mostra o modo `Manual`, `Assistido` ou `Automático`, o sinal seguro observado e a ação para alterar o modo. Contagem regressiva assistida permanece visível e cancelável.
+
+### Presença no Windows e notificações
+
+- Quando a detecção automática inicia uma gravação, um indicador compacto permanece visível acima da área de notificação do Windows durante toda a captura. Ele mostra `Gravando automaticamente`, plataforma, título seguro, tempo decorrido e as ações `Abrir` e `Encerrar`.
+- O indicador não aparece para gravação manual, não ocupa um botão adicional na barra de tarefas, não rouba foco e não pisca. Seu estado é estável e muda somente em transições relevantes.
+- O ícone da área de notificação também comunica o estado de gravação por texto acessível e uma variação visual estática, sem animação contínua.
+- Notificações locais são emitidas uma única vez no início automático, na conclusão do processamento e em falha acionável. Polling repetido não duplica notificações.
+- Clicar em uma notificação ou no indicador abre o Anamnesis no contexto operacional disponível. Nenhuma notificação inclui transcrição, segredo, caminho privado ou diagnóstico bruto.
+- O polimento visual usa espaçamento consistente em múltiplos de quatro, hierarquia clara entre título, estado e ações, navegação sempre alcançável e ausência de grandes áreas vazias sem função. Etapas e sinais permanecem legíveis em `1180 x 760` com escala de 100%.
 
 ### Edição segura
 
@@ -66,6 +75,9 @@ Transformar o Command Deck em uma experiência operacional coerente: a pessoa en
 - [x] O modo real remove os medidores simulados e mostra valores reais ou `Sem leitura`.
 - [x] Microfone e sistema têm gráfico curto de atividade, indicação de silêncio e leitura acessível em texto.
 - [ ] O modo e o estado da detecção local ficam visíveis no fluxo; a contagem assistida continua cancelável.
+- [x] A gravação iniciada automaticamente mantém indicador compacto próximo à barra de tarefas, sem foco ou pisca, com plataforma, tempo, `Abrir` e `Encerrar`.
+- [x] O ícone e as notificações do Windows comunicam início automático, conclusão e falha uma única vez, sem conteúdo sensível.
+- [x] A navegação, as etapas e o cartão operacional permanecem legíveis em `1180 x 760`, com espaçamento coerente e sem área vazia dominante.
 - [x] O título pode ser editado, salvo, cancelado e restaurado após reiniciar a sessão.
 - [x] A transcrição pode ser editada, salva, cancelada e restaurada em UTF-8 após reiniciar a sessão.
 - [x] Polling não sobrescreve título ou transcrição com alterações locais ainda não salvas.
@@ -85,6 +97,9 @@ Transformar o Command Deck em uma experiência operacional coerente: a pessoa en
 - Fonte de áudio: normalização, indisponibilidade e histórico determinístico por fakes.
 - Teste guiado: gravação ativa bloqueada, cancelamento, transcrição vazia, sucesso e falha acionável.
 - Privacidade: diagnóstico copiável sem conteúdo sensível.
+- Presença no Windows: indicador automático sem ativação, ações explícitas e descarte ao encerrar.
+- Notificações: deduplicação por transição, abertura contextual e conteúdo seguro.
+- Regressão visual: navegação inferior visível, cartão operacional compacto e etapas legíveis em `1180 x 760`.
 
 ## Fora de escopo
 
@@ -122,14 +137,26 @@ Etapas + gráfico + console → Tudo certo
 7. Red: o diagnóstico guiado não diferencia sucesso, transcrição vazia e falha por etapa.
 8. Green: orquestrar o teste real com estado, correlação e ações seguras.
 9. Refactor: reduzir duplicação visual preservando os limites atuais do Desktop.
+10. Red: provar que a captura automática não possui presença persistente e que polling pode repetir notificações.
+11. Green: adicionar indicador compacto sem ativação, estado visual do ícone e notificações deduplicadas.
+12. Refactor: aplicar a grade de quatro pixels, reduzir peso visual concorrente e eliminar espaço morto no fluxo guiado.
 
 ## Evidências de implementação
 
-- Suíte Release: 317 de 317 testes verdes, sendo 6 de domínio, 53 de aplicação e 258 de infraestrutura.
+- Suíte Release: 323 de 323 testes verdes, sendo 6 de domínio, 53 de aplicação e 264 de infraestrutura.
 - `DesktopPocFormTests` prova atualização incremental sem recriar página, preservação de edição suja, fluxo manual, teste guiado, concorrência bloqueada e cancelamento seguro da captura.
 - `SqliteReuniaoRepositoryTests.DeveRestaurarEdicaoAposReinicioEAtualizarArquivosArquivados` reabre o banco por uma nova instância e confere título, transcrição UTF-8, `ata.md` e `transcricao.md`.
 - `WindowsNivelAudioSourceTests` e os testes do medidor provam normalização real, indisponibilidade honesta e histórico determinístico sem simulação no modo real.
-- Inspeções visuais locais das telas de edição e teste guiado foram produzidas em `C:\tmp\anamnesis-spek-051-editor.png` e `C:\tmp\anamnesis-spek-051-guided.png`.
+- `GravacaoAutomaticaWidgetTests` prova presença persistente sem ativação ou botão adicional na barra, cronômetro, abertura contextual e encerramento único.
+- `NotificacoesDesktopStateTests` prova semeadura silenciosa, notificação somente por transição, deduplicação de polling e falha sem diagnóstico bruto.
+- Inspeções visuais locais do teste guiado compacto e do indicador automático foram produzidas em `C:\tmp\anamnesis-spek-051-guided-polish-2.png` e `C:\tmp\anamnesis-spek-051-auto-widget.png`.
+
+## Referências de UX consultadas
+
+- [Fluent 2 Layout](https://fluent2.microsoft.design/layout): grade base de quatro pixels, proximidade e hierarquia por espaçamento.
+- [Windows app notifications](https://learn.microsoft.com/windows/apps/develop/notifications/app-notifications/app-notifications-ux-guidance): notificações úteis, pouco ruidosas e com abertura no contexto correto.
+- [Windows notification area](https://learn.microsoft.com/windows/win32/uxguide/winenv-notification): estado persistente somente enquanto relevante, sem pisca ou animação contínua, com janela compacta próxima à área de notificação.
+- [Windows compact overlay](https://learn.microsoft.com/windows/apps/develop/ui/manage-app-windows): referência para presença pequena, sempre visível e separada da janela principal.
 
 ## Decisões pendentes
 
