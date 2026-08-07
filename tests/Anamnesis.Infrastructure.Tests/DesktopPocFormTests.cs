@@ -280,6 +280,99 @@ public sealed class DesktopPocFormTests
     }
 
     [Fact]
+    public void NavegacaoDeveUsarSuperficieContinuaComUmUnicoItemAtivo()
+    {
+        ExecutarEmSta(() =>
+        {
+            using var form = new DesktopPocForm(
+                TemaDesktopPoc.Escuro,
+                new DesktopPocEffectsPolicy(AnimacoesAtivas: false));
+            form.ClientSize = new Size(1180, 760);
+            form.Show();
+            System.Windows.Forms.Application.DoEvents();
+
+            var navegacao = EncontrarControles(form)
+                .OfType<DesktopNavigationButton>()
+                .ToArray();
+
+            Assert.Equal(7, navegacao.Length);
+            Assert.All(navegacao, botao =>
+            {
+                Assert.Null(botao.Region);
+                Assert.Equal(0, botao.FlatAppearance.BorderSize);
+                Assert.Equal(AccessibleRole.MenuItem, botao.AccessibleRole);
+                Assert.True(botao.Height >= 44);
+            });
+            Assert.Equal("Início", Assert.Single(navegacao, botao => botao.Selecionado).Text);
+
+            EncontrarBotao(form, "Reuniões").PerformClick();
+            System.Windows.Forms.Application.DoEvents();
+
+            Assert.Equal("Reuniões", Assert.Single(navegacao, botao => botao.Selecionado).Text);
+        });
+    }
+
+    [Fact]
+    public void AtividadeDeveResumirEstadosEAbrirAReuniaoSelecionada()
+    {
+        ExecutarEmSta(() =>
+        {
+            var sessao = new DesktopSessionAtividadeFake();
+            using var form = new DesktopPocForm(
+                TemaDesktopPoc.Escuro,
+                new DesktopPocEffectsPolicy(AnimacoesAtivas: false),
+                sessao);
+            form.Show();
+            AguardarInterface(() => sessao.Atualizacoes > 0);
+
+            EncontrarBotao(form, "Atividade").PerformClick();
+            System.Windows.Forms.Application.DoEvents();
+
+            var cards = EncontrarControles(form).OfType<DesktopActivityButton>().ToArray();
+            Assert.Equal(2, cards.Length);
+            Assert.All(cards, card =>
+            {
+                Assert.Equal(AccessibleRole.PushButton, card.AccessibleRole);
+                Assert.StartsWith("Abrir reunião: ", card.AccessibleName, StringComparison.Ordinal);
+                Assert.True(card.TabStop);
+            });
+            Assert.Contains(EncontrarLabels(form), label => label.Text == "2 atividades");
+            Assert.Contains(EncontrarLabels(form), label => label.Text == "1 concluída");
+            Assert.Contains(EncontrarLabels(form), label => label.Text == "1 com falha");
+            Assert.Contains(
+                EncontrarLabels(form),
+                label => label.Text.Contains("Clique em uma atividade", StringComparison.Ordinal));
+            CapturarQuandoSolicitado(form, "ANAMNESIS_ACTIVITY_SCREENSHOT");
+
+            cards.Single(card => card.ReuniaoId == sessao.ReuniaoFalhaId).PerformClick();
+            AguardarInterface(() => sessao.UltimoDetalheIdSolicitado == sessao.ReuniaoFalhaId);
+
+            Assert.Contains(EncontrarLabels(form), label => label.Text == "Reunião com falha");
+            Assert.Contains(EncontrarLabels(form), label => label.Text == "Resumo executivo");
+        });
+    }
+
+    [Fact]
+    public void AtividadeVaziaDeveOrientarOPrimeiroPasso()
+    {
+        ExecutarEmSta(() =>
+        {
+            using var form = new DesktopPocForm(
+                TemaDesktopPoc.Escuro,
+                new DesktopPocEffectsPolicy(AnimacoesAtivas: false),
+                new DesktopSessionRealFake());
+            form.Show();
+            AguardarInterface(() => EncontrarLabels(form).Any(label => label.Text == "DADOS LOCAIS REAIS"));
+
+            EncontrarBotao(form, "Atividade").PerformClick();
+            System.Windows.Forms.Application.DoEvents();
+
+            Assert.Contains(EncontrarLabels(form), label => label.Text == "Nenhuma atividade ainda");
+            Assert.NotNull(EncontrarBotao(form, "Iniciar uma reunião"));
+        });
+    }
+
+    [Fact]
     public void TesteGuiadoDeveCancelarCapturaEEncerrarGravacaoComSeguranca()
     {
         ExecutarEmSta(() =>
@@ -847,6 +940,69 @@ public sealed class DesktopPocFormTests
             Status = "Transcrevendo",
             Resumo = "Resumo real.",
             PontosPrincipais = pontos,
+            Transcricao = [],
+            Decisoes = [],
+            Tarefas = []
+        };
+    }
+
+    private sealed class DesktopSessionAtividadeFake : IDesktopSession
+    {
+        private readonly IReadOnlyList<ReuniaoDesktopPoc> _reunioes;
+
+        public DesktopSessionAtividadeFake()
+        {
+            _reunioes =
+            [
+                CriarReuniao(ReuniaoConcluidaId, "Reunião concluída", "Ata pronta", null),
+                CriarReuniao(ReuniaoFalhaId, "Reunião com falha", "Falha", "Whisper indisponível.")
+            ];
+        }
+
+        public Guid ReuniaoConcluidaId { get; } = Guid.NewGuid();
+        public Guid ReuniaoFalhaId { get; } = Guid.NewGuid();
+        public Guid? UltimoDetalheIdSolicitado { get; private set; }
+        public int Atualizacoes { get; private set; }
+        public bool ModoDemonstracao => false;
+        public EtapaDesktopPoc Etapa => EtapaDesktopPoc.Pronto;
+        public TimeSpan DuracaoGravacao => TimeSpan.Zero;
+        public IReadOnlyList<ReuniaoDesktopPoc> Reunioes => _reunioes;
+
+        public Task AtualizarAsync(CancellationToken cancellationToken)
+        {
+            Atualizacoes++;
+            return Task.CompletedTask;
+        }
+
+        public Task IniciarGravacaoAsync(string titulo, CancellationToken cancellationToken) => Task.CompletedTask;
+        public void AvancarGravacao() { }
+        public Task EncerrarGravacaoAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+        public void ConcluirProcessamentoSimulado() { }
+
+        public Task<ReuniaoDesktopPoc?> ObterDetalheAsync(Guid reuniaoId, CancellationToken cancellationToken)
+        {
+            UltimoDetalheIdSolicitado = reuniaoId;
+            return Task.FromResult<ReuniaoDesktopPoc?>(_reunioes.SingleOrDefault(item => item.Id == reuniaoId));
+        }
+
+        public Task AbrirArquivoAsync(string caminho, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task MostrarNaPastaAsync(string caminho, CancellationToken cancellationToken) => Task.CompletedTask;
+
+        private static ReuniaoDesktopPoc CriarReuniao(
+            Guid id,
+            string titulo,
+            string status,
+            string? motivoFalha) => new()
+        {
+            Id = id,
+            Titulo = titulo,
+            Data = "Hoje, 09:00",
+            Plataforma = "Captura OBS",
+            Duracao = "00:18:00",
+            Status = status,
+            Resumo = motivoFalha ?? "Ata e transcrição disponíveis no arquivo local.",
+            MotivoFalha = motivoFalha,
+            PontosPrincipais = [],
             Transcricao = [],
             Decisoes = [],
             Tarefas = []

@@ -21,6 +21,9 @@ Transformar o Command Deck em uma experiência operacional coerente: a pessoa en
 ### Navegação e atualização visual
 
 - A navegação principal mantém a hierarquia existente do Command Deck e reúne as ações da reunião em um fluxo contínuo: preparação, gravação, processamento, revisão e conclusão.
+- A barra lateral usa uma única superfície contínua: somente o item ativo ou sob interação recebe fundo, sem contorno permanente em cada opção. Ícones vetoriais, texto e foco respeitam escala de DPI, permanecem nítidos e navegáveis por teclado.
+- `Atividade` é uma linha do tempo operacional, não um painel decorativo. Cada item associado a reunião mostra contexto, estado e a ação explícita `Abrir reunião`; clique, Enter ou Espaço abrem o detalhe correspondente. Eventos técnicos sem reunião pertencem à `Observabilidade`.
+- A linha do tempo resume quantos itens estão em andamento, concluídos ou com falha e possui estado vazio orientando a primeira ação.
 - O fluxo usa as etapas verificáveis `Preparando`, `Gravando`, `Arquivo salvo`, `Na fila`, `Transcrevendo`, `Gerando ata`, `Arquivando`, `Concluído` e `Falha`.
 - A etapa ativa é destacada e as etapas concluídas permanecem visíveis. Estados sem percentual verificável usam loading indeterminado; a interface nunca inventa progresso.
 - Polling, áudio e journal atualizam somente os controles afetados. Nenhum timer pode reconstruir a página, disparar `Navegar`, limpar a árvore visual ou retirar foco, seleção, rolagem, filtro, aba ou texto não salvo.
@@ -78,6 +81,8 @@ Transformar o Command Deck em uma experiência operacional coerente: a pessoa en
 - [x] A gravação iniciada automaticamente mantém indicador compacto próximo à barra de tarefas, sem foco ou pisca, com plataforma, tempo, `Abrir` e `Encerrar`.
 - [x] O ícone e as notificações do Windows comunicam início automático, conclusão e falha uma única vez, sem conteúdo sensível.
 - [x] A navegação, as etapas e o cartão operacional permanecem legíveis em `1180 x 760`, com espaçamento coerente e sem área vazia dominante.
+- [x] A barra lateral mantém uma única superfície nítida em escala de DPI, com apenas um item ativo, sem cápsulas permanentes e com foco de teclado visível.
+- [x] Cada reunião em `Atividade` é uma ação acessível, mostra contexto e estado, abre o detalhe correto e participa do resumo operacional e do estado vazio.
 - [x] O título pode ser editado, salvo, cancelado e restaurado após reiniciar a sessão.
 - [x] A transcrição pode ser editada, salva, cancelada e restaurada em UTF-8 após reiniciar a sessão.
 - [x] Polling não sobrescreve título ou transcrição com alterações locais ainda não salvas.
@@ -100,6 +105,7 @@ Transformar o Command Deck em uma experiência operacional coerente: a pessoa en
 - Presença no Windows: indicador automático sem ativação, ações explícitas e descarte ao encerrar.
 - Notificações: deduplicação por transição, abertura contextual e conteúdo seguro.
 - Regressão visual: navegação inferior visível, cartão operacional compacto e etapas legíveis em `1180 x 760`.
+- Navegação e atividade: item ativo único, foco por teclado, ausência de cápsulas permanentes, resumo operacional e abertura da reunião correta por card.
 
 ## Fora de escopo
 
@@ -140,16 +146,20 @@ Etapas + gráfico + console → Tudo certo
 10. Red: provar que a captura automática não possui presença persistente e que polling pode repetir notificações.
 11. Green: adicionar indicador compacto sem ativação, estado visual do ícone e notificações deduplicadas.
 12. Refactor: aplicar a grade de quatro pixels, reduzir peso visual concorrente e eliminar espaço morto no fluxo guiado.
+13. Red: provar que a barra lateral parece uma coleção de botões e que os cards de atividade não abrem a reunião.
+14. Green: tornar a navegação uma superfície contínua e a atividade um feed acessível com resumo, contexto e abertura explícita.
 
 ## Evidências de implementação
 
-- Suíte Release: 323 de 323 testes verdes, sendo 6 de domínio, 53 de aplicação e 264 de infraestrutura.
+- Suíte Release: 326 de 326 testes verdes, sendo 6 de domínio, 53 de aplicação e 267 de infraestrutura.
 - `DesktopPocFormTests` prova atualização incremental sem recriar página, preservação de edição suja, fluxo manual, teste guiado, concorrência bloqueada e cancelamento seguro da captura.
 - `SqliteReuniaoRepositoryTests.DeveRestaurarEdicaoAposReinicioEAtualizarArquivosArquivados` reabre o banco por uma nova instância e confere título, transcrição UTF-8, `ata.md` e `transcricao.md`.
 - `WindowsNivelAudioSourceTests` e os testes do medidor provam normalização real, indisponibilidade honesta e histórico determinístico sem simulação no modo real.
 - `GravacaoAutomaticaWidgetTests` prova presença persistente sem ativação ou botão adicional na barra, cronômetro, abertura contextual e encerramento único.
 - `NotificacoesDesktopStateTests` prova semeadura silenciosa, notificação somente por transição, deduplicação de polling e falha sem diagnóstico bruto.
+- `DesktopPocFormTests` prova a barra lateral como superfície contínua com item ativo único, cards de atividade acessíveis, resumo por estado, estado vazio e abertura do detalhe pelo `ReuniaoId` selecionado.
 - Inspeções visuais locais do teste guiado compacto e do indicador automático foram produzidas em `C:\tmp\anamnesis-spek-051-guided-polish-2.png` e `C:\tmp\anamnesis-spek-051-auto-widget.png`.
+- A inspeção visual do feed operacional refinado foi produzida em `C:\tmp\anamnesis-spek-051-activity-polish.png` a `1180 x 760`.
 
 ## Referências de UX consultadas
 

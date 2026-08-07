@@ -28,7 +28,7 @@ Duas limitações continuam registradas: um Worker morto no meio da transcriçã
 | Entrega para a alpha | Peso | Concluído | Avanço | Evidência atual |
 | --- | ---: | ---: | ---: | --- |
 | Especificações, ADRs e protocolo multi-LLM | 5% | 100% | 5% | SPEKs 001–004, ADRs 001–003 e protocolo versionados |
-| Solução .NET, qualidade e TDD inicial | 5% | 100% | 5% | Solução compilável e 323 testes automatizados verdes, incluindo OBS, Docker, Tray, Worker black box, Desktop real, observabilidade, motion, detecção local, notificações e release Windows |
+| Solução .NET, qualidade e TDD inicial | 5% | 100% | 5% | Solução compilável e 326 testes automatizados verdes, incluindo OBS, Docker, Tray, Worker black box, Desktop real, observabilidade, motion, detecção local, notificações e release Windows |
 | Ciclo de vida de reunião no domínio | 10% | 100% | 10% | Estados, falha, retentativa, arquivamento e retenção cobertos por testes e persistência |
 | Fila local durável | 10% | 100% | 10% | `SqliteJobQueue` com reserva atômica, liberação e conclusão testadas |
 | Persistência de reuniões | 10% | 100% | 10% | `SqliteReuniaoRepository` persiste e restaura o agregado com testes em banco temporário |
@@ -84,7 +84,7 @@ A alpha estará pronta quando, em uma máquina Windows limpa e com pré-requisit
 | Inicialização concorrente do journal | SPEK 100% concluída | Trava de arquivo entre processos, checagem read-only do schema e cem primeiros acessos concorrentes estabilizados ([[SPEK-048 Inicializacao Concorrente do Journal SQLite]]) |
 | Release canônico do instalador Windows | SPEK 100% concluída | O run [`31126791469`](https://github.com/michel-az-de/anamnesis/actions/runs/31126791469) concluiu 285 testes Release, smoke instalado e promoção. A [release `v0.2.0-beta.6`](https://github.com/michel-az-de/anamnesis/releases/tag/v0.2.0-beta.6) é imutável, atestada por `gh release verify` e tem EXE, `SHA256SUMS.txt` e `release.json` verificados por `gh release verify-asset`; SHA-256 oficial do EXE: `80ca930b38954100d6f733200c4ed7e8cbc291ea3c52a1ea498b0806b0d38cb9` ([[SPEK-049 Release Canonico do Instalador Windows]]) |
 | Fluxo de processamento assistido no Tray | SPEK 100% concluída | Título manual no Command Deck e no menu do Tray, barra indeterminada, console correlacionado por `ReuniaoId`, abertura direta na aba Transcrição e polling incremental sem recriar a página ativa; 285 testes Release verdes ([[SPEK-050 Fluxo de Processamento Assistido no Tray]]) |
-| Experiência operacional em tempo real | 18 de 19 critérios atendidos | Etapas sem refresh visível, edição persistida, áudio real, diagnóstico guiado compacto, notificações deduplicadas e indicador de gravação automática junto à barra cobertos por 323 testes; falta expor o sinal seguro do detector e alterar seu modo na tela ([[SPEK-051 Experiencia Operacional em Tempo Real e Diagnostico Guiado]]) |
+| Experiência operacional em tempo real | 20 de 21 critérios atendidos | Etapas sem refresh visível, edição persistida, áudio real, diagnóstico guiado compacto, navegação contínua, atividade acionável, notificações deduplicadas e indicador de gravação automática cobertos por 326 testes; falta expor o sinal seguro do detector e alterar seu modo na tela ([[SPEK-051 Experiencia Operacional em Tempo Real e Diagnostico Guiado]]) |
 
 ## Próximo incremento
 
@@ -92,7 +92,7 @@ A alpha estará pronta quando, em uma máquina Windows limpa e com pré-requisit
 
 ## Roadmap pós-alpha
 
-O planejamento pós-alpha está documentado em [[Roadmap de Produto]]. As SPEKs 030, 031, 045, 046, 048, 049 e 050 foram concluídas; a SPEK-032 está em validação com 12 de 13 critérios atendidos; a SPEK-051 está em validação com 18 de 19 critérios atendidos; e as SPEKs 033 a 039 permanecem em rascunho para agendas Google e Microsoft, Obsidian, Trello e Azure DevOps.
+O planejamento pós-alpha está documentado em [[Roadmap de Produto]]. As SPEKs 030, 031, 045, 046, 048, 049 e 050 foram concluídas; a SPEK-032 está em validação com 12 de 13 critérios atendidos; a SPEK-051 está em validação com 20 de 21 critérios atendidos; e as SPEKs 033 a 039 permanecem em rascunho para agendas Google e Microsoft, Obsidian, Trello e Azure DevOps.
 
 Esse roadmap não altera os 100% da alpha. Novos percentuais só serão criados quando houver uma versão-alvo com pesos próprios, evitando misturar produto futuro com a medição já encerrada.
 

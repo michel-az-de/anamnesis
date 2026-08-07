@@ -257,15 +257,15 @@ internal sealed class DesktopPocForm : Form
             DesktopSurfaceVariant.Navigation)
         {
             Dock = DockStyle.Left,
-            Width = 196,
+            Width = 208,
             CornerRadius = 0,
-            Padding = new Padding(10, _tokens.Espacamento.Lg, 10, _tokens.Espacamento.Md)
+            Padding = new Padding(12, _tokens.Espacamento.Lg, 12, _tokens.Espacamento.Md)
         };
 
         var principal = new FlowLayoutPanel
         {
             Dock = DockStyle.Top,
-            Height = 280,
+            Height = 304,
             FlowDirection = FlowDirection.TopDown,
             WrapContents = false,
             BackColor = _paleta.Navegacao
@@ -294,9 +294,11 @@ internal sealed class DesktopPocForm : Form
         var botao = new DesktopNavigationButton(_paleta, _tokens, _politicaVisual, icon)
         {
             Text = texto,
-            Width = 176,
-            Height = 40,
-            Margin = new Padding(0, 0, 0, 4),
+            AccessibleName = texto,
+            AccessibleDescription = $"Abrir {texto}",
+            Width = 184,
+            Height = 44,
+            Margin = new Padding(0, 0, 0, 2),
             Font = new Font(_tokens.Tipografia.Interface, 9.5F, FontStyle.Regular, GraphicsUnit.Point)
         };
         botao.Click += (_, _) => Navegar(pagina);
@@ -974,36 +976,82 @@ internal sealed class DesktopPocForm : Form
 
     private Panel CriarTelaAtividade()
     {
-        var pagina = CriarPagina("Atividade", "Processamento local e eventos operacionais", null, out var corpo);
+        var pagina = CriarPagina(
+            "Atividade",
+            "Linha do tempo das reuniões e do processamento local",
+            null,
+            out var corpo);
         var reuniaoAcompanhada = ObterReuniaoAcompanhada();
-        var itens = new List<(string, string, string)>();
+        var reunioes = _sessao.Reunioes
+            .Where(reuniao => reuniaoAcompanhada is null || reuniao.Id != reuniaoAcompanhada.Id)
+            .Take(20)
+            .ToArray();
 
-        if (_sessao.ModoDemonstracao)
+        if (reunioes.Length > 0 || _sessao.Reunioes.Count == 0)
         {
-            itens.Add(("Planejamento do produto", "Ata gerada e arquivos arquivados", "Concluído"));
-            itens.Add(("Diagnóstico automático", "OBS, Docker, Whisper e Codex disponíveis", "Saudável"));
+            corpo.Controls.Add(CriarListaAtividade(reunioes));
         }
-        else
-        {
-            itens.AddRange(_sessao.Reunioes
-                .Where(reuniao => reuniaoAcompanhada is null || reuniao.Id != reuniaoAcompanhada.Id)
-                .Take(20)
-                .Select(reuniao => (
-                    reuniao.Titulo,
-                    reuniao.MotivoFalha ?? reuniao.Resumo,
-                    reuniao.Status)));
-        }
-
-        var lista = CriarListaInformativa(itens);
-        corpo.Controls.Add(lista);
 
         if (_sessao.Etapa is EtapaDesktopPoc.Processando or EtapaDesktopPoc.Concluido)
         {
             corpo.Controls.Add(CriarCartaoAcompanhamentoProcessamento());
         }
 
+        corpo.Controls.Add(CriarResumoAtividade(_sessao.Reunioes));
+
         return pagina;
     }
+
+    private DesktopSurfacePanel CriarResumoAtividade(IReadOnlyList<ReuniaoDesktopPoc> reunioes)
+    {
+        var concluidas = reunioes.Count(EhAtividadeConcluida);
+        var falhas = reunioes.Count(EhAtividadeComFalha);
+        var emAndamento = reunioes.Count - concluidas - falhas;
+        var resumo = CriarCartao(DesktopSurfaceVariant.Base, accent: _paleta.Destaque);
+        resumo.Name = "resumo-atividade";
+        resumo.Dock = DockStyle.Top;
+        resumo.Height = 78;
+        resumo.Margin = new Padding(0, 0, 0, 12);
+        resumo.Controls.Add(CriarLabel(
+            "Clique em uma atividade ou use Enter para abrir a reunião.",
+            8.75F,
+            _paleta.TextoSecundario,
+            new Point(20, 45)));
+        resumo.Controls.Add(CriarLabel(
+            FormatarQuantidade(reunioes.Count, "atividade", "atividades"),
+            10F,
+            _paleta.Texto,
+            new Point(20, 18),
+            FontStyle.Bold));
+        resumo.Controls.Add(CriarLabel(
+            FormatarQuantidade(emAndamento, "em andamento", "em andamento"),
+            9F,
+            _paleta.Destaque,
+            new Point(150, 20),
+            FontStyle.Bold));
+        resumo.Controls.Add(CriarLabel(
+            FormatarQuantidade(concluidas, "concluída", "concluídas"),
+            9F,
+            _paleta.Positivo,
+            new Point(300, 20),
+            FontStyle.Bold));
+        resumo.Controls.Add(CriarLabel(
+            FormatarQuantidade(falhas, "com falha", "com falha"),
+            9F,
+            falhas > 0 ? _paleta.Perigo : _paleta.TextoSecundario,
+            new Point(420, 20),
+            FontStyle.Bold));
+        return resumo;
+    }
+
+    private static string FormatarQuantidade(int quantidade, string singular, string plural) =>
+        $"{quantidade} {(quantidade == 1 ? singular : plural)}";
+
+    private static bool EhAtividadeConcluida(ReuniaoDesktopPoc reuniao) =>
+        reuniao.Status is "Ata pronta" or "Concluído";
+
+    private static bool EhAtividadeComFalha(ReuniaoDesktopPoc reuniao) =>
+        reuniao.Status.Contains("Falha", StringComparison.OrdinalIgnoreCase);
 
     private DesktopSurfacePanel CriarCartaoAcompanhamentoProcessamento()
     {
@@ -1927,6 +1975,66 @@ internal sealed class DesktopPocForm : Form
         return lista;
     }
 
+    private FlowLayoutPanel CriarListaAtividade(ReuniaoDesktopPoc[] reunioes)
+    {
+        var lista = new FlowLayoutPanel
+        {
+            Name = "lista-atividade",
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
+            AutoScroll = true,
+            BackColor = _paleta.Superficies.Canvas,
+            Padding = new Padding(0, 4, 8, 0)
+        };
+
+        foreach (var reuniao in reunioes)
+        {
+            var detalhe = $"{reuniao.Plataforma}  •  {reuniao.Data}  •  {reuniao.Duracao}";
+            var atividade = new DesktopActivityButton(
+                _paleta,
+                _tokens,
+                _politicaVisual,
+                reuniao.Id,
+                reuniao.Titulo,
+                detalhe,
+                reuniao.Status)
+            {
+                Name = $"atividade-{reuniao.Id:N}",
+                Height = 82,
+                Margin = new Padding(0, 0, 0, 8)
+            };
+            atividade.Click += async (_, _) => await AbrirDetalheAsync(reuniao.Id);
+            lista.Controls.Add(atividade);
+        }
+
+        if (reunioes.Length == 0)
+        {
+            var vazio = CriarCartao(DesktopSurfaceVariant.Base, accent: _paleta.Destaque);
+            vazio.Height = 142;
+            vazio.Margin = new Padding(0, 0, 0, 8);
+            vazio.Controls.Add(CriarLabel(
+                "Grave uma reunião para acompanhar captura, processamento e resultado neste feed.",
+                9F,
+                _paleta.TextoSecundario,
+                new Point(20, 50)));
+            vazio.Controls.Add(CriarLabel(
+                "Nenhuma atividade ainda",
+                12F,
+                _paleta.Texto,
+                new Point(20, 20),
+                FontStyle.Bold));
+            var iniciar = CriarBotaoPrimario("Iniciar uma reunião", (_, _) => Navegar("inicio"));
+            iniciar.Location = new Point(20, 88);
+            vazio.Controls.Add(iniciar);
+            lista.Controls.Add(vazio);
+        }
+
+        lista.SizeChanged += (_, _) => AjustarLarguraFilhos(lista);
+        AjustarLarguraFilhos(lista);
+        return lista;
+    }
+
     private DesktopSurfacePanel CriarLinhaReuniao(ReuniaoDesktopPoc reuniao)
     {
         var linha = CriarCartao(DesktopSurfaceVariant.Base, interactive: true, accent: _paleta.Destaque);
@@ -1998,7 +2106,7 @@ internal sealed class DesktopPocForm : Form
         };
         foreach (var item in itens)
         {
-            var linha = CriarCartao(DesktopSurfaceVariant.Base, interactive: true, accent: _paleta.Positivo);
+            var linha = CriarCartao(DesktopSurfaceVariant.Base, accent: _paleta.Positivo);
             linha.Height = 78;
             linha.Margin = new Padding(0, 0, 0, 9);
             linha.Controls.Add(CriarLabel(item.Estado, 10F, _paleta.Positivo, new Point(0, 27), FontStyle.Bold));
