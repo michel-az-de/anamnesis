@@ -98,7 +98,19 @@ public sealed class ArquivoConfiguracaoTests : IAsyncLifetime
         Assert.Contains("whisper.cpp@sha256:", criada.ImagemDockerWhisper, StringComparison.Ordinal);
         Assert.EndsWith("codex.exe", criada.CaminhoExecutavelCli, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("--output-schema", criada.ArgumentosCli);
+        Assert.Equal("--output-last-message", criada.ResolverArgumentoArquivoSaidaCli());
         Assert.Equal(criada.CaminhoExecutavelCli, preservada.CaminhoExecutavelCli);
+    }
+
+    [Fact]
+    public void ConfiguracaoLegadaDoCodexDeveResolverArquivoDaMensagemFinal()
+    {
+        var configuracao = ConfiguracaoAnamnesis.CriarPadrao() with
+        {
+            CaminhoExecutavelCli = "C:\\ferramentas\\codex.exe"
+        };
+
+        Assert.Equal("--output-last-message", configuracao.ResolverArgumentoArquivoSaidaCli());
     }
 
     [Fact]

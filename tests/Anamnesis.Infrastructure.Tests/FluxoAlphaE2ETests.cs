@@ -126,7 +126,7 @@ public sealed class FluxoAlphaE2ETests : IAsyncLifetime
         Assert.Contains("transcricao", await File.ReadAllTextAsync(caminhoEntradaCli), StringComparison.OrdinalIgnoreCase);
         await RegistrarAsync("Ata e transcrição arquivadas; protocolo OBS e entrada JSON da CLI confirmados.");
 
-        relogio.Avancar(TimeSpan.FromDays(7));
+        relogio.Avancar(TimeSpan.FromDays(30));
         var lixeira = new LixeiraFake();
         var retencao = new RetencaoGravacaoHandler(repository, lixeira, relogio, journal);
         var simulacao = await retencao.SimularAsync(reuniaoId, CancellationToken.None);
@@ -364,7 +364,7 @@ public sealed class FluxoAlphaE2ETests : IAsyncLifetime
                 await EnviarAsync(socket, new { op = 0, d = new { rpcVersion = 1 } });
                 await ReceberAsync(socket);
                 await EnviarAsync(socket, new { op = 2, d = new { negotiatedRpcVersion = 1 } });
-                var quantidadeSolicitacoes = conexao == 0 ? 4 : 2;
+                var quantidadeSolicitacoes = conexao == 0 ? 5 : 2;
                 for (var indice = 0; indice < quantidadeSolicitacoes; indice++)
                 {
                     var solicitacao = await ReceberAsync(socket);
@@ -386,6 +386,7 @@ public sealed class FluxoAlphaE2ETests : IAsyncLifetime
                                 new { inputName = "Anamnesis | Microfone" }
                             }
                         },
+                        "GetSpecialInputs" => new { },
                         "StopRecord" => new { outputPath = _caminhoGravacao },
                         _ => new { }
                     };

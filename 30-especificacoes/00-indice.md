@@ -4,7 +4,7 @@ aliases: [Índice de Especificações, Indice de SPEKs]
 tags: [especificacao, indice]
 type: moc
 created: 2026-08-04
-updated: 2026-08-06
+updated: 2026-08-07
 status: evergreen
 summary: Fonte de verdade para a ordem de leitura e estado das especificações.
 related: ["[[Especificacoes MOC]]", "[[Protocolo de Agentes]]", "[[Roadmap de Produto]]"]
@@ -45,11 +45,11 @@ related: ["[[Especificacoes MOC]]", "[[Protocolo de Agentes]]", "[[Roadmap de Pr
 | SPEK-029 | [[SPEK-029 Polimento Visual e Motion Desktop]] | concluído | `Tray` |
 | SPEK-030 | [[SPEK-030 Desktop com Dados Reais]] | concluído | `Application`, `Infrastructure`, `Tray` |
 | SPEK-031 | [[SPEK-031 Observabilidade Operacional Real]] | concluído | `Application`, `Infrastructure`, `Tray`, `Worker` |
-| SPEK-032 | [[SPEK-032 Captura Instantanea e Deteccao Local]] | em validação | `Application`, `Infrastructure`, `Tray` |
+| SPEK-032 | [[SPEK-032 Captura Instantanea e Deteccao Local]] | concluído | `Application`, `Infrastructure`, `Tray` |
 | SPEK-033 | [[SPEK-033 Agenda Conectada]] | rascunho | `Application`, `Infrastructure`, `Tray` |
 | SPEK-034 | [[SPEK-034 Google Calendar Adapter]] | rascunho | `Infrastructure`, `Tray` |
 | SPEK-035 | [[SPEK-035 Microsoft Graph Calendar Adapter]] | rascunho | `Infrastructure`, `Tray` |
-| SPEK-036 | [[SPEK-036 Publicacao Local no Obsidian]] | rascunho | `Application`, `Infrastructure`, `Tray` |
+| SPEK-036 | [[SPEK-036 Publicacao Local no Obsidian]] | concluído | `Application`, `Infrastructure`, `Tray` |
 | SPEK-037 | [[SPEK-037 Mapeamento de Tarefas Externas]] | rascunho | `Domain`, `Application`, `Infrastructure`, `Tray` |
 | SPEK-038 | [[SPEK-038 Trello Adapter]] | rascunho | `Infrastructure`, `Tray` |
 | SPEK-039 | [[SPEK-039 Azure DevOps Work Items Adapter]] | rascunho | `Infrastructure`, `Tray` |
@@ -64,6 +64,13 @@ related: ["[[Especificacoes MOC]]", "[[Protocolo de Agentes]]", "[[Roadmap de Pr
 | SPEK-048 | [[SPEK-048 Inicializacao Concorrente do Journal SQLite]] | concluido | `Infrastructure` |
 | SPEK-049 | [[SPEK-049 Release Canonico do Instalador Windows]] | concluído | `Installer`, `Scripts`, `CI`, `Docs` |
 | SPEK-050 | [[SPEK-050 Fluxo de Processamento Assistido no Tray]] | concluído | `Application`, `Infrastructure`, `Tray` |
+| SPEK-051 | [[SPEK-051 Confiabilidade do Primeiro Uso Real]] | concluído | `Application`, `Infrastructure`, `Worker` |
+| SPEK-052 | [[SPEK-052 Texto Selecionavel e Copia]] | concluído | `Tray` |
+| SPEK-053 | [[SPEK-053 Ata Narrativa da Reuniao]] | concluído | `Infrastructure`, `Worker` |
+| SPEK-054 | [[SPEK-054 Lembretes Locais de Tarefas]] | concluída | `Domain`, `Application`, `Infrastructure`, `Tray` |
+| SPEK-055 | [[SPEK-055 Diarizacao Local de Locutores]] | rascunho | `Application`, `Infrastructure`, `Worker` |
+| SPEK-056 | [[SPEK-056 Busca Local no Conteudo das Reunioes]] | concluído | `Application`, `Infrastructure`, `Tray` |
+| SPEK-057 | [[SPEK-057 Exportacao Local de Ata em PDF e DOCX]] | concluído | `Application`, `Infrastructure`, `Tray` |
 
 ## Release oficial atual
 

@@ -27,7 +27,7 @@ public static class WhisperDockerComando
             "-v", $"{caminhoAudio}:/audio/input.wav:ro",
             "-v", $"{diretorioSaida}:/output",
             options.ImagemDocker,
-            $"whisper-cli -m /models/model.bin -f /audio/input.wav -l {options.Idioma} -otxt -of /output/{nomeSaida}"
+            $"whisper-cli -m /models/model.bin -f /audio/input.wav -l {options.Idioma} -mc 0 -sns -np -otxt -of /output/{nomeSaida}"
         ];
     }
 }

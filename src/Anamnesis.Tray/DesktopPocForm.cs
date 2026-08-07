@@ -1,6 +1,7 @@
 using System.Drawing.Drawing2D;
 using System.Globalization;
 using System.Diagnostics;
+using Anamnesis.Application.Modelos;
 using Anamnesis.Application.UseCases;
 
 namespace Anamnesis.Tray;
@@ -16,6 +17,7 @@ internal sealed class DesktopPocForm : Form
     private readonly DesktopPocDesignTokens _tokens;
     private readonly DesktopPocEffectsPolicy _politicaVisual;
     private readonly IDesktopSession _sessao;
+    private readonly Func<Guid, string, DateTimeOffset, CancellationToken, Task>? _criarLembrete;
     private readonly DesktopPocObservabilityState _observabilidade;
     private readonly Panel _conteudo = new();
     private readonly Label _estadoGlobal = new();
@@ -28,16 +30,18 @@ internal sealed class DesktopPocForm : Form
     private Guid? _reuniaoDetalheId;
     private Guid? _reuniaoAcompanhadaId;
     private string? _filtroObservabilidade;
+    private Panel? _areaListaReunioes;
+    private int _versaoBuscaReunioes;
     private bool _pollingEmAndamento;
     private int _versaoNavegacao;
     private Label? _cronometro;
     private DesktopSignalMeter? _audioSistema;
     private DesktopSignalMeter? _microfone;
-    private DesktopSurfacePanel? _cartaoProcessamento;
+    private DesktopShadowPanel? _cartaoProcessamento;
     private Label? _tituloProcessamento;
     private Label? _descricaoProcessamento;
     private Label? _estadoProcessamento;
-    private ProgressBar? _barraProcessamento;
+    private DesktopProgressBar? _barraProcessamento;
     private DesktopActionButton? _abrirLogsProcessamento;
     private DesktopActionButton? _abrirTranscricaoProcessamento;
     private Action? _atualizarConsoleObservabilidade;
@@ -67,9 +71,11 @@ internal sealed class DesktopPocForm : Form
     internal DesktopPocForm(
         TemaDesktopPoc tema,
         DesktopPocEffectsPolicy politicaVisual,
-        IDesktopSession sessao)
+        IDesktopSession sessao,
+        Func<Guid, string, DateTimeOffset, CancellationToken, Task>? criarLembrete = null)
     {
         _sessao = sessao ?? throw new ArgumentNullException(nameof(sessao));
+        _criarLembrete = criarLembrete;
         _observabilidade = new DesktopPocObservabilityState(
             incluirHistorico: sessao.ModoDemonstracao);
         _tema = tema;
@@ -295,9 +301,9 @@ internal sealed class DesktopPocForm : Form
             }
         }
 
-        _conteudo.SuspendLayout();
+        var paginaAnterior = _conteudo.Controls.Count > 0 ? _conteudo.Controls[0] : null;
         LimparReferenciasDaPagina();
-        _conteudo.Controls.Clear();
+
         var novaPagina = pagina switch
         {
             "reunioes" => CriarTelaReunioes(),
@@ -308,16 +314,88 @@ internal sealed class DesktopPocForm : Form
             "configuracoes" => CriarTelaConfiguracoes(),
             _ => CriarTelaInicio()
         };
-        _conteudo.Controls.Add(novaPagina);
-        _conteudo.ResumeLayout(performLayout: true);
-        if (Visible && _politicaVisual.AnimacoesAtivas)
+
+        _conteudo.SuspendLayout();
+
+        if (Visible && _politicaVisual.AnimacoesAtivas && paginaAnterior != null)
         {
-            DesktopPocMotion.AnimarEntrada(novaPagina, novaPagina.Bounds, _tokens.Motion, animacoesAtivas: true);
+            var largura = _conteudo.ClientSize.Width;
+            var altura = _conteudo.ClientSize.Height;
+
+            paginaAnterior.Dock = DockStyle.None;
+            paginaAnterior.SetBounds(0, 0, largura, altura);
+
+            novaPagina.Dock = DockStyle.None;
+            novaPagina.SetBounds(largura, 0, largura, altura);
+
+            _conteudo.Controls.Add(novaPagina);
+            _conteudo.ResumeLayout(performLayout: true);
+
+            var relogio = Stopwatch.StartNew();
+            var timer = new System.Windows.Forms.Timer { Interval = 15 };
+            var versao = _versaoNavegacao;
+            var deslocamento = _tokens.Motion.DeslocamentoPagina;
+
+            void Encerrar()
+            {
+                timer.Stop();
+                timer.Dispose();
+                if (_versaoNavegacao == versao && paginaAnterior != null && !paginaAnterior.IsDisposed)
+                {
+                    _conteudo.Controls.Remove(paginaAnterior);
+                    paginaAnterior.Dispose();
+                }
+                if (novaPagina != null && !novaPagina.IsDisposed)
+                {
+                    novaPagina.Dock = DockStyle.Fill;
+                }
+            }
+
+            timer.Tick += (_, _) =>
+            {
+                if (paginaAnterior.IsDisposed || novaPagina.IsDisposed)
+                {
+                    Encerrar();
+                    return;
+                }
+
+                var progresso = relogio.Elapsed.TotalMilliseconds / _tokens.Motion.NormalMs;
+                if (progresso >= 1D)
+                {
+                    Encerrar();
+                    return;
+                }
+
+                var suave = DesktopPocMotion.SuavizarSaida(progresso);
+                var atual = (int)Math.Round(deslocamento * suave);
+                var progressoSaida = Math.Min(1D, progresso * 1.25D);
+                var suaveSaida = DesktopPocMotion.SuavizarSaida(progressoSaida);
+                var atualSaida = (int)Math.Round(deslocamento * suaveSaida);
+                paginaAnterior.Left = -atualSaida;
+                novaPagina.Left = largura - atual;
+            };
+
+            paginaAnterior.Disposed += (_, _) => { if (timer.Enabled) { timer.Stop(); timer.Dispose(); } };
+            novaPagina.Disposed += (_, _) => { if (timer.Enabled) { timer.Stop(); timer.Dispose(); } };
+            timer.Start();
+        }
+        else
+        {
+            _conteudo.Controls.Clear();
+            _conteudo.Controls.Add(novaPagina);
+            _conteudo.ResumeLayout(performLayout: true);
+
+            if (Visible && _politicaVisual.AnimacoesAtivas)
+            {
+                DesktopPocMotion.AnimarEntrada(novaPagina, novaPagina.Bounds, _tokens.Motion, animacoesAtivas: true);
+            }
         }
     }
 
     private void LimparReferenciasDaPagina()
     {
+        _versaoBuscaReunioes++;
+        _areaListaReunioes = null;
         _cronometro = null;
         _audioSistema = null;
         _microfone = null;
@@ -406,7 +484,7 @@ internal sealed class DesktopPocForm : Form
             out var corpo);
 
         var barra = new Panel { Dock = DockStyle.Top, Height = 54, Padding = new Padding(0, 0, 0, 12) };
-        var busca = CriarCampoTexto("Buscar por título ou plataforma");
+        var busca = CriarCampoTexto("Buscar em título, resumo, decisões, tarefas e transcrição");
         busca.Width = 340;
         busca.Dock = DockStyle.Left;
 
@@ -420,20 +498,18 @@ internal sealed class DesktopPocForm : Form
         estado.Width = 180;
         estado.Dock = DockStyle.Right;
 
-        var periodo = CriarCombo(["Últimos 30 dias", "Esta semana", "Este ano"]);
+        var periodo = CriarCombo(["Todo o período", "Últimos 30 dias", "Esta semana", "Este ano"]);
         periodo.Width = 180;
         periodo.Dock = DockStyle.Right;
         periodo.Margin = new Padding(0, 0, 10, 0);
 
-        if (_sessao.ModoDemonstracao)
-        {
-            barra.Controls.Add(periodo);
-        }
+        barra.Controls.Add(periodo);
         barra.Controls.Add(estado);
         barra.Controls.Add(busca);
 
         var areaLista = new Panel { Dock = DockStyle.Fill, BackColor = _paleta.Superficies.Canvas };
-        void AtualizarLista()
+        _areaListaReunioes = areaLista;
+        void AtualizarListaLocal()
         {
             var filtro = busca.Text.Trim();
             var reunioes = _sessao.Reunioes.Where(reuniao =>
@@ -445,13 +521,68 @@ internal sealed class DesktopPocForm : Form
             areaLista.Controls.Add(CriarListaReunioes(reunioes));
         }
 
-        busca.TextChanged += (_, _) => AtualizarLista();
-        estado.SelectedIndexChanged += (_, _) => AtualizarLista();
+        async void SolicitarBusca(object? _, EventArgs __)
+        {
+            var versao = ++_versaoBuscaReunioes;
+            try
+            {
+                await Task.Delay(280, _lifetime.Token);
+                if (versao != _versaoBuscaReunioes)
+                {
+                    return;
+                }
+
+                await AtualizarListaReunioesAsync(busca.Text, estado.Text, periodo.Text, versao);
+            }
+            catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
+            {
+            }
+        }
+
+        busca.TextChanged += SolicitarBusca;
+        estado.SelectedIndexChanged += SolicitarBusca;
+        periodo.SelectedIndexChanged += SolicitarBusca;
 
         corpo.Controls.Add(areaLista);
         corpo.Controls.Add(barra);
-        AtualizarLista();
+        AtualizarListaLocal();
         return pagina;
+    }
+
+    private async Task AtualizarListaReunioesAsync(
+        string? texto,
+        string? status,
+        string? periodo,
+        int versao)
+    {
+        var resultados = await _sessao.BuscarReunioesAsync(
+            texto,
+            status,
+            ResolverCriadaDesde(periodo),
+            _lifetime.Token);
+        if (IsDisposed || versao != _versaoBuscaReunioes || _areaListaReunioes is null)
+        {
+            return;
+        }
+
+        _areaListaReunioes.Controls.Clear();
+        _areaListaReunioes.Controls.Add(CriarListaReunioes(resultados));
+    }
+
+    private static DateTimeOffset? ResolverCriadaDesde(string? periodo)
+    {
+        var agora = DateTimeOffset.Now;
+        return periodo switch
+        {
+            "Últimos 30 dias" => agora.AddDays(-30).ToUniversalTime(),
+            "Esta semana" => new DateTimeOffset(
+                    agora.Date.AddDays(-(((int)agora.DayOfWeek + 6) % 7)),
+                    agora.Offset)
+                .ToUniversalTime(),
+            "Este ano" => new DateTimeOffset(agora.Year, 1, 1, 0, 0, 0, agora.Offset)
+                .ToUniversalTime(),
+            _ => null
+        };
     }
 
     private Panel CriarTelaDetalhe(ReuniaoDesktopPoc reuniao, string abaInicial = "Resumo")
@@ -474,14 +605,13 @@ internal sealed class DesktopPocForm : Form
         };
         var detalhe = new Panel { Dock = DockStyle.Fill, BackColor = _paleta.Superficies.Canvas };
         var nomes = new[] { "Resumo", "Transcrição", "Decisões", "Tarefas", "Arquivos" };
-        var botoes = new List<Button>();
+        var botoes = new List<DesktopTabButton>();
 
         void Selecionar(string nome)
         {
             foreach (var botao in botoes)
             {
-                botao.ForeColor = botao.Text == nome ? _paleta.Destaque : _paleta.TextoSecundario;
-                botao.BackColor = botao.Text == nome ? _paleta.FundoDestaque : _paleta.Fundo;
+                botao.DefinirSelecionado(botao.Text == nome);
             }
 
             detalhe.Controls.Clear();
@@ -490,22 +620,20 @@ internal sealed class DesktopPocForm : Form
 
         foreach (var nome in nomes)
         {
-            var botao = new Button
+            var icone = nome switch
+            {
+                "Resumo" => DesktopTabIcon.Resumo,
+                "Transcrição" => DesktopTabIcon.Transcricao,
+                "Decisões" => DesktopTabIcon.Decisoes,
+                "Tarefas" => DesktopTabIcon.Tarefas,
+                "Arquivos" => DesktopTabIcon.Arquivos,
+                _ => DesktopTabIcon.Resumo
+            };
+            var botao = new DesktopTabButton(_paleta, _tokens, _politicaVisual, icone)
             {
                 Text = nome,
-                AutoSize = true,
-                Height = 38,
-                FlatStyle = FlatStyle.Flat,
-                FlatAppearance = { BorderSize = 0 },
-                BackColor = _paleta.Fundo,
-                ForeColor = _paleta.TextoSecundario,
-                Padding = new Padding(10, 0, 10, 0),
-                Cursor = Cursors.Hand
+                Margin = new Padding(0, 0, 6, 0)
             };
-            botao.UseVisualStyleBackColor = false;
-            botao.FlatAppearance.MouseOverBackColor = _paleta.FundoDestaque;
-            botao.FlatAppearance.MouseDownBackColor = _paleta.Selecao;
-            AplicarRegiaoArredondada(botao, _tokens.Geometria.RaioPequeno);
             botao.Click += (_, _) => Selecionar(nome);
             botoes.Add(botao);
             abas.Controls.Add(botao);
@@ -540,6 +668,10 @@ internal sealed class DesktopPocForm : Form
                 break;
             case "Tarefas":
                 rolagem.Controls.Add(CriarBlocoTexto("Tarefas", reuniao.Tarefas.Select(item => $"□  {item}")));
+                if (_criarLembrete is not null && reuniao.Tarefas.Count > 0)
+                {
+                    rolagem.Controls.Add(CriarBlocoLembretes(reuniao.Id, reuniao.Tarefas));
+                }
                 break;
             case "Arquivos":
                 if (_sessao.ModoDemonstracao)
@@ -566,7 +698,7 @@ internal sealed class DesktopPocForm : Form
     private DesktopSurfacePanel CriarBlocoArquivosPersistidos(ReuniaoDesktopPoc reuniao)
     {
         var bloco = CriarCartao(DesktopSurfaceVariant.Base);
-        bloco.Height = 260;
+        bloco.Height = 342;
         bloco.Padding = new Padding(20);
         bloco.Controls.Add(CriarLabel(
             "Arquivos persistidos",
@@ -575,7 +707,26 @@ internal sealed class DesktopPocForm : Form
             new Point(20, 16),
             FontStyle.Bold));
 
-        var topo = 54;
+        var exportarPdf = CriarBotaoSecundario(
+            "Exportar PDF",
+            async (_, _) => await SolicitarExportacaoAtaAsync(reuniao, FormatoExportacaoAta.Pdf));
+        exportarPdf.Location = new Point(20, 54);
+        exportarPdf.Size = new Size(150, 40);
+        var exportarDocx = CriarBotaoSecundario(
+            "Exportar DOCX",
+            async (_, _) => await SolicitarExportacaoAtaAsync(reuniao, FormatoExportacaoAta.Docx));
+        exportarDocx.Location = new Point(182, 54);
+        exportarDocx.Size = new Size(160, 40);
+        var publicarObsidian = CriarBotaoSecundario(
+            "Publicar no Obsidian",
+            async (_, _) => await SolicitarPublicacaoObsidianAsync(reuniao));
+        publicarObsidian.Location = new Point(354, 54);
+        publicarObsidian.Size = new Size(190, 40);
+        bloco.Controls.Add(publicarObsidian);
+        bloco.Controls.Add(exportarDocx);
+        bloco.Controls.Add(exportarPdf);
+
+        var topo = 118;
         AdicionarArtefato(
             bloco,
             "Ata",
@@ -660,6 +811,119 @@ internal sealed class DesktopPocForm : Form
         }
     }
 
+    private async Task SolicitarExportacaoAtaAsync(
+        ReuniaoDesktopPoc reuniao,
+        FormatoExportacaoAta formato)
+    {
+        var extensao = formato == FormatoExportacaoAta.Pdf ? "pdf" : "docx";
+        using var dialogo = new SaveFileDialog
+        {
+            Title = $"Exportar ata em {extensao.ToUpperInvariant()}",
+            Filter = formato == FormatoExportacaoAta.Pdf
+                ? "Documento PDF (*.pdf)|*.pdf"
+                : "Documento Word (*.docx)|*.docx",
+            DefaultExt = extensao,
+            AddExtension = true,
+            OverwritePrompt = true,
+            FileName = $"ata-{CriarNomeArquivoSeguro(reuniao.Titulo)}.{extensao}"
+        };
+        if (dialogo.ShowDialog(this) != DialogResult.OK)
+        {
+            return;
+        }
+
+        try
+        {
+            var caminho = await ExportarAtaAgoraAsync(
+                reuniao.Id,
+                formato,
+                dialogo.FileName,
+                File.Exists(dialogo.FileName));
+            MessageBox.Show(
+                $"Ata exportada com sucesso em:\n{caminho}",
+                "Exportação concluída",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
+        catch (Exception exception)
+        {
+            MostrarFalhaSegura(
+                $"Não foi possível exportar a ata. {exception.Message}",
+                "Falha na exportação",
+                exception,
+                "exportar_ata");
+        }
+    }
+
+    private async Task SolicitarPublicacaoObsidianAsync(ReuniaoDesktopPoc reuniao)
+    {
+        using var dialogo = new FolderBrowserDialog
+        {
+            Description = "Escolha a pasta raiz do vault Obsidian. Ela precisa conter .obsidian.",
+            UseDescriptionForTitle = true,
+            ShowNewFolderButton = false
+        };
+        if (dialogo.ShowDialog(this) != DialogResult.OK)
+        {
+            return;
+        }
+
+        if (CaminhoPossivelmenteSincronizado(dialogo.SelectedPath) &&
+            MessageBox.Show(
+                "Este vault parece estar em uma pasta sincronizada. A nota publicada terá ciclo de vida independente da retenção do Anamnesis. Deseja continuar?",
+                "Vault possivelmente sincronizado",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning) != DialogResult.Yes)
+        {
+            return;
+        }
+
+        try
+        {
+            var caminho = await PublicarAtaObsidianAgoraAsync(
+                reuniao.Id,
+                dialogo.SelectedPath,
+                "Anamnesis/Reunioes");
+            MessageBox.Show(
+                $"Ata publicada com sucesso em:\n{caminho}",
+                "Publicação concluída",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
+        catch (Exception exception)
+        {
+            MostrarFalhaSegura(
+                $"Não foi possível publicar a ata. {exception.Message}",
+                "Falha na publicação",
+                exception,
+                "publicar_ata_obsidian");
+        }
+    }
+
+    private static string CriarNomeArquivoSeguro(string titulo)
+    {
+        var invalido = Path.GetInvalidFileNameChars();
+        var normalizado = new string(titulo.Trim().Select(caractere =>
+            invalido.Contains(caractere) || char.IsWhiteSpace(caractere) ? '-' : caractere).ToArray());
+        while (normalizado.Contains("--", StringComparison.Ordinal))
+        {
+            normalizado = normalizado.Replace("--", "-", StringComparison.Ordinal);
+        }
+
+        normalizado = normalizado.Trim('-', '.');
+        if (normalizado.Length == 0)
+        {
+            normalizado = "reuniao";
+        }
+
+        return normalizado.Length <= 72 ? normalizado : normalizado[..72].TrimEnd('-');
+    }
+
+    private static bool CaminhoPossivelmenteSincronizado(string caminho) =>
+        caminho.Contains("OneDrive", StringComparison.OrdinalIgnoreCase) ||
+        caminho.Contains("Dropbox", StringComparison.OrdinalIgnoreCase) ||
+        caminho.Contains("Google Drive", StringComparison.OrdinalIgnoreCase);
+
     private Panel CriarTelaAoVivo()
     {
         var recuperacao = _sessao.RecuperacaoPendente;
@@ -674,10 +938,13 @@ internal sealed class DesktopPocForm : Form
 
         if (_sessao.Etapa != EtapaDesktopPoc.Gravando)
         {
-            var cartao = CriarCartao(DesktopSurfaceVariant.Elevated);
-            cartao.Dock = DockStyle.Top;
-            cartao.Height = 220;
-            cartao.Padding = new Padding(28);
+            var cartao = new DesktopShadowPanel(_paleta, _tokens, _politicaVisual, DesktopSurfaceVariant.Elevated)
+            {
+                Dock = DockStyle.Top,
+                Height = 220,
+                Padding = new Padding(28),
+                CornerRadius = _tokens.Geometria.RaioMedio
+            };
             var iniciar = CriarBotaoPrimario("Iniciar gravação", (_, _) => IniciarGravacao());
             iniciar.Location = new Point(28, 142);
             cartao.Controls.Add(iniciar);
@@ -687,12 +954,14 @@ internal sealed class DesktopPocForm : Form
             return pagina;
         }
 
-        var vivo = CriarCartao(
-            DesktopSurfaceVariant.Elevated,
-            accent: recuperacao ? _paleta.Destaque : _paleta.Perigo);
-        vivo.Dock = DockStyle.Top;
-        vivo.Height = 420;
-        vivo.Padding = new Padding(30);
+        var vivo = new DesktopShadowPanel(_paleta, _tokens, _politicaVisual, DesktopSurfaceVariant.Elevated)
+        {
+            Dock = DockStyle.Top,
+            Height = 420,
+            Padding = new Padding(30),
+            CornerRadius = _tokens.Geometria.RaioMedio,
+            AccentColor = recuperacao ? _paleta.Destaque : _paleta.Perigo
+        };
 
         var gravando = CriarLabel(
             recuperacao ? "RECUPERAÇÃO PENDENTE" : "GRAVANDO AGORA",
@@ -810,13 +1079,17 @@ internal sealed class DesktopPocForm : Form
         return pagina;
     }
 
-    private DesktopSurfacePanel CriarCartaoAcompanhamentoProcessamento()
+    private DesktopShadowPanel CriarCartaoAcompanhamentoProcessamento()
     {
-        _cartaoProcessamento = CriarCartao(DesktopSurfaceVariant.Elevated, accent: _paleta.Destaque);
-        _cartaoProcessamento.Dock = DockStyle.Top;
-        _cartaoProcessamento.Height = 194;
-        _cartaoProcessamento.Margin = new Padding(0, 0, 0, 12);
-        _cartaoProcessamento.Padding = new Padding(20);
+        _cartaoProcessamento = new DesktopShadowPanel(_paleta, _tokens, _politicaVisual, DesktopSurfaceVariant.Elevated)
+        {
+            Dock = DockStyle.Top,
+            Height = 194,
+            Margin = new Padding(0, 0, 0, 12),
+            Padding = new Padding(20),
+            CornerRadius = _tokens.Geometria.RaioMedio,
+            AccentColor = _paleta.Destaque
+        };
 
         _estadoProcessamento = CriarLabel(
             "PROCESSAMENTO LOCAL",
@@ -831,12 +1104,10 @@ internal sealed class DesktopPocForm : Form
             GraphicsUnit.Point);
         _tituloProcessamento = CriarLabel("", 13F, _paleta.Texto, new Point(20, 42), FontStyle.Bold);
         _descricaoProcessamento = CriarLabel("", 9.5F, _paleta.TextoSecundario, new Point(20, 70));
-        _barraProcessamento = new ProgressBar
+        _barraProcessamento = new DesktopProgressBar(_paleta, _tokens, _politicaVisual)
         {
             Location = new Point(20, 100),
-            Height = 14,
-            Style = ProgressBarStyle.Marquee,
-            MarqueeAnimationSpeed = 30,
+            MarqueeAtivo = true,
             Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
         };
         _cartaoProcessamento.Resize += (_, _) =>
@@ -906,7 +1177,7 @@ internal sealed class DesktopPocForm : Form
             ? "Transcrição e ata concluídas. Abra a reunião diretamente na aba de transcrição."
             : DescreverProcessamento(reuniao);
         _barraProcessamento.Visible = emProcessamento;
-        _barraProcessamento.MarqueeAnimationSpeed = emProcessamento ? 30 : 0;
+        _barraProcessamento.MarqueeAtivo = emProcessamento;
         _abrirLogsProcessamento.Visible = reuniao is not null;
         _abrirTranscricaoProcessamento.Visible = concluido;
     }
@@ -1405,14 +1676,21 @@ internal sealed class DesktopPocForm : Form
         return pagina;
     }
 
-    private DesktopSurfacePanel CriarCartaoStatus(string titulo, string estado, string detalhe)
+    private DesktopShadowPanel CriarCartaoStatus(string titulo, string estado, string detalhe)
     {
-        var cartao = CriarCartao(DesktopSurfaceVariant.Base, interactive: true, accent: _paleta.Positivo);
-        cartao.Dock = DockStyle.Fill;
-        cartao.Margin = new Padding(0, 0, 12, 0);
-        cartao.Padding = new Padding(16);
-        cartao.Controls.Add(CriarLabel(detalhe, 8.5F, _paleta.TextoSecundario, new Point(16, 58)));
-        cartao.Controls.Add(CriarLabel(estado, 10.5F, _paleta.Positivo, new Point(16, 34), FontStyle.Bold));
+        var cartao = new DesktopShadowPanel(_paleta, _tokens, _politicaVisual, DesktopSurfaceVariant.Base)
+        {
+            Dock = DockStyle.Fill,
+            Margin = new Padding(0, 0, 12, 0),
+            Padding = new Padding(16),
+            Interactive = true,
+            CornerRadius = _tokens.Geometria.RaioMedio
+        };
+        cartao.Controls.Add(CriarLabel(detalhe, 8.5F, _paleta.TextoSecundario, new Point(16, 62)));
+        cartao.Controls.Add(new DesktopStatusBadge(_paleta, _tokens, estado)
+        {
+            Location = new Point(16, 32)
+        });
         cartao.Controls.Add(CriarLabel(titulo, 9F, _paleta.Texto, new Point(16, 12), FontStyle.Bold));
         return cartao;
     }
@@ -1485,64 +1763,14 @@ internal sealed class DesktopPocForm : Form
         return lista;
     }
 
-    private DesktopSurfacePanel CriarLinhaReuniao(ReuniaoDesktopPoc reuniao)
+    private DesktopReuniaoListItem CriarLinhaReuniao(ReuniaoDesktopPoc reuniao)
     {
-        var linha = CriarCartao(DesktopSurfaceVariant.Base, interactive: true, accent: _paleta.Destaque);
-        linha.Height = 76;
-        linha.Margin = new Padding(0, 0, 0, 9);
-        linha.Cursor = Cursors.Hand;
-
-        var grade = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            ColumnCount = 3,
-            RowCount = 2,
-            Padding = new Padding(18, 12, 18, 10),
-            BackColor = _paleta.Superficies.Painel,
-            Cursor = Cursors.Hand
-        };
-        grade.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        grade.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 92F));
-        grade.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 118F));
-        grade.RowStyles.Add(new RowStyle(SizeType.Percent, 52F));
-        grade.RowStyles.Add(new RowStyle(SizeType.Percent, 48F));
-
-        var titulo = new Label { Text = reuniao.Titulo, Dock = DockStyle.Fill, ForeColor = _paleta.Texto, Font = new Font(Font, FontStyle.Bold), Cursor = Cursors.Hand };
-        var detalhe = new Label { Text = $"{reuniao.Plataforma}  •  {reuniao.Data}", Dock = DockStyle.Fill, ForeColor = _paleta.TextoSecundario, Cursor = Cursors.Hand };
-        var duracao = new Label { Text = reuniao.Duracao, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, ForeColor = _paleta.TextoSecundario, Cursor = Cursors.Hand };
-        var status = new Label
-        {
-            Text = reuniao.Status,
-            Dock = DockStyle.Fill,
-            TextAlign = ContentAlignment.MiddleCenter,
-            ForeColor = reuniao.Status == "Ata pronta" ? _paleta.Positivo : _paleta.Destaque,
-            BackColor = reuniao.Status == "Ata pronta" ? _paleta.FundoPositivo : _paleta.FundoDestaque,
-            Cursor = Cursors.Hand
-        };
-        AplicarRegiaoArredondada(status, _tokens.Geometria.RaioPequeno);
-
-        grade.Controls.Add(titulo, 0, 0);
-        grade.SetRowSpan(duracao, 2);
-        grade.Controls.Add(duracao, 1, 0);
-        grade.SetRowSpan(status, 2);
-        grade.Controls.Add(status, 2, 0);
-        grade.Controls.Add(detalhe, 0, 1);
-        linha.Controls.Add(grade);
-
-        async void Abrir(object? sender, EventArgs args)
-        {
-            await AbrirDetalheAsync(reuniao.Id);
-        }
-
-        linha.Click += Abrir;
-        foreach (Control control in new Control[] { grade, titulo, detalhe, duracao, status })
-        {
-            control.Click += Abrir;
-        }
-
-        return linha;
+        var item = new DesktopReuniaoListItem(_paleta, _tokens, _politicaVisual, reuniao);
+        item.Click += async (_, _) => await AbrirDetalheAsync(
+            reuniao.Id,
+            reuniao.SecaoCorrespondente ?? "Resumo");
+        return item;
     }
-
     private FlowLayoutPanel CriarListaInformativa(IEnumerable<(string Titulo, string Detalhe, string Estado)> itens)
     {
         var lista = new FlowLayoutPanel
@@ -1573,13 +1801,17 @@ internal sealed class DesktopPocForm : Form
         return lista;
     }
 
-    private DesktopSurfacePanel CriarAviso(string mensagem)
+    private DesktopShadowPanel CriarAviso(string mensagem)
     {
-        var aviso = CriarCartao(DesktopSurfaceVariant.Base, accent: _paleta.Positivo);
-        aviso.Dock = DockStyle.Top;
-        aviso.Height = 48;
-        aviso.Padding = new Padding(14);
-        aviso.Margin = new Padding(0, 0, 0, 12);
+        var aviso = new DesktopShadowPanel(_paleta, _tokens, _politicaVisual, DesktopSurfaceVariant.Base)
+        {
+            Dock = DockStyle.Top,
+            Height = 48,
+            Padding = new Padding(14),
+            Margin = new Padding(0, 0, 0, 12),
+            CornerRadius = _tokens.Geometria.RaioMedio,
+            AccentColor = _paleta.Positivo
+        };
         aviso.Controls.Add(new Label
         {
             Text = $"Pronto: {mensagem}",
@@ -1591,13 +1823,17 @@ internal sealed class DesktopPocForm : Form
         return aviso;
     }
 
-    private DesktopSurfacePanel CriarAlerta(string mensagem)
+    private DesktopShadowPanel CriarAlerta(string mensagem)
     {
-        var alerta = CriarCartao(DesktopSurfaceVariant.Base, accent: _paleta.Destaque);
-        alerta.Dock = DockStyle.Top;
-        alerta.Height = 48;
-        alerta.Padding = new Padding(14);
-        alerta.Margin = new Padding(0, 0, 0, 12);
+        var alerta = new DesktopShadowPanel(_paleta, _tokens, _politicaVisual, DesktopSurfaceVariant.Base)
+        {
+            Dock = DockStyle.Top,
+            Height = 48,
+            Padding = new Padding(14),
+            Margin = new Padding(0, 0, 0, 12),
+            CornerRadius = _tokens.Geometria.RaioMedio,
+            AccentColor = _paleta.Destaque
+        };
         alerta.Controls.Add(new Label
         {
             Text = $"Atenção: {mensagem}",
@@ -1609,30 +1845,176 @@ internal sealed class DesktopPocForm : Form
         return alerta;
     }
 
-    private DesktopSurfacePanel CriarBlocoTexto(string titulo, IEnumerable<string> linhas)
+    private DesktopShadowPanel CriarBlocoTexto(string titulo, IEnumerable<string> linhas)
     {
         var itens = linhas.ToArray();
-        var bloco = CriarCartao(DesktopSurfaceVariant.Base);
-        bloco.Height = Math.Max(126, 70 + itens.Length * 38);
-        bloco.Margin = new Padding(0, 0, 0, 12);
-        bloco.Padding = new Padding(24, 20, 24, 20);
+        var conteudo = itens.Length == 0
+            ? "Nenhum conteúdo disponível."
+            : string.Join(Environment.NewLine, itens);
+        var linhasVisiveis = itens.Sum(item => Math.Max(1, (item.Length + 95) / 96));
+        var bloco = new DesktopShadowPanel(_paleta, _tokens, _politicaVisual, DesktopSurfaceVariant.Base)
+        {
+            Height = Math.Clamp(120 + linhasVisiveis * 24, 180, 560),
+            Margin = new Padding(0, 0, 0, 12),
+            Padding = new Padding(24, 20, 24, 20),
+            CornerRadius = _tokens.Geometria.RaioMedio
+        };
 
-        var fluxo = new FlowLayoutPanel
+        var grade = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            FlowDirection = FlowDirection.TopDown,
-            WrapContents = false,
-            BackColor = _paleta.Superficies.Painel
+            ColumnCount = 1,
+            RowCount = 2,
+            BackColor = _paleta.Superficies.Painel,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty
         };
-        fluxo.Controls.Add(new Label { Text = titulo, AutoSize = true, ForeColor = _paleta.Texto, Font = new Font(Font.FontFamily, 13F, FontStyle.Bold, GraphicsUnit.Point), Margin = new Padding(0, 0, 0, 12) });
-        foreach (var linha in itens)
-        {
-            fluxo.Controls.Add(new Label { Text = linha, AutoSize = true, MaximumSize = new Size(760, 0), ForeColor = _paleta.Texto, Margin = new Padding(0, 0, 0, 10) });
-        }
+        grade.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        grade.RowStyles.Add(new RowStyle(SizeType.Absolute, 42F));
+        grade.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
 
-        bloco.Controls.Add(fluxo);
+        var cabecalho = new Panel
+        {
+            Dock = DockStyle.Fill,
+            BackColor = _paleta.Superficies.Painel,
+            Margin = Padding.Empty
+        };
+        var tituloLabel = new Label
+        {
+            Text = titulo,
+            Dock = DockStyle.Fill,
+            ForeColor = _paleta.Texto,
+            Font = new Font(Font.FontFamily, 13F, FontStyle.Bold, GraphicsUnit.Point),
+            TextAlign = ContentAlignment.MiddleLeft
+        };
+        var copiar = CriarBotaoSecundario("Copiar texto", (_, _) =>
+        {
+            Clipboard.SetText(conteudo);
+        });
+        copiar.Dock = DockStyle.Right;
+        copiar.MinimumSize = new Size(112, 32);
+        copiar.Height = 32;
+        copiar.Padding = new Padding(10, 0, 10, 0);
+
+        var texto = new RichTextBox
+        {
+            Text = conteudo,
+            Dock = DockStyle.Fill,
+            ReadOnly = true,
+            ShortcutsEnabled = true,
+            HideSelection = false,
+            DetectUrls = false,
+            WordWrap = true,
+            ScrollBars = RichTextBoxScrollBars.Vertical,
+            BorderStyle = BorderStyle.None,
+            BackColor = _paleta.Superficies.Painel,
+            ForeColor = _paleta.Texto,
+            Font = new Font(_tokens.Tipografia.Interface, 9.5F, FontStyle.Regular, GraphicsUnit.Point),
+            TabStop = true,
+            AccessibleName = $"{titulo}: texto selecionável"
+        };
+
+        cabecalho.Controls.Add(tituloLabel);
+        cabecalho.Controls.Add(copiar);
+        grade.Controls.Add(cabecalho, 0, 0);
+        grade.Controls.Add(texto, 0, 1);
+
+        bloco.Controls.Add(grade);
         return bloco;
     }
+
+    private DesktopShadowPanel CriarBlocoLembretes(Guid reuniaoId, IReadOnlyList<string> tarefas)
+    {
+        var bloco = new DesktopShadowPanel(_paleta, _tokens, _politicaVisual, DesktopSurfaceVariant.Base)
+        {
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            MinimumSize = new Size(0, 92),
+            Margin = new Padding(0, 0, 0, 12),
+            Padding = new Padding(22, 18, 22, 18),
+            CornerRadius = _tokens.Geometria.RaioMedio
+        };
+
+        var lista = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
+            BackColor = Color.Transparent
+        };
+        foreach (var tarefa in tarefas)
+        {
+            var linha = new Panel
+            {
+                Width = 820,
+                Height = 54,
+                BackColor = Color.Transparent,
+                Margin = new Padding(0, 0, 0, 8)
+            };
+            var descricao = CriarLabel(
+                tarefa,
+                9.5F,
+                _paleta.Texto,
+                new Point(0, 8));
+            descricao.AutoEllipsis = true;
+            descricao.Size = new Size(610, 36);
+            var criar = CriarBotaoSecundario("Criar lembrete", async (_, _) =>
+                await SolicitarLembreteAsync(reuniaoId, tarefa));
+            criar.Location = new Point(630, 5);
+            criar.Size = new Size(170, 40);
+            linha.Controls.Add(criar);
+            linha.Controls.Add(descricao);
+            lista.Controls.Add(linha);
+        }
+
+        bloco.Controls.Add(lista);
+        bloco.Controls.Add(CriarLabel(
+            "LEMBRETES LOCAIS",
+            8.5F,
+            _paleta.Destaque,
+            new Point(22, 18),
+            FontStyle.Bold));
+        lista.Padding = new Padding(0, 30, 0, 0);
+        return bloco;
+    }
+
+    private async Task SolicitarLembreteAsync(Guid reuniaoId, string tarefa)
+    {
+        using var dialogo = new LembreteTarefaForm(
+            tarefa,
+            _tema);
+        if (dialogo.ShowDialog(this) != DialogResult.OK)
+        {
+            return;
+        }
+
+        try
+        {
+            await CriarLembreteConfirmadoAgoraAsync(reuniaoId, tarefa, dialogo.Horario);
+            MessageBox.Show(
+                $"Lembrete salvo para {dialogo.Horario:dd/MM/yyyy 'às' HH:mm}.",
+                "Lembrete criado",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
+        catch (Exception exception)
+        {
+            MessageBox.Show(
+                exception.Message,
+                "Não foi possível criar o lembrete",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+        }
+    }
+
+    internal Task CriarLembreteConfirmadoAgoraAsync(
+        Guid reuniaoId,
+        string tarefa,
+        DateTimeOffset horario) =>
+        _criarLembrete is null
+            ? throw new InvalidOperationException("A criação de lembretes não está configurada.")
+            : _criarLembrete(reuniaoId, tarefa, horario, _lifetime.Token);
 
     private Label CriarTituloConfiguracao(string titulo) => new()
     {
@@ -2046,6 +2428,34 @@ internal sealed class DesktopPocForm : Form
 
     internal Task AbrirDetalheAgoraAsync(Guid reuniaoId, string abaInicial = "Resumo") =>
         AbrirDetalheAsync(reuniaoId, abaInicial);
+
+    internal Task BuscarReunioesAgoraAsync(string? texto, string? status, string? periodo)
+    {
+        var versao = ++_versaoBuscaReunioes;
+        return AtualizarListaReunioesAsync(texto, status, periodo, versao);
+    }
+
+    internal Task<string> ExportarAtaAgoraAsync(
+        Guid reuniaoId,
+        FormatoExportacaoAta formato,
+        string caminhoDestino,
+        bool sobrescrever) =>
+        _sessao.ExportarAtaAsync(
+            reuniaoId,
+            formato,
+            caminhoDestino,
+            sobrescrever,
+            _lifetime.Token);
+
+    internal Task<string> PublicarAtaObsidianAgoraAsync(
+        Guid reuniaoId,
+        string caminhoVault,
+        string subpasta) =>
+        _sessao.PublicarAtaObsidianAsync(
+            reuniaoId,
+            caminhoVault,
+            subpasta,
+            _lifetime.Token);
 
     internal Task AtualizarAgoraAsync() => AtualizarDadosReaisAsync();
 

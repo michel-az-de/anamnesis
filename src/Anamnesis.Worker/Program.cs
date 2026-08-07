@@ -122,7 +122,8 @@ internal static class Program
             new CliAtaRunner(new CliAtaRunnerOptions(
                 configuracao.NomeCli,
                 configuracao.CaminhoExecutavelCli,
-                configuracao.ArgumentosCli)),
+                configuracao.ArgumentosCli,
+                ArgumentoArquivoSaida: configuracao.ResolverArgumentoArquivoSaidaCli())),
             new DiscoArquivador(configuracao.DiretorioArquivo),
             new SqliteArtefatoRepository(configuracao.CaminhoBanco),
             TimeProvider.System,

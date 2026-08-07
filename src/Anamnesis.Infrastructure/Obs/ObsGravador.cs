@@ -30,6 +30,10 @@ public sealed class ObsGravador(ObsWebSocketOptions options) : IGravador
             .Select(entrada => entrada.GetProperty("inputName").GetString())
             .Where(nome => nome is not null)
             .ToHashSet(StringComparer.Ordinal);
+        var especiais = await EnviarSolicitacaoAsync(cliente, "GetSpecialInputs", null, cancellationToken);
+        var dadosEspeciais = especiais.GetProperty("responseData");
+        var possuiDesktopGlobal = PossuiEntradaEspecial(dadosEspeciais, "desktop");
+        var possuiMicrofoneGlobal = PossuiEntradaEspecial(dadosEspeciais, "mic");
 
         if (!cenaExiste)
         {
@@ -40,12 +44,20 @@ public sealed class ObsGravador(ObsWebSocketOptions options) : IGravador
                 cancellationToken);
         }
 
-        if (!nomesEntradas.Contains(AudioSistema))
+        if (possuiDesktopGlobal && nomesEntradas.Contains(AudioSistema))
+        {
+            await RemoverEntradaAsync(cliente, AudioSistema, cancellationToken);
+        }
+        else if (!possuiDesktopGlobal && !nomesEntradas.Contains(AudioSistema))
         {
             await CriarEntradaAsync(cliente, AudioSistema, "wasapi_output_capture", cancellationToken);
         }
 
-        if (!nomesEntradas.Contains(Microfone))
+        if (possuiMicrofoneGlobal && nomesEntradas.Contains(Microfone))
+        {
+            await RemoverEntradaAsync(cliente, Microfone, cancellationToken);
+        }
+        else if (!possuiMicrofoneGlobal && !nomesEntradas.Contains(Microfone))
         {
             await CriarEntradaAsync(cliente, Microfone, "wasapi_input_capture", cancellationToken);
         }
@@ -131,6 +143,22 @@ public sealed class ObsGravador(ObsWebSocketOptions options) : IGravador
                 sceneItemEnabled = true
             },
             cancellationToken);
+
+    private static Task<JsonElement> RemoverEntradaAsync(
+        ClientWebSocket cliente,
+        string nome,
+        CancellationToken cancellationToken) =>
+        EnviarSolicitacaoAsync(
+            cliente,
+            "RemoveInput",
+            new { inputName = nome },
+            cancellationToken);
+
+    private static bool PossuiEntradaEspecial(JsonElement dados, string prefixo) =>
+        dados.EnumerateObject().Any(propriedade =>
+            propriedade.Name.StartsWith(prefixo, StringComparison.OrdinalIgnoreCase) &&
+            propriedade.Value.ValueKind == JsonValueKind.String &&
+            !string.IsNullOrWhiteSpace(propriedade.Value.GetString()));
 
     private async Task RestaurarCenaAsync(ClientWebSocket cliente, CancellationToken cancellationToken)
     {

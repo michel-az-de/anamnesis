@@ -52,7 +52,7 @@ public sealed record DesktopPocDesignTokens(
     public static DesktopPocDesignTokens Padrao { get; } = new(
         new DesktopPocSpacingTokens([4, 8, 12, 16, 24, 32]),
         new DesktopPocGeometryTokens([6, 8, 12, 16], 1, 2),
-        new DesktopPocMotionTokens(83, 167, 250, 24),
+        new DesktopPocMotionTokens(83, 167, 250, 60),
         new DesktopPocTypographyTokens(
             ResolverFonte("Segoe UI Variable Text", "Segoe UI"),
             ResolverFonte("Segoe UI Variable Display", "Segoe UI"),

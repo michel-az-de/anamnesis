@@ -15,7 +15,7 @@ public sealed class RetencaoGravacaoHandlerTests
     [Fact]
     public async Task DeveSimularSemMoverGravacao()
     {
-        var reuniao = CriarReuniaoArquivada(Agora.AddDays(-7));
+        var reuniao = CriarReuniaoArquivada(Agora.AddDays(-30));
         var lixeira = new LixeiraFake(existe: true);
         var handler = CriarHandler(reuniao, lixeira);
 
@@ -28,9 +28,9 @@ public sealed class RetencaoGravacaoHandlerTests
     }
 
     [Fact]
-    public async Task DeveMoverParaLixeiraDepoisDeSeteDias()
+    public async Task DeveMoverParaLixeiraDepoisDeTrintaDias()
     {
-        var reuniao = CriarReuniaoArquivada(Agora.AddDays(-7));
+        var reuniao = CriarReuniaoArquivada(Agora.AddDays(-30));
         var repository = new ReuniaoRepositoryFake(reuniao);
         var lixeira = new LixeiraFake(existe: true);
         var handler = new RetencaoGravacaoHandler(repository, lixeira, new RelogioFixo(Agora));
@@ -45,7 +45,7 @@ public sealed class RetencaoGravacaoHandlerTests
     [Fact]
     public async Task DeveFalharQuandoGravacaoNaoExiste()
     {
-        var reuniao = CriarReuniaoArquivada(Agora.AddDays(-7));
+        var reuniao = CriarReuniaoArquivada(Agora.AddDays(-30));
         var lixeira = new LixeiraFake(existe: false);
         var handler = CriarHandler(reuniao, lixeira);
 
@@ -59,7 +59,7 @@ public sealed class RetencaoGravacaoHandlerTests
     [Fact]
     public async Task DeveRestaurarEstadoArquivadoQuandoLixeiraFalha()
     {
-        var reuniao = CriarReuniaoArquivada(Agora.AddDays(-7));
+        var reuniao = CriarReuniaoArquivada(Agora.AddDays(-30));
         var repository = new ReuniaoRepositoryFake(reuniao);
         var lixeira = new LixeiraFake(existe: true, falharAoMover: true);
         var handler = new RetencaoGravacaoHandler(repository, lixeira, new RelogioFixo(Agora));
@@ -84,9 +84,21 @@ public sealed class RetencaoGravacaoHandlerTests
     }
 
     [Fact]
+    public async Task DevePreservarGravacaoComVinteENoveDias()
+    {
+        var reuniao = CriarReuniaoArquivada(Agora.AddDays(-29));
+        var handler = CriarHandler(reuniao, new LixeiraFake(existe: true));
+
+        var resultado = await handler.SimularAsync(reuniao.Id, CancellationToken.None);
+
+        Assert.Equal(MotivoRetencao.PrazoNaoAtingido, resultado.Motivo);
+        Assert.False(resultado.PodeMover);
+    }
+
+    [Fact]
     public async Task DeveRegistrarAvaliacaoEAplicacaoDaRetencao()
     {
-        var reuniao = CriarReuniaoArquivada(Agora.AddDays(-7));
+        var reuniao = CriarReuniaoArquivada(Agora.AddDays(-30));
         var sink = new EventoSinkFake();
         var handler = new RetencaoGravacaoHandler(
             new ReuniaoRepositoryFake(reuniao),
@@ -105,7 +117,7 @@ public sealed class RetencaoGravacaoHandlerTests
     [Fact]
     public async Task FalhaAoAvaliarArquivoDeveGerarEventoSeguroDaRetencao()
     {
-        var reuniao = CriarReuniaoArquivada(Agora.AddDays(-7));
+        var reuniao = CriarReuniaoArquivada(Agora.AddDays(-30));
         var sink = new EventoSinkFake();
         var handler = new RetencaoGravacaoHandler(
             new ReuniaoRepositoryFake(reuniao),

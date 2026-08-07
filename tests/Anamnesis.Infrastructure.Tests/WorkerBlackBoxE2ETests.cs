@@ -306,7 +306,7 @@ public sealed class WorkerBlackBoxE2ETests : IAsyncLifetime
         var resultado = await ExecutarWorkerAsync(caminhoConfiguracao, [
             "--retencao-simular",
             "--reuniao", reuniao.Id.ToString(),
-            "--agora", "2026-08-12T12:00:00Z"
+            "--agora", "2026-09-04T12:00:00Z"
         ]);
 
         Assert.Equal(0, resultado.CodigoSaida);

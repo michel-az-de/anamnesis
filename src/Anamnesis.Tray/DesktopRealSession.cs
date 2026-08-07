@@ -22,7 +22,9 @@ internal sealed class DesktopRealSession(
     DesktopRuntimeInfo? ambiente = null,
     IEventoOperacionalQuery? eventoQuery = null,
     IJobMetricasQuery? jobMetricasQuery = null,
-    JornalOperacional? journal = null) : IDesktopSession
+    JornalOperacional? journal = null,
+    ExportarAtaHandler? exportarAta = null,
+    PublicarAtaObsidianHandler? publicarAtaObsidian = null) : IDesktopSession
 {
     private IReadOnlyList<ReuniaoDesktopPoc> _reunioes = [];
     private IReadOnlyList<EventoObservabilidadePoc> _eventosOperacionais = [];
@@ -232,6 +234,50 @@ internal sealed class DesktopRealSession(
         return MapearDetalhe(detalhe, job);
     }
 
+    public async Task<IReadOnlyList<ReuniaoDesktopPoc>> BuscarReunioesAsync(
+        string? texto,
+        string? status,
+        DateTimeOffset? criadaDesde,
+        CancellationToken cancellationToken)
+    {
+        var resumos = await reuniaoQuery.ListarAsync(
+            new ReuniaoQueryFiltro(
+                texto,
+                ConverterStatus(status),
+                100,
+                criadaDesde),
+            cancellationToken);
+        return resumos.Select(MapearResumo).ToArray();
+    }
+
+    public Task<string> ExportarAtaAsync(
+        Guid reuniaoId,
+        FormatoExportacaoAta formato,
+        string caminhoDestino,
+        bool sobrescrever,
+        CancellationToken cancellationToken) =>
+        exportarAta is null
+            ? throw new InvalidOperationException("A exportação de atas não está configurada.")
+            : exportarAta.ExecutarAsync(
+                reuniaoId,
+                formato,
+                caminhoDestino,
+                sobrescrever,
+                cancellationToken);
+
+    public Task<string> PublicarAtaObsidianAsync(
+        Guid reuniaoId,
+        string caminhoVault,
+        string subpasta,
+        CancellationToken cancellationToken) =>
+        publicarAtaObsidian is null
+            ? throw new InvalidOperationException("A publicação no Obsidian não está configurada.")
+            : publicarAtaObsidian.ExecutarAsync(
+                reuniaoId,
+                caminhoVault,
+                subpasta,
+                cancellationToken);
+
     public Task AbrirArquivoAsync(string caminho, CancellationToken cancellationToken) =>
         artefatoLauncher.AbrirArquivoAsync(caminho, cancellationToken);
 
@@ -312,7 +358,9 @@ internal sealed class DesktopRealSession(
         Transcricao = [],
         Decisoes = [],
         Tarefas = [],
-        MotivoFalha = resumo.MotivoFalha
+        MotivoFalha = resumo.MotivoFalha,
+        SecaoCorrespondente = resumo.SecaoCorrespondente,
+        TrechoCorrespondente = resumo.TrechoCorrespondente
     };
 
     private static ReuniaoDesktopPoc MapearDetalhe(ReuniaoDetalhe detalhe, JobResumo? job) => new()
@@ -446,6 +494,22 @@ internal sealed class DesktopRealSession(
         StatusReuniao.Excluida => "Gravação removida",
         StatusReuniao.Falha => "Falha",
         _ => status.ToString()
+    };
+
+    private static StatusReuniao? ConverterStatus(string? status) => status switch
+    {
+        null or "" or "Todos os estados" => null,
+        "Aguardando processamento" => StatusReuniao.AguardandoProcessamento,
+        "Transcrevendo" => StatusReuniao.EmTranscricao,
+        "Gerando ata" => StatusReuniao.EmAnalise,
+        "Arquivando" => StatusReuniao.AguardandoArquivamento,
+        "Ata pronta" => StatusReuniao.Arquivada,
+        "Retenção pendente" => StatusReuniao.PendenteExclusao,
+        "Gravação removida" => StatusReuniao.Excluida,
+        "Falha" => StatusReuniao.Falha,
+        "Gravando" => StatusReuniao.Gravando,
+        "Agendada" => StatusReuniao.Agendada,
+        _ => Enum.TryParse<StatusReuniao>(status, ignoreCase: true, out var valor) ? valor : null
     };
 
     private static string DescreverStatus(StatusReuniao status) => status switch

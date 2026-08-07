@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Runtime.ExceptionServices;
+using Anamnesis.Application.Modelos;
 using Anamnesis.Tray;
 using Xunit;
 
@@ -91,7 +92,7 @@ public sealed class DesktopPocFormTests
 
             var titulo = EncontrarLabels(form)
                 .Single(label => label.Text == "Configuração local em uso");
-            var bloco = Assert.IsType<DesktopSurfacePanel>(titulo.Parent!.Parent);
+            var bloco = Assert.IsType<DesktopShadowPanel>(titulo.Parent!.Parent!.Parent);
 
             Assert.True(bloco.Width >= form.ClientSize.Width / 2);
             Assert.All(
@@ -134,6 +135,167 @@ public sealed class DesktopPocFormTests
     }
 
     [Fact]
+    public void DetalheDeveExibirTextoSelecionavelSomenteLeituraEAcaoDeCopia()
+    {
+        ExecutarEmSta(() =>
+        {
+            var reuniaoId = Guid.NewGuid();
+            using var form = new DesktopPocForm(
+                TemaDesktopPoc.Escuro,
+                new DesktopPocEffectsPolicy(AnimacoesAtivas: false),
+                new DesktopSessionDetalheFake(reuniaoId));
+            form.Show();
+            System.Windows.Forms.Application.DoEvents();
+            form.AbrirDetalheAgoraAsync(reuniaoId, "Transcrição").GetAwaiter().GetResult();
+
+            var texto = Assert.Single(EncontrarControles(form).OfType<RichTextBox>());
+            Assert.True(texto.ReadOnly);
+            Assert.True(texto.ShortcutsEnabled);
+            Assert.True(texto.TabStop);
+            Assert.Contains("Pessoa 1: decisão importante.", texto.Text, StringComparison.Ordinal);
+            texto.Select(0, 8);
+            Assert.Equal("Pessoa 1", texto.SelectedText);
+            Assert.NotNull(EncontrarBotao(form, "Copiar texto"));
+        });
+    }
+
+    [Fact]
+    public void CliqueNoTituloDoCartaoDeveAbrirDetalheDaReuniao()
+    {
+        ExecutarEmSta(() =>
+        {
+            var reuniaoId = Guid.NewGuid();
+            using var form = new DesktopPocForm(
+                TemaDesktopPoc.Escuro,
+                new DesktopPocEffectsPolicy(AnimacoesAtivas: false),
+                new DesktopSessionDetalheFake(reuniaoId));
+            form.Show();
+            System.Windows.Forms.Application.DoEvents();
+            EncontrarBotao(form, "Reuniões").PerformClick();
+            System.Windows.Forms.Application.DoEvents();
+
+            DispararClique(EncontrarLabels(form).Single(label => label.Text == "Reunião real"));
+            AguardarInterface(() => EncontrarControles(form).OfType<Button>()
+                .Any(botao => botao.Text == "Transcrição"));
+
+            Assert.NotNull(EncontrarBotao(form, "Transcrição"));
+        });
+    }
+
+    [Fact]
+    public void BuscaCompletaDeveExibirTrechoEAbrirSecaoCorrespondente()
+    {
+        ExecutarEmSta(() =>
+        {
+            var reuniaoId = Guid.NewGuid();
+            var sessao = new DesktopSessionDetalheFake(reuniaoId);
+            using var form = new DesktopPocForm(
+                TemaDesktopPoc.Escuro,
+                new DesktopPocEffectsPolicy(AnimacoesAtivas: false),
+                sessao);
+            form.Show();
+            System.Windows.Forms.Application.DoEvents();
+            EncontrarBotao(form, "Reuniões").PerformClick();
+            System.Windows.Forms.Application.DoEvents();
+
+            form.BuscarReunioesAgoraAsync(
+                    "incidente resolvido",
+                    "Todos os estados",
+                    "Todo o período")
+                .GetAwaiter()
+                .GetResult();
+            System.Windows.Forms.Application.DoEvents();
+
+            Assert.Equal("incidente resolvido", sessao.UltimoTextoBusca);
+            Assert.Contains(
+                EncontrarLabels(form),
+                label => label.Text.Contains("incidente resolvido", StringComparison.OrdinalIgnoreCase));
+            CapturarQuandoSolicitado(form, "ANAMNESIS_SEARCH_SCREENSHOT");
+            DispararClique(EncontrarLabels(form).Single(label => label.Text == "Reunião real"));
+            AguardarInterface(() => EncontrarLabels(form)
+                .Any(label => label.Text == "Transcrição com timestamps"));
+        });
+    }
+
+    [Fact]
+    public void TarefaDeveOferecerCriacaoDeLembreteConfirmado()
+    {
+        ExecutarEmSta(() =>
+        {
+            var reuniaoId = Guid.NewGuid();
+            Guid? reuniaoRecebida = null;
+            string? tarefaRecebida = null;
+            DateTimeOffset? horarioRecebido = null;
+            using var form = new DesktopPocForm(
+                TemaDesktopPoc.Escuro,
+                new DesktopPocEffectsPolicy(AnimacoesAtivas: false),
+                new DesktopSessionDetalheFake(reuniaoId),
+                (id, tarefa, horario, _) =>
+                {
+                    reuniaoRecebida = id;
+                    tarefaRecebida = tarefa;
+                    horarioRecebido = horario;
+                    return Task.CompletedTask;
+                });
+            form.Show();
+            System.Windows.Forms.Application.DoEvents();
+            form.AbrirDetalheAgoraAsync(reuniaoId, "Tarefas").GetAwaiter().GetResult();
+
+            Assert.NotNull(EncontrarBotao(form, "Criar lembrete"));
+            var horario = DateTimeOffset.Now.AddDays(1);
+            form.CriarLembreteConfirmadoAgoraAsync(
+                    reuniaoId,
+                    "Felipe: concluir atividade.",
+                    horario)
+                .GetAwaiter()
+                .GetResult();
+
+            Assert.Equal(reuniaoId, reuniaoRecebida);
+            Assert.Equal("Felipe: concluir atividade.", tarefaRecebida);
+            Assert.Equal(horario, horarioRecebido);
+        });
+    }
+
+    [Fact]
+    public void DetalheDeveOferecerExportacaoEPublicacaoLocal()
+    {
+        ExecutarEmSta(() =>
+        {
+            var reuniaoId = Guid.NewGuid();
+            var sessao = new DesktopSessionDetalheFake(reuniaoId);
+            using var form = new DesktopPocForm(
+                TemaDesktopPoc.Escuro,
+                new DesktopPocEffectsPolicy(AnimacoesAtivas: false),
+                sessao);
+            form.Show();
+            System.Windows.Forms.Application.DoEvents();
+            form.AbrirDetalheAgoraAsync(reuniaoId, "Arquivos").GetAwaiter().GetResult();
+
+            Assert.NotNull(EncontrarBotao(form, "Exportar PDF"));
+            Assert.NotNull(EncontrarBotao(form, "Exportar DOCX"));
+            Assert.NotNull(EncontrarBotao(form, "Publicar no Obsidian"));
+            CapturarQuandoSolicitado(form, "ANAMNESIS_EXPORT_SCREENSHOT");
+            form.ExportarAtaAgoraAsync(
+                    reuniaoId,
+                    FormatoExportacaoAta.Pdf,
+                    @"C:\destino\ata.pdf",
+                    sobrescrever: true)
+                .GetAwaiter()
+                .GetResult();
+            form.PublicarAtaObsidianAgoraAsync(
+                    reuniaoId,
+                    @"C:\vault",
+                    "Anamnesis/Reunioes")
+                .GetAwaiter()
+                .GetResult();
+
+            Assert.Equal(FormatoExportacaoAta.Pdf, sessao.UltimoFormatoExportado);
+            Assert.Equal(@"C:\destino\ata.pdf", sessao.UltimoDestinoExportado);
+            Assert.Equal(@"C:\vault", sessao.UltimoVaultPublicado);
+        });
+    }
+
+    [Fact]
     public void FluxoManualDeveExibirProgressoFiltrarLogsEAbrirTranscricaoAoConcluir()
     {
         ExecutarEmSta(() =>
@@ -155,8 +317,8 @@ public sealed class DesktopPocFormTests
             form.EncerrarGravacaoAgoraAsync().GetAwaiter().GetResult();
             Assert.Contains(EncontrarLabels(form), label => label.Text.Contains("Planejamento da alpha", StringComparison.Ordinal));
             Assert.Contains(EncontrarLabels(form), label => label.Text.Contains("Whisper transcrevendo", StringComparison.Ordinal));
-            var barra = Assert.Single(EncontrarControles(form).OfType<ProgressBar>());
-            Assert.Equal(ProgressBarStyle.Marquee, barra.Style);
+            var barra = Assert.Single(EncontrarControles(form).OfType<DesktopProgressBar>());
+            Assert.True(barra.MarqueeAtivo);
             CapturarQuandoSolicitado(form, "ANAMNESIS_POC_PROCESSING_SCREENSHOT");
 
             EncontrarBotao(form, "Ver console de logs").PerformClick();
@@ -177,8 +339,8 @@ public sealed class DesktopPocFormTests
             EncontrarBotao(form, "Abrir transcrição").PerformClick();
             AguardarInterface(() => EncontrarLabels(form).Any(label => label.Text == "Transcrição com timestamps"));
             Assert.Contains(
-                EncontrarLabels(form),
-                label => label.Text.Contains("Transcrição final da reunião manual", StringComparison.Ordinal));
+                EncontrarControles(form).OfType<RichTextBox>(),
+                texto => texto.Text.Contains("Transcrição final da reunião manual", StringComparison.Ordinal));
         });
     }
 
@@ -332,8 +494,9 @@ public sealed class DesktopPocFormTests
             var titulo = EncontrarLabels(form).Single(label => label.Text == "Reuniões");
             var pagina = titulo.Parent!.Parent!;
             var esquerdaFinal = pagina.Parent!.DisplayRectangle.Left;
+            var largura = pagina.Parent!.ClientSize.Width;
             Assert.Equal(DockStyle.None, pagina.Dock);
-            Assert.Equal(esquerdaFinal + DesktopPocDesignTokens.Padrao.Motion.DeslocamentoPagina, pagina.Left);
+            Assert.True(pagina.Left >= largura - 1);
 
             AguardarInterface(() => pagina.Dock == DockStyle.Fill);
             Assert.Equal(DockStyle.Fill, pagina.Dock);
@@ -345,6 +508,11 @@ public sealed class DesktopPocFormTests
         EncontrarControles(raiz)
             .OfType<Button>()
             .Single(botao => botao.Text.Contains(texto, StringComparison.Ordinal));
+
+    private static void DispararClique(Control controle) =>
+        typeof(Control)
+            .GetMethod("OnClick", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+            .Invoke(controle, [EventArgs.Empty]);
 
     private static IEnumerable<Label> EncontrarLabels(Control raiz) =>
         EncontrarControles(raiz).OfType<Label>();
@@ -565,6 +733,10 @@ public sealed class DesktopPocFormTests
         public TimeSpan DuracaoGravacao => TimeSpan.Zero;
         public int Atualizacoes { get; private set; }
         public string EstadoJob { get; set; } = "Pendente";
+        public string? UltimoTextoBusca { get; private set; }
+        public FormatoExportacaoAta? UltimoFormatoExportado { get; private set; }
+        public string? UltimoDestinoExportado { get; private set; }
+        public string? UltimoVaultPublicado { get; private set; }
         public IReadOnlyList<ReuniaoDesktopPoc> Reunioes { get; } =
         [
             CriarReuniao(reuniaoId, ["Job: Pendente"])
@@ -592,6 +764,38 @@ public sealed class DesktopPocFormTests
             Task.FromResult<ReuniaoDesktopPoc?>(
                 id == reuniaoId ? CriarReuniao(reuniaoId, [$"Job: {EstadoJob}"]) : null);
 
+        public Task<IReadOnlyList<ReuniaoDesktopPoc>> BuscarReunioesAsync(
+            string? texto,
+            string? status,
+            DateTimeOffset? criadaDesde,
+            CancellationToken cancellationToken)
+        {
+            UltimoTextoBusca = texto;
+            return Task.FromResult<IReadOnlyList<ReuniaoDesktopPoc>>(Reunioes);
+        }
+
+        public Task<string> ExportarAtaAsync(
+            Guid id,
+            FormatoExportacaoAta formato,
+            string caminhoDestino,
+            bool sobrescrever,
+            CancellationToken cancellationToken)
+        {
+            UltimoFormatoExportado = formato;
+            UltimoDestinoExportado = caminhoDestino;
+            return Task.FromResult(caminhoDestino);
+        }
+
+        public Task<string> PublicarAtaObsidianAsync(
+            Guid id,
+            string caminhoVault,
+            string subpasta,
+            CancellationToken cancellationToken)
+        {
+            UltimoVaultPublicado = caminhoVault;
+            return Task.FromResult(Path.Combine(caminhoVault, subpasta, "ata.md"));
+        }
+
         public Task AbrirArquivoAsync(string caminho, CancellationToken cancellationToken) => Task.CompletedTask;
 
         public Task MostrarNaPastaAsync(string caminho, CancellationToken cancellationToken) => Task.CompletedTask;
@@ -606,9 +810,11 @@ public sealed class DesktopPocFormTests
             Status = "Transcrevendo",
             Resumo = "Resumo real.",
             PontosPrincipais = pontos,
-            Transcricao = [],
+            Transcricao = ["Pessoa 1: decisão importante.", "Pessoa 2: confirmado."],
             Decisoes = [],
-            Tarefas = []
+            Tarefas = ["Felipe: concluir atividade."],
+            SecaoCorrespondente = "Transcrição",
+            TrechoCorrespondente = "...incidente resolvido com segurança..."
         };
     }
 

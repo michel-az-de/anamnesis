@@ -25,7 +25,8 @@
             "type": ["string", "null"]
           },
           "prazo": {
-            "type": ["string", "null"]
+            "type": ["string", "null"],
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
           }
         },
         "required": ["descricao", "responsavel", "prazo"]

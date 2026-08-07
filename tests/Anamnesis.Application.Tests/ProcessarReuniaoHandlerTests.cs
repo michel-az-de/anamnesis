@@ -56,6 +56,31 @@ public sealed class ProcessarReuniaoHandlerTests
     }
 
     [Fact]
+    public async Task TranscricaoSemFalaDeveFalharSemGerarAtaNemArquivar()
+    {
+        var reuniao = new Reuniao(Guid.NewGuid(), "Primeiro uso real", DateTimeOffset.UtcNow);
+        reuniao.IniciarGravacao(DateTimeOffset.UtcNow);
+        reuniao.FinalizarGravacao("C:\\gravacoes\\meet.mp4", DateTimeOffset.UtcNow);
+        var ataRunner = new AtaRunnerContadorFake();
+        var arquivador = new ArquivadorContadorFake();
+        var handler = new ProcessarReuniaoHandler(
+            new ReuniaoRepositoryFake(reuniao),
+            new TranscritorTextoFake(string.Join('\n', Enumerable.Repeat("[MÚSICA DE FUNDO]", 20))),
+            ataRunner,
+            arquivador,
+            new ArtefatoRepositoryFake(),
+            TimeProvider.System);
+
+        await Assert.ThrowsAsync<TranscricaoBaixaQualidadeException>(() =>
+            handler.ExecutarAsync(reuniao.Id, CancellationToken.None));
+
+        Assert.Equal(StatusReuniao.Falha, reuniao.Status);
+        Assert.Equal("C:\\gravacoes\\meet.mp4", reuniao.Gravacao!.CaminhoArquivo);
+        Assert.Equal(0, ataRunner.Chamadas);
+        Assert.Equal(0, arquivador.Chamadas);
+    }
+
+    [Fact]
     public async Task DeveCorrelacionarEtapasDeProcessamentoComJob()
     {
         var reuniao = new Reuniao(Guid.NewGuid(), "Observável", DateTimeOffset.UtcNow);
@@ -131,6 +156,12 @@ public sealed class ProcessarReuniaoHandlerTests
             Task.FromResult(new TranscricaoGerada("Felipe prepara a proposta.", "pt"));
     }
 
+    private sealed class TranscritorTextoFake(string texto) : ITranscritor
+    {
+        public Task<TranscricaoGerada> TranscreverAsync(string caminhoArquivo, CancellationToken cancellationToken) =>
+            Task.FromResult(new TranscricaoGerada(texto, "pt"));
+    }
+
     private sealed class AtaRunnerFake : IAtaRunner
     {
         public string Nome => "Fake";
@@ -142,6 +173,21 @@ public sealed class ProcessarReuniaoHandlerTests
                 [new Tarefa("Preparar proposta.", "Felipe", null)]));
     }
 
+    private sealed class AtaRunnerContadorFake : IAtaRunner
+    {
+        public string Nome => "Contador";
+        public int Chamadas { get; private set; }
+
+        public Task<AtaGerada> GerarAsync(
+            Reuniao reuniao,
+            TranscricaoGerada transcricao,
+            CancellationToken cancellationToken)
+        {
+            Chamadas++;
+            return Task.FromResult(new AtaGerada("Resumo.", [], []));
+        }
+    }
+
     private sealed class ArquivadorFake : IArquivador
     {
         public Task<ArtefatosReuniao> ArquivarAsync(Reuniao reuniao, CancellationToken cancellationToken) =>
@@ -150,6 +196,23 @@ public sealed class ProcessarReuniaoHandlerTests
                 @"C:\arquivo\reuniao",
                 @"C:\arquivo\reuniao\ata.md",
                 @"C:\arquivo\reuniao\transcricao.md"));
+    }
+
+    private sealed class ArquivadorContadorFake : IArquivador
+    {
+        public int Chamadas { get; private set; }
+
+        public Task<ArtefatosReuniao> ArquivarAsync(
+            Reuniao reuniao,
+            CancellationToken cancellationToken)
+        {
+            Chamadas++;
+            return Task.FromResult(new ArtefatosReuniao(
+                reuniao.Id,
+                @"C:\arquivo\reuniao",
+                @"C:\arquivo\reuniao\ata.md",
+                @"C:\arquivo\reuniao\transcricao.md"));
+        }
     }
 
     private sealed class ArtefatoRepositoryFake : IArtefatoRepository

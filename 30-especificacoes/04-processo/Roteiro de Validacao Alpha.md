@@ -25,7 +25,7 @@ related: ["[[SPEK-011 Empacotamento e Validacao Manual]]"]
 3. Inicie e encerre uma gravação de teste; confirme no SQLite que existe uma reunião em `AguardandoProcessamento` e um job ativo.
 4. Inicie o Worker, interrompa-o durante um job reservado e inicie-o novamente; confirme que a reserva foi liberada e retomada.
 5. Confirme que a transcrição local, `ata.md` e `transcricao.md` foram criadas no diretório de arquivo.
-6. Confirme a simulação de retenção; avance o relógio de teste ou use uma reunião arquivada há sete dias e confirme a ida à Lixeira somente após arquivamento.
+6. Confirme a simulação de retenção; avance o relógio de teste ou use uma reunião arquivada há trinta dias e confirme a ida à Lixeira somente após arquivamento.
 
 ## Resultado
 

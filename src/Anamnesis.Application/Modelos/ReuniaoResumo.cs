@@ -9,5 +9,7 @@ public sealed record ReuniaoResumo(
     StatusReuniao Status,
     DateTimeOffset? GravacaoIniciadaEm,
     DateTimeOffset? GravacaoFinalizadaEm,
-    string? MotivoFalha);
+    string? MotivoFalha,
+    string? SecaoCorrespondente = null,
+    string? TrechoCorrespondente = null);
 

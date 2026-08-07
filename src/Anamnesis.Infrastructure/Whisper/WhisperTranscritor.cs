@@ -48,6 +48,7 @@ public sealed class WhisperTranscritor : ITranscritor
             var inicio = new ProcessStartInfo(options.CaminhoExecutavel)
             {
                 UseShellExecute = false,
+                RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 CreateNoWindow = true
             };
@@ -64,10 +65,12 @@ public sealed class WhisperTranscritor : ITranscritor
                 ?? throw new InvalidOperationException("Não foi possível iniciar o Whisper local.");
             var timeout = options.TimeoutWhisper ?? TimeoutPadrao;
             using var deadline = ProcessoExterno.CriarDeadline(timeout, cancellationToken);
+            var saidaPendente = processo.StandardOutput.ReadToEndAsync(deadline.Token);
             var erroPendente = processo.StandardError.ReadToEndAsync(deadline.Token);
             try
             {
                 await processo.WaitForExitAsync(deadline.Token);
+                await saidaPendente;
                 var erro = await erroPendente;
                 if (processo.ExitCode != 0)
                 {
@@ -77,7 +80,7 @@ public sealed class WhisperTranscritor : ITranscritor
             catch (OperationCanceledException excecao)
             {
                 await ProcessoExterno.EncerrarAsync(processo);
-                await ProcessoExterno.ObservarSemSubstituirErroAsync(erroPendente);
+                await ProcessoExterno.ObservarSemSubstituirErroAsync(saidaPendente, erroPendente);
                 cancellationToken.ThrowIfCancellationRequested();
                 throw ProcessoExterno.CriarTimeout("Whisper", timeout, excecao);
             }

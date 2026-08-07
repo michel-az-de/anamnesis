@@ -41,6 +41,10 @@ public sealed class ReuniaoDesktopPoc
     public string? CaminhoGravacao { get; init; }
 
     public string? DiretorioArtefatos { get; init; }
+
+    public string? SecaoCorrespondente { get; init; }
+
+    public string? TrechoCorrespondente { get; init; }
 }
 
 public sealed class DesktopPocState

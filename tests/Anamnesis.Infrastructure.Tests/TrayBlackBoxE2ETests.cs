@@ -372,7 +372,7 @@ public sealed class TrayBlackBoxE2ETests
                 await EnviarAsync(socket, new { op = 0, d = new { rpcVersion = 1 } });
                 await ReceberAsync(socket);
                 await EnviarAsync(socket, new { op = 2, d = new { negotiatedRpcVersion = 1 } });
-                var quantidadeSolicitacoes = conexao == 0 ? 4 : 2;
+                var quantidadeSolicitacoes = conexao == 0 ? 5 : 2;
                 for (var indice = 0; indice < quantidadeSolicitacoes; indice++)
                 {
                     var solicitacao = await ReceberAsync(socket);
@@ -394,6 +394,7 @@ public sealed class TrayBlackBoxE2ETests
                                 new { inputName = "Anamnesis | Microfone" }
                             }
                         },
+                        "GetSpecialInputs" => new { },
                         "StopRecord" => new { outputPath = _caminhoGravacao },
                         _ => new { }
                     };

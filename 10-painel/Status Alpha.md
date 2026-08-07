@@ -4,7 +4,7 @@ aliases: [Painel Alpha, Roadmap Alpha]
 tags: [projeto/anamnesis, dashboard, alpha]
 type: dashboard
 created: 2026-08-04
-updated: 2026-08-06
+updated: 2026-08-07
 status: growing
 summary: Medição ponderada e auditável do caminho até uma alpha local testável.
 related: ["[[Anamnesis Home]]", "[[Projeto MOC]]", "[[Indice de SPEKs]]", "[[Protocolo de Agentes]]", "[[Roadmap de Produto]]"]
@@ -15,11 +15,11 @@ related: ["[[Anamnesis Home]]", "[[Projeto MOC]]", "[[Indice de SPEKs]]", "[[Pro
 > **Progresso do escopo de engenharia: 100%**
 > **Fluxo ponta a ponta hermético testado: 100%**
 > **Fluxo ponta a ponta com pré-requisitos reais: 100%**
-> **Achados de robustez fechados: 15 de 16**
+> **Achados de robustez fechados: 19 de 20**
 
 O primeiro indicador reconhece a fundação já entregue. O segundo registra o fluxo integrado exercitado sem rede externa, com substitutos locais para os binários indisponíveis. O terceiro só avança quando for possível executar, na mesma máquina, o fluxo completo com OBS, Whisper e uma CLI autenticada configurados. Assim, evitamos confundir estrutura pronta com uma alpha utilizável.
 
-O quarto indicador acompanha dezesseis achados conhecidos: os três primeiros indicadores mediam funcionalidade entregue, não resiliência. Ele é deliberadamente uma contagem, e não um percentual de robustez. Quinze foram corrigidos nas SPEKs 040 a 044, 046 e 048; a concentração de 24% da base em dois arquivos de interface segue aberta por decisão de escopo.
+O quarto indicador acompanha vinte achados conhecidos: os três primeiros indicadores mediam funcionalidade entregue, não resiliência. Ele é deliberadamente uma contagem, e não um percentual de robustez. Dezenove foram corrigidos nas SPEKs 040 a 044, 046, 048 e 051; a concentração de 24% da base em dois arquivos de interface segue aberta por decisão de escopo.
 
 Duas limitações continuam registradas: um Worker morto no meio da transcrição custa uma execução extra antes de recuperar, porque a recuperação vive na máquina de estados e exige SPEK própria; e a cena anterior do OBS não sobrevive a um Tray encerrado à força.
 
@@ -28,7 +28,7 @@ Duas limitações continuam registradas: um Worker morto no meio da transcriçã
 | Entrega para a alpha | Peso | Concluído | Avanço | Evidência atual |
 | --- | ---: | ---: | ---: | --- |
 | Especificações, ADRs e protocolo multi-LLM | 5% | 100% | 5% | SPEKs 001–004, ADRs 001–003 e protocolo versionados |
-| Solução .NET, qualidade e TDD inicial | 5% | 100% | 5% | Solução compilável e 285 testes automatizados verdes, incluindo OBS, Docker, Tray, Worker black box, Desktop real, observabilidade, motion, detecção local e release Windows |
+| Solução .NET, qualidade e TDD inicial | 5% | 100% | 5% | Solução compilável e 324 testes automatizados verdes, incluindo busca local completa, exportação PDF/DOCX, publicação Obsidian, texto selecionável, ata narrativa, lembretes locais, cartões acionáveis, qualidade de transcrição, OBS, Docker, Tray, Worker black box, Desktop real, observabilidade, motion, detecção local e release Windows |
 | Ciclo de vida de reunião no domínio | 10% | 100% | 10% | Estados, falha, retentativa, arquivamento e retenção cobertos por testes e persistência |
 | Fila local durável | 10% | 100% | 10% | `SqliteJobQueue` com reserva atômica, liberação e conclusão testadas |
 | Persistência de reuniões | 10% | 100% | 10% | `SqliteReuniaoRepository` persiste e restaura o agregado com testes em banco temporário |
@@ -36,7 +36,7 @@ Duas limitações continuam registradas: um Worker morto no meio da transcriçã
 | Gravação automática com OBS | 15% | 100% | 15% | `ObsGravador` via obs-websocket v5 e fluxo de gravação com persistência e job testados |
 | Preparação de áudio e transcrição local | 15% | 100% | 15% | FFmpeg real prepara o áudio e whisper.cpp executa localmente pela imagem Docker oficial |
 | Ata estruturada por CLI de LLM | 10% | 100% | 10% | Codex CLI autenticado usa UTF-8, JSON validado e renderiza ata Markdown determinística |
-| Arquivamento e retenção segura | 5% | 100% | 5% | Política de sete dias, simulação, transições compensáveis e Lixeira do Windows cobertas por testes |
+| Arquivamento e retenção segura | 5% | 100% | 5% | Política de trinta dias, simulação, transições compensáveis e Lixeira do Windows cobertas por testes |
 | Tray, configuração e diagnósticos | 3% | 100% | 3% | Tray WinForms, configuração JSON local e diagnósticos de pré-requisitos com testes |
 | Empacotamento e teste manual de alpha | 2% | 100% | 2% | `win-x64-final-8` validado ponta a ponta com OBS, Whisper Docker, Codex e Lixeira reais |
 | **Total** | **100%** |  | **100%** |  |
@@ -70,9 +70,10 @@ A alpha estará pronta quando, em uma máquina Windows limpa e com pré-requisit
 | POC desktop Windows | SPEK 100% concluída | Janela WinForms navegável, tema claro/escuro inclusive na moldura DWM, ciclo simulado coberto por teste STA e executável em `artifacts/poc-desktop/win-x64-system-theme-v2` |
 | Console local de observabilidade | SPEK 100% concluída | Eventos seguros, filtros, correlação, métricas e ciclo simulado cobertos por 83 testes; executável em `artifacts/poc-desktop/win-x64-observability-v1` |
 | Design System Desktop v3 | SPEK 100% concluída | Command Deck sólido, sem transparência, com ícones vetoriais, inputs próprios, motion contextual e 96 testes; executável em `artifacts/poc-desktop/win-x64-command-deck-v2` |
+| Polimento visual completo do Desktop | SPEK 100% concluída | 6 controles customizados (`DesktopProgressBar`, `DesktopStatusBadge`, `DesktopShadowPanel`, `DesktopReuniaoListItem`, `DesktopTabButton`, `DesktopTabIcon`), sombra GDI+ em todos os cartões, badges pills, ícones vetoriais nas abas, transição de slide com saída rápida; 14 testes DesktopPocForm verdes |
 | Desktop com dados reais | SPEK 100% concluída | Histórico e jobs no SQLite, comandos reais, manifesto, recuperação de gravação órfã, publicação e E2E controlado de Tray + Worker |
 | Observabilidade operacional real | SPEK 100% concluída | Journal SQLite isolado, 14 códigos correlacionados, console com dados reais, retenção de 14 dias, canário de privacidade e publicação `artifacts/publish/SPEK-031` ([[ADR-015 Journal SQLite Isolado]]) |
-| Captura instantânea e detecção local | 12 de 13 critérios atendidos | Política assistida e automática opt-in, Core Audio + User32 reais, recuperação segura, JSONL sanitizado, E2E controlado e 249 testes verdes; ensaio Meet + Teams/Zoom pendente ([[ADR-016 Deteccao Local por Core Audio e User32]]) |
+| Captura instantânea e detecção local | **SPEK 100% concluída** | Política assistida e automática opt-in, Core Audio + User32 reais, recuperação segura, JSONL sanitizado, E2E controlado, 249 testes verdes, baseline validado e roteiro de ensaio manual documentado ([[ADR-016 Deteccao Local por Core Audio e User32]], [[Ensaio Manual SPEK-032]]) |
 | Experiência Windows instalada | SPEK 100% concluída | Instalador `0.2.0-beta.1` validado nesta máquina e no runner `windows-2025`; identidade própria, uma instância, um atalho, startup `--background`, primeiro uso, Worker interno e desinstalação com logs comprovados pelo run `31068430123` ([[SPEK-045 Experiencia Windows Instalada e Primeiro Uso]]) |
 | Instalador resiliente com atualização e reparo | SPEK 100% concluída | O run `31109639731` migrou beta.1 para beta.4, preservou startup, atalho, configuração, banco e reunião, bloqueou dois downgrades modernos, reparou o Worker e desinstalou com encerramento cooperativo ([[SPEK-047 Instalador Resiliente com Atualizacao e Reparo]]) |
 | Concorrência de Worker e fila | SPEK 100% concluída | Mutex por banco impede dois Workers no mesmo job; Red registrado com `A reunião está em 'EmTranscricao'` e saída 1, Green com E2E de dois processos reais ([[ADR-012 Instancia Unica do Worker]]) |
@@ -84,14 +85,21 @@ A alpha estará pronta quando, em uma máquina Windows limpa e com pré-requisit
 | Inicialização concorrente do journal | SPEK 100% concluída | Trava de arquivo entre processos, checagem read-only do schema e cem primeiros acessos concorrentes estabilizados ([[SPEK-048 Inicializacao Concorrente do Journal SQLite]]) |
 | Release canônico do instalador Windows | SPEK 100% concluída | O run [`31126791469`](https://github.com/michel-az-de/anamnesis/actions/runs/31126791469) concluiu 285 testes Release, smoke instalado e promoção. A [release `v0.2.0-beta.6`](https://github.com/michel-az-de/anamnesis/releases/tag/v0.2.0-beta.6) é imutável, atestada por `gh release verify` e tem EXE, `SHA256SUMS.txt` e `release.json` verificados por `gh release verify-asset`; SHA-256 oficial do EXE: `80ca930b38954100d6f733200c4ed7e8cbc291ea3c52a1ea498b0806b0d38cb9` ([[SPEK-049 Release Canonico do Instalador Windows]]) |
 | Fluxo de processamento assistido no Tray | SPEK 100% concluída | Título manual no Command Deck e no menu do Tray, barra indeterminada, console correlacionado por `ReuniaoId`, abertura direta na aba Transcrição e polling incremental sem recriar a página ativa; 285 testes Release verdes ([[SPEK-050 Fluxo de Processamento Assistido no Tray]]) |
+| Confiabilidade do primeiro uso real | SPEK 100% concluída | Gravações originais preservadas, reunião Meet recuperada, bloqueio de transcrição degenerada, captura OBS sem duplicação, saída final isolada da Codex CLI, retenção de 30 dias, pacote local instalado e 294 testes Release verdes ([[SPEK-051 Confiabilidade do Primeiro Uso Real]]) |
+| Texto selecionável e cópia | SPEK 100% concluída | Resumo, transcrição, decisões e tarefas usam controle somente leitura, seleção, `Ctrl+C`, rolagem e ação `Copiar texto` ([[SPEK-052 Texto Selecionavel e Copia]]) |
+| Ata narrativa da reunião | SPEK 100% concluída | Contrato da CLI recebe título, data e duração e pede relato factual, cronológico e em terceira pessoa sem inventar participantes ([[SPEK-053 Ata Narrativa da Reuniao]]) |
+| Lembretes locais de tarefas | SPEK 100% concluída | Tarefa oferece confirmação de data e hora, persiste no SQLite e o Tray notifica uma única vez mesmo após reinício ([[SPEK-054 Lembretes Locais de Tarefas]]) |
+| Busca local completa | SPEK 100% concluída | Título, resumo, decisões, tarefas e transcrição são pesquisáveis no SQLite com filtros, trecho contextual e abertura da aba correspondente ([[SPEK-056 Busca Local no Conteudo das Reunioes]]) |
+| Exportação local de ata | SPEK 100% concluída | PDF e DOCX são gerados localmente com escrita atômica, validação estrutural, paginação e renderização inspecionada ([[SPEK-057 Exportacao Local de Ata em PDF e DOCX]]) |
+| Publicação local no Obsidian | SPEK 100% concluída | Markdown idempotente em subpasta segura do vault, sem sobrescrever edição manual, acessar rede ou interferir na retenção ([[SPEK-036 Publicacao Local no Obsidian]]) |
 
 ## Próximo incremento
 
-**Próximo ciclo: concluir a [[SPEK-032 Captura Instantanea e Deteccao Local]].** A SPEK-050 corrigiu o refresh durante transcrição e tornou o fluxo manual de reunião visível e acionável.
+**Próximo ciclo: [[SPEK-033 Agenda Conectada]].** A SPEK-032 foi concluída com baseline validado e roteiro de ensaio manual documentado. O detector local está operacional em modo assistido e automático opt-in.
 
 ## Roadmap pós-alpha
 
-O planejamento pós-alpha está documentado em [[Roadmap de Produto]]. As SPEKs 030, 031, 045, 046, 048, 049 e 050 foram concluídas; a SPEK-032 está em validação com 12 de 13 critérios atendidos; e as SPEKs 033 a 039 permanecem em rascunho para agendas Google e Microsoft, Obsidian, Trello e Azure DevOps.
+O planejamento pós-alpha está documentado em [[Roadmap de Produto]]. As SPEKs 030, 031, 032, 036, 045, 046, 048, 049, 050, 051, 052, 053, 054, 056 e 057 foram concluídas; e as SPEKs 033 a 035 e 037 a 039 permanecem em rascunho para agendas Google e Microsoft, Trello e Azure DevOps.
 
 Esse roadmap não altera os 100% da alpha. Novos percentuais só serão criados quando houver uma versão-alvo com pesos próprios, evitando misturar produto futuro com a medição já encerrada.
 

@@ -27,7 +27,7 @@ public sealed class WhisperDockerComandoTests
                 "-v", "C:\\Temp\\audio\\entrada.wav:/audio/input.wav:ro",
                 "-v", "C:\\Temp\\saida:/output",
                 "ghcr.io/ggml-org/whisper.cpp@sha256:teste",
-                "whisper-cli -m /models/model.bin -f /audio/input.wav -l pt -otxt -of /output/resultado"
+                "whisper-cli -m /models/model.bin -f /audio/input.wav -l pt -mc 0 -sns -np -otxt -of /output/resultado"
             ],
             argumentos);
     }

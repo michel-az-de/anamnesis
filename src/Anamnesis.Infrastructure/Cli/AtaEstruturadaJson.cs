@@ -20,22 +20,22 @@ public static class AtaEstruturadaJson
         }
         catch (JsonException exception)
         {
-            throw new InvalidOperationException("A CLI retornou JSON de ata inválido.", exception);
+            throw new AtaJsonInvalidoException("A CLI retornou JSON de ata inválido.", exception);
         }
 
         if (resultado is null)
         {
-            throw new InvalidOperationException("A CLI retornou JSON de ata inválido.");
+            throw new AtaJsonInvalidoException("A CLI retornou JSON de ata inválido.");
         }
 
         if (string.IsNullOrWhiteSpace(resultado.ResumoExecutivo))
         {
-            throw new InvalidOperationException("A CLI não retornou o resumo executivo da ata.");
+            throw new AtaJsonInvalidoException("A CLI não retornou o resumo executivo da ata.");
         }
 
         if (resultado.Decisoes is null || resultado.Tarefas is null)
         {
-            throw new InvalidOperationException("A CLI não retornou decisões e tarefas da ata.");
+            throw new AtaJsonInvalidoException("A CLI não retornou decisões e tarefas da ata.");
         }
 
         return new AtaGerada(resultado.ResumoExecutivo, resultado.Decisoes, resultado.Tarefas);

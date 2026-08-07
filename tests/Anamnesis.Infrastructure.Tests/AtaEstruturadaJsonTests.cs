@@ -29,7 +29,7 @@ public sealed class AtaEstruturadaJsonTests
     [Fact]
     public void DeveRejeitarJsonInvalido()
     {
-        var excecao = Assert.Throws<InvalidOperationException>(() => AtaEstruturadaJson.Converter("não é JSON"));
+        var excecao = Assert.Throws<AtaJsonInvalidoException>(() => AtaEstruturadaJson.Converter("não é JSON"));
 
         Assert.Equal("A CLI retornou JSON de ata inválido.", excecao.Message);
     }
@@ -37,7 +37,7 @@ public sealed class AtaEstruturadaJsonTests
     [Fact]
     public void DeveRejeitarResumoAusente()
     {
-        var excecao = Assert.Throws<InvalidOperationException>(() => AtaEstruturadaJson.Converter("""{ "decisoes": [], "tarefas": [] }"""));
+        var excecao = Assert.Throws<AtaJsonInvalidoException>(() => AtaEstruturadaJson.Converter("""{ "decisoes": [], "tarefas": [] }"""));
 
         Assert.Equal("A CLI não retornou o resumo executivo da ata.", excecao.Message);
     }

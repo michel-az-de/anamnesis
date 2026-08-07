@@ -17,7 +17,7 @@ public sealed class DesktopPocDesignSystemTests
         Assert.Equal(83, tokens.Motion.FasterMs);
         Assert.Equal(167, tokens.Motion.FastMs);
         Assert.Equal(250, tokens.Motion.NormalMs);
-        Assert.Equal(24, tokens.Motion.DeslocamentoPagina);
+        Assert.Equal(60, tokens.Motion.DeslocamentoPagina);
         Assert.False(string.IsNullOrWhiteSpace(tokens.Tipografia.Interface));
         Assert.False(string.IsNullOrWhiteSpace(tokens.Tipografia.Display));
         Assert.False(string.IsNullOrWhiteSpace(tokens.Tipografia.Mono));

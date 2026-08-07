@@ -33,6 +33,15 @@ internal enum DesktopNavigationIcon
     Settings
 }
 
+internal enum DesktopTabIcon
+{
+    Resumo,
+    Transcricao,
+    Decisoes,
+    Tarefas,
+    Arquivos
+}
+
 internal sealed class DesktopBackdropPanel : Panel
 {
     private readonly DesktopPocPalette _paleta;
@@ -1092,6 +1101,199 @@ internal sealed class DesktopInteractionAnimator : IDisposable
             _controle.Invalidate();
         };
         return timer;
+    }
+}
+
+internal sealed class DesktopTabButton : Button
+{
+    private readonly DesktopPocPalette _paleta;
+    private readonly DesktopPocDesignTokens _tokens;
+    private readonly DesktopInteractionAnimator _hover;
+    private bool _selecionado;
+    private bool _pressionado;
+
+    private readonly DesktopTabIcon _icon;
+
+    public DesktopTabButton(
+        DesktopPocPalette paleta,
+        DesktopPocDesignTokens tokens,
+        DesktopPocEffectsPolicy politica,
+        DesktopTabIcon icon)
+    {
+        _paleta = paleta;
+        _tokens = tokens;
+        _icon = icon;
+        _hover = new DesktopInteractionAnimator(this, tokens.Motion, politica.AnimacoesAtivas);
+        DoubleBuffered = true;
+        FlatStyle = FlatStyle.Flat;
+        FlatAppearance.BorderSize = 0;
+        UseVisualStyleBackColor = false;
+        BackColor = paleta.Fundo;
+        ForeColor = paleta.TextoSecundario;
+        Cursor = Cursors.Hand;
+        Height = 38;
+        AutoSize = true;
+        Padding = new Padding(12, 0, 14, 0);
+        TabStop = true;
+        SetStyle(
+            ControlStyles.AllPaintingInWmPaint |
+            ControlStyles.OptimizedDoubleBuffer |
+            ControlStyles.UserPaint,
+            true);
+    }
+
+    public bool Selecionado => _selecionado;
+
+    public void DefinirSelecionado(bool selecionado)
+    {
+        _selecionado = selecionado;
+        Invalidate();
+    }
+
+    protected override void OnMouseEnter(EventArgs e)
+    {
+        base.OnMouseEnter(e);
+        _hover.Definir(ativo: true);
+    }
+
+    protected override void OnMouseLeave(EventArgs e)
+    {
+        base.OnMouseLeave(e);
+        _pressionado = false;
+        _hover.Definir(ativo: false);
+    }
+
+    protected override void OnMouseDown(MouseEventArgs mevent)
+    {
+        base.OnMouseDown(mevent);
+        _pressionado = true;
+        Invalidate();
+    }
+
+    protected override void OnMouseUp(MouseEventArgs mevent)
+    {
+        base.OnMouseUp(mevent);
+        _pressionado = false;
+        Invalidate();
+    }
+
+    protected override void OnResize(EventArgs e)
+    {
+        base.OnResize(e);
+        Region?.Dispose();
+        using var caminho = DesktopPocDrawing.CriarCaminhoArredondado(ClientRectangle, _tokens.Geometria.RaioPequeno);
+        Region = new Region(caminho);
+    }
+
+    protected override void OnPaint(PaintEventArgs pevent)
+    {
+        pevent.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+        var area = new Rectangle(1, 1, Math.Max(1, ClientSize.Width - 3), Math.Max(1, ClientSize.Height - 3));
+        using var caminho = DesktopPocDrawing.CriarCaminhoArredondado(area, _tokens.Geometria.RaioPequeno);
+
+        var fundoBase = _selecionado ? _paleta.FundoDestaque : _paleta.Fundo;
+        var hoverFundo = _selecionado ? DesktopPocMotion.Misturar(_paleta.FundoDestaque, _paleta.Destaque, 0.08D) : _paleta.FundoDestaque;
+        var fundo = DesktopPocMotion.Misturar(fundoBase, hoverFundo, _hover.Valor);
+
+        if (_pressionado)
+        {
+            fundo = DesktopPocMotion.Misturar(fundo, Color.Black, 0.12D);
+        }
+
+        using var pincel = new SolidBrush(fundo);
+        pevent.Graphics.FillPath(pincel, caminho);
+
+        var corTexto = _selecionado ? _paleta.Destaque : _paleta.TextoSecundario;
+        var hoverTexto = _selecionado ? _paleta.Destaque : _paleta.Texto;
+        corTexto = DesktopPocMotion.Misturar(corTexto, hoverTexto, _hover.Valor);
+
+        if (_selecionado)
+        {
+            using var bordaAtiva = new Pen(Color.FromArgb(80, _paleta.Destaque), 1.2F);
+            pevent.Graphics.DrawPath(bordaAtiva, caminho);
+        }
+        else if (_hover.Valor > 0.01D)
+        {
+            using var bordaHover = new Pen(DesktopPocMotion.Misturar(_paleta.Borda, _paleta.Destaque, _hover.Valor * 0.35D), 1F);
+            pevent.Graphics.DrawPath(bordaHover, caminho);
+        }
+
+        if (Focused)
+        {
+            using var foco = new Pen(_paleta.Superficies.BordaForte, _tokens.Geometria.BordaFoco);
+            pevent.Graphics.DrawPath(foco, caminho);
+        }
+
+        var temIcone = _icon != DesktopTabIcon.Resumo;
+        var offsetIcone = temIcone ? 20 : 0;
+        var areaTexto = new Rectangle(area.X + offsetIcone, area.Y, Math.Max(1, area.Width - offsetIcone), area.Height);
+
+        if (temIcone)
+        {
+            var areaIcone = new Rectangle(area.X + 10, (area.Height - 14) / 2 + 1, 14, 14);
+            DesenharIcone(pevent.Graphics, areaIcone, corTexto);
+        }
+
+        TextRenderer.DrawText(
+            pevent.Graphics,
+            Text,
+            Font,
+            areaTexto,
+            corTexto,
+            TextFormatFlags.HorizontalCenter |
+            TextFormatFlags.VerticalCenter |
+            TextFormatFlags.EndEllipsis |
+            TextFormatFlags.NoPrefix);
+    }
+
+    private void DesenharIcone(Graphics g, Rectangle area, Color cor)
+    {
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        using var caneta = new Pen(cor, 1.4F)
+        {
+            StartCap = LineCap.Round,
+            EndCap = LineCap.Round,
+            LineJoin = LineJoin.Round
+        };
+        var x = area.X;
+        var y = area.Y;
+
+        switch (_icon)
+        {
+            case DesktopTabIcon.Transcricao:
+                // Três linhas horizontais (texto)
+                for (int i = 0; i < 3; i++)
+                {
+                    g.DrawLine(caneta, x + 1, y + 3 + i * 5, x + 12, y + 3 + i * 5);
+                }
+                break;
+            case DesktopTabIcon.Decisoes:
+                // Checkmark
+                g.DrawLines(caneta, [new Point(x + 2, y + 7), new Point(x + 5, y + 10), new Point(x + 11, y + 4)]);
+                break;
+            case DesktopTabIcon.Tarefas:
+                // Quadrado com check pequeno
+                g.DrawRectangle(caneta, x + 1, y + 1, 11, 11);
+                g.DrawLines(caneta, [new Point(x + 4, y + 6), new Point(x + 6, y + 8), new Point(x + 10, y + 4)]);
+                break;
+            case DesktopTabIcon.Arquivos:
+                // Documento dobrado
+                g.DrawRectangle(caneta, x + 1, y + 2, 10, 11);
+                g.DrawLine(caneta, x + 8, y + 2, x + 8, y + 5);
+                g.DrawLine(caneta, x + 8, y + 5, x + 11, y + 5);
+                break;
+        }
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _hover.Dispose();
+            Region?.Dispose();
+        }
+
+        base.Dispose(disposing);
     }
 }
 

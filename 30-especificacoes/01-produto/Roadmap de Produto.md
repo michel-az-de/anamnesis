@@ -4,7 +4,7 @@ aliases: [Roadmap Pos-Alpha, Backlog de Features]
 tags: [produto, roadmap, pos-alpha, integracoes]
 type: roadmap
 created: 2026-08-05
-updated: 2026-08-05
+updated: 2026-08-07
 status: growing
 summary: Sequencia priorizada de evolucao do Anamnesis depois da alpha, com dependencias, riscos e ideias futuras.
 related: ["[[Status Alpha]]", "[[Indice de SPEKs]]", "[[Visao do Produto]]"]
@@ -30,9 +30,10 @@ flowchart LR
 | --- | --- | --- | --- | ---: |
 | Concluido | Desktop real e console persistente operam com dados locais | 030, 031 | entregue | 100% |
 | Concluido | Aplicativo Windows instalado, identificado e operado pela bandeja | 045 | entregue | 100% |
+| Concluido | Histórico pesquisável por conteúdo e ata exportável em PDF/DOCX | 056, 057 | entregue | 100% |
+| Concluido | Atas publicadas em vault Obsidian sem plugin | 036 | entregue | 100% |
 | Agora | Validar captura assistida ou automatica em chamadas reais | 032 | P1 | 90% |
 | Contexto de agenda | Eventos Google e Microsoft alimentam o detector local | 033, 034, 035 | P2 | 85% |
-| Conhecimento | Atas sao publicadas em um vault Obsidian sem plugin | 036 | P2 | 95% |
 | Execucao | Tarefas aprovadas sao enviadas ao Trello ou Azure DevOps | 037, 038, 039 | P3 | 80% |
 
 Confianca indica estabilidade da direcao tecnica em 2026-08-05, nao probabilidade de prazo.
@@ -90,11 +91,10 @@ O detector da SPEK-032 funciona primeiro com sinais locais. Agendas conectadas a
 
 | Ideia | Valor | Complexidade | Confianca | Gatilho para promover |
 | --- | --- | --- | ---: | --- |
-| Busca local por texto em atas e transcricoes | Alto | Media | 90% | Historico real estabilizado |
 | Diarizacao local por participante | Alto | Alta | 70% | Benchmark local de qualidade e desempenho |
 | Marcadores e clipes de audio vinculados a evidencia | Alto | Media | 80% | Evidencias temporais completas na SPEK-002 |
 | Busca semantica local e perguntas sobre o historico | Medio | Alta | 70% | Modelo local e politica de indice definidos |
-| Templates de ata e exportacao PDF ou DOCX | Alto | Baixa | 90% | Demanda de formatos confirmada |
+| Templates personalizados de ata | Alto | Baixa | 90% | Demanda de formatos confirmada |
 | Backup criptografado e restauracao | Alto | Alta | 75% | Modelo de ameacas e destino escolhidos |
 | Consentimento visual e politicas por reuniao | Alto | Media | 90% | Captura automatica entrar em beta |
 | Atualizacao automatica e assinatura de releases | Alto | Media | 85% | Canal beta estabilizado |
@@ -109,7 +109,6 @@ Uma ideia recebe numero de SPEK somente quando houver objetivo pequeno, criterio
 | Antes de implementar | Decisao obrigatoria |
 | --- | --- |
 | SPEK-033 a 035 | ADR de OAuth desktop, cache protegido e politica de polling |
-| SPEK-036 | ADR de publicacao local no vault e protecao contra sobrescrita |
 | SPEK-037 a 039 | ADR de aprovacao, idempotencia e propriedade dos campos remotos |
 | Qualquer webhook | ADR de infraestrutura publica, custos e privacidade |
 

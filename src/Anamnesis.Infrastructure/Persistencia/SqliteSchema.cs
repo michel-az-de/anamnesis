@@ -108,6 +108,28 @@ internal static class SqliteSchema
         await comando.ExecuteNonQueryAsync(cancellationToken);
     }
 
+    public static async Task InicializarLembretesAsync(
+        SqliteConnection conexao,
+        CancellationToken cancellationToken)
+    {
+        await using var comando = conexao.CreateCommand();
+        comando.CommandText = """
+            CREATE TABLE IF NOT EXISTS lembretes_tarefa (
+                id TEXT NOT NULL PRIMARY KEY,
+                reuniao_id TEXT NOT NULL,
+                descricao_tarefa TEXT NOT NULL,
+                lembrar_em TEXT NOT NULL,
+                criado_em TEXT NOT NULL,
+                status TEXT NOT NULL,
+                notificado_em TEXT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS ix_lembretes_tarefa_pendentes
+            ON lembretes_tarefa(status, lembrar_em);
+            """;
+        await comando.ExecuteNonQueryAsync(cancellationToken);
+    }
+
     public static async Task InicializarEventosOperacionaisAsync(
         SqliteConnection conexao,
         CancellationToken cancellationToken)

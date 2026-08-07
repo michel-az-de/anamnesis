@@ -12,7 +12,7 @@ public sealed class WhisperComandoTests
 
         var argumentos = WhisperComando.Criar(options, "C:\\gravacoes\\reuniao com espaço.mkv", "C:\\temp\\resultado");
 
-        Assert.Equal(["-m", "C:\\whisper\\modelo.bin", "-f", "C:\\gravacoes\\reuniao com espaço.mkv", "-l", "pt", "-otxt", "-of", "C:\\temp\\resultado"], argumentos);
+        Assert.Equal(["-m", "C:\\whisper\\modelo.bin", "-f", "C:\\gravacoes\\reuniao com espaço.mkv", "-l", "pt", "-mc", "0", "-sns", "-np", "-otxt", "-of", "C:\\temp\\resultado"], argumentos);
     }
 
     [Fact]

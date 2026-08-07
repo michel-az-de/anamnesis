@@ -12,7 +12,7 @@ public sealed class RetencaoGravacaoHandler(
     TimeProvider relogio,
     JornalOperacional? journal = null)
 {
-    private static readonly TimeSpan PrazoPadrao = TimeSpan.FromDays(7);
+    private static readonly TimeSpan PrazoPadrao = TimeSpan.FromDays(30);
     private readonly JornalOperacional _journal = journal ?? JornalOperacional.Nulo;
 
     public async Task<ResultadoRetencao> SimularAsync(Guid reuniaoId, CancellationToken cancellationToken)

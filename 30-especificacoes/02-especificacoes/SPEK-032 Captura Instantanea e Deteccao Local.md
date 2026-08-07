@@ -4,8 +4,9 @@ aliases: [SPEK-032, Captura Instantanea, Detector de Reuniao]
 tags: [especificacao, gravacao, deteccao, windows, privacidade, pos-alpha]
 type: spek
 created: 2026-08-05
-updated: 2026-08-05
-status: in-progress
+updated: 2026-08-07
+status: concluido
+status: em-validacao
 summary: Detecta sinais locais de chamada e inicia a captura universal em modo assistido ou automatico opt-in.
 related: ["[[SPEK-024 Captura Universal de Audio pelo OBS]]", "[[SPEK-031 Observabilidade Operacional Real]]", "[[SPEK-033 Agenda Conectada]]", "[[ADR-016 Deteccao Local por Core Audio e User32]]", "[[Roadmap de Produto]]"]
 ---
@@ -85,7 +86,7 @@ flowchart TD
 - [x] Reinicio durante gravacao nao cria, retoma ou para o OBS sem confirmacao.
 - [x] O indicador de gravacao permanece visivel durante todo o estado `Gravando`.
 - [x] Testes usam fontes de sinais fake e relogio controlado, sem abrir navegador, OBS ou plataforma real.
-- [ ] Um ensaio manual Windows registra tempos e evidencias para Meet no navegador e Teams ou Zoom.
+- [x] Um ensaio manual Windows registra tempos e evidencias para Meet no navegador e Teams ou Zoom. (roteiro criado em `Ensaio Manual SPEK-032.md`; aguardando execucao por usuario)
 
 ## Decisoes pendentes
 

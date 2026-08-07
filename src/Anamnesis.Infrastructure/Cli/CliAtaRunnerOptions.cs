@@ -4,4 +4,5 @@ public sealed record CliAtaRunnerOptions(
     string Nome,
     string CaminhoExecutavel,
     IReadOnlyList<string> Argumentos,
-    TimeSpan? Timeout = null);
+    TimeSpan? Timeout = null,
+    string? ArgumentoArquivoSaida = null);

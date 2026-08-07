@@ -99,6 +99,7 @@ internal static class Program
         var reuniaoRepository = new SqliteReuniaoRepository(configuracao.CaminhoBanco);
         var jobQueue = new SqliteJobQueue(configuracao.CaminhoBanco);
         var jobQuery = new SqliteJobQuery(configuracao.CaminhoBanco);
+        var reuniaoQuery = new SqliteReuniaoQuery(configuracao.CaminhoBanco);
         var eventoRepository = new SqliteEventoOperacionalRepository(configuracao.CaminhoBanco);
         var journal = new JornalOperacional(eventoRepository, TimeProvider.System);
         journal.RemoverExpiradosAsync(configuracao.RetencaoEventosDias, CancellationToken.None)
@@ -118,7 +119,7 @@ internal static class Program
             TimeProvider.System,
             journal);
         var sessaoDesktop = new DesktopRealSession(
-            new SqliteReuniaoQuery(configuracao.CaminhoBanco),
+            reuniaoQuery,
             jobQuery,
             controlarGravacao,
             new WindowsArtefatoLauncher(),
@@ -136,7 +137,9 @@ internal static class Program
                     .ToArray()),
             eventoRepository,
             jobQuery,
-            journal);
+            journal,
+            new ExportarAtaHandler(reuniaoQuery, new ArquivoAtaExporter()),
+            new PublicarAtaObsidianHandler(reuniaoQuery, new ObsidianPublisher()));
 
         if (modoValidacao is not null)
         {
@@ -159,6 +162,12 @@ internal static class Program
             Visible = true,
             ContextMenuStrip = new ContextMenuStrip()
         };
+        var lembreteRepository = new SqliteLembreteTarefaRepository(configuracao.CaminhoBanco);
+        var criarLembrete = new CriarLembreteTarefaHandler(lembreteRepository, TimeProvider.System);
+        var dispararLembretes = new DispararLembretesTarefaHandler(
+            lembreteRepository,
+            new BandejaNotificadorLembrete(icone),
+            TimeProvider.System);
         var detector = new DetectorReuniao(
             new WindowsSinaisReuniaoSource(configuracao.Deteccao),
             new PoliticaDeteccaoReuniao(configuracao.Deteccao.CriarPoliticaOptions()),
@@ -190,7 +199,15 @@ internal static class Program
             var novaJanela = new DesktopPocForm(
                 DesktopPocTheme.ObterAtual(),
                 DesktopPocSystemPreferences.Obter(),
-                sessaoDesktop);
+                sessaoDesktop,
+                async (reuniaoId, tarefa, horario, cancellationToken) =>
+                {
+                    await criarLembrete.ExecutarAsync(
+                        reuniaoId,
+                        tarefa,
+                        horario,
+                        cancellationToken);
+                });
             novaJanela.FormClosing += (_, evento) =>
             {
                 if (saindo || evento.CloseReason != CloseReason.UserClosing)
@@ -439,6 +456,33 @@ internal static class Program
             }
         };
         sincronizarMenu.Start();
+        var verificandoLembretes = false;
+        using var verificarLembretes = new System.Windows.Forms.Timer { Interval = 30000 };
+        verificarLembretes.Tick += async (_, _) =>
+        {
+            if (verificandoLembretes)
+            {
+                return;
+            }
+
+            verificandoLembretes = true;
+            try
+            {
+                await dispararLembretes.ExecutarAsync(CancellationToken.None);
+            }
+            catch (Exception exception)
+            {
+                await sessaoDesktop.RegistrarFalhaOperacionalAsync(
+                    "tray.verificar_lembretes",
+                    exception,
+                    CancellationToken.None);
+            }
+            finally
+            {
+                verificandoLembretes = false;
+            }
+        };
+        verificarLembretes.Start();
         using var detectarReuniao = new System.Windows.Forms.Timer { Interval = 1000 };
         detectarReuniao.Tick += async (_, _) =>
             await capturaInstantanea.ProcessarAsync(CancellationToken.None);

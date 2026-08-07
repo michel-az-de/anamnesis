@@ -52,10 +52,11 @@ public sealed class ProcessarReuniaoHandler(
             var transcricaoGerada = await transcritor.TranscreverAsync(
                 reuniao.Gravacao!.CaminhoArquivo,
                 cancellationToken);
+            var transcricaoConfiavel = QualidadeTranscricao.LimparEValidar(transcricaoGerada);
 
             reuniao.RegistrarTranscricao(new Transcricao(
-                transcricaoGerada.Texto,
-                transcricaoGerada.Idioma,
+                transcricaoConfiavel.Texto,
+                transcricaoConfiavel.Idioma,
                 relogio.GetUtcNow()));
             await _journal.RegistrarAsync(
                 NivelEventoOperacional.Info,
@@ -72,7 +73,7 @@ public sealed class ProcessarReuniaoHandler(
 
             componenteFalha = "Ata";
             operacaoFalha = "gerar_ata";
-            var ataGerada = await ataRunner.GerarAsync(reuniao, transcricaoGerada, cancellationToken);
+            var ataGerada = await ataRunner.GerarAsync(reuniao, transcricaoConfiavel, cancellationToken);
 
             reuniao.RegistrarAta(new Ata(
                 ataGerada.ResumoExecutivo,

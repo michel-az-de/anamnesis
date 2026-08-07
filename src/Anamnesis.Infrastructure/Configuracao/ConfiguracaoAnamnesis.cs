@@ -16,6 +16,7 @@ public sealed record ConfiguracaoAnamnesis
     public string NomeCli { get; init; } = "CLI configurada";
     public string CaminhoExecutavelCli { get; init; } = string.Empty;
     public IReadOnlyList<string> ArgumentosCli { get; init; } = [];
+    public string? ArgumentoArquivoSaidaCli { get; init; }
     public int RetencaoEventosDias { get; init; } = 14;
     public DeteccaoLocalOptions Deteccao { get; init; } = DeteccaoLocalOptions.Padrao;
 
@@ -29,5 +30,20 @@ public sealed record ConfiguracaoAnamnesis
             CaminhoBanco = Path.Combine(diretorioDados, "anamnesis.db"),
             DiretorioArquivo = Path.Combine(diretorioDados, "arquivo")
         };
+    }
+
+    public string? ResolverArgumentoArquivoSaidaCli()
+    {
+        if (!string.IsNullOrWhiteSpace(ArgumentoArquivoSaidaCli))
+        {
+            return ArgumentoArquivoSaidaCli;
+        }
+
+        return string.Equals(
+            Path.GetFileName(CaminhoExecutavelCli),
+            "codex.exe",
+            StringComparison.OrdinalIgnoreCase)
+            ? "--output-last-message"
+            : null;
     }
 }

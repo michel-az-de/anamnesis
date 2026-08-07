@@ -68,6 +68,9 @@ public sealed class DescobertaConfiguracaoLocal
             CaminhoExecutavelDockerDesktop = dockerDesktop,
             NomeCli = codex is not null && schema is not null ? "Codex CLI" : "CLI configurada",
             CaminhoExecutavelCli = codex is not null && schema is not null ? codex : string.Empty,
+            ArgumentoArquivoSaidaCli = codex is not null && schema is not null
+                ? "--output-last-message"
+                : null,
             ArgumentosCli = codex is not null && schema is not null
                 ?
                 [

@@ -105,6 +105,42 @@ public sealed class DesktopRealSessionTests
     }
 
     [Fact]
+    public async Task DeveBuscarConteudoEMapearContextoParaODetalhe()
+    {
+        var reuniaoId = Guid.NewGuid();
+        var query = new BuscaReuniaoQueryFake(new ReuniaoResumo(
+            reuniaoId,
+            "Reunião encontrada",
+            new DateTimeOffset(2026, 8, 7, 12, 0, 0, TimeSpan.Zero),
+            StatusReuniao.Arquivada,
+            null,
+            null,
+            null,
+            "Transcrição",
+            "...incidente resolvido com segurança..."));
+        var sessao = new DesktopRealSession(
+            query,
+            new JobQueryFake(null),
+            CriarHandlerNulo(),
+            new ArtefatoLauncherFake(),
+            TimeProvider.System);
+        var desde = new DateTimeOffset(2026, 8, 1, 0, 0, 0, TimeSpan.Zero);
+
+        var resultado = await sessao.BuscarReunioesAsync(
+            "incidente resolvido",
+            "Ata pronta",
+            desde,
+            CancellationToken.None);
+
+        var reuniao = Assert.Single(resultado);
+        Assert.Equal("Transcrição", reuniao.SecaoCorrespondente);
+        Assert.Contains("incidente resolvido", reuniao.TrechoCorrespondente, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("incidente resolvido", query.UltimoFiltro!.Texto);
+        Assert.Equal(StatusReuniao.Arquivada, query.UltimoFiltro.Status);
+        Assert.Equal(desde, query.UltimoFiltro.CriadaDesde);
+    }
+
+    [Fact]
     public async Task ReinicioComGravacaoDeveExigirAcaoSemConsultarOuAlterarObs()
     {
         var dados = new DadosEmMemoria();
@@ -419,6 +455,22 @@ public sealed class DesktopRealSessionTests
         public Task<ReuniaoDetalhe?> ObterDetalheAsync(Guid reuniaoId, CancellationToken cancellationToken) =>
             Task.FromResult<ReuniaoDetalhe?>(
                 detalhe is not null && reuniaoId == detalhe.Id ? detalhe : null);
+    }
+
+    private sealed class BuscaReuniaoQueryFake(ReuniaoResumo resumo) : IReuniaoQuery
+    {
+        public ReuniaoQueryFiltro? UltimoFiltro { get; private set; }
+
+        public Task<IReadOnlyList<ReuniaoResumo>> ListarAsync(
+            ReuniaoQueryFiltro filtro,
+            CancellationToken cancellationToken)
+        {
+            UltimoFiltro = filtro;
+            return Task.FromResult<IReadOnlyList<ReuniaoResumo>>([resumo]);
+        }
+
+        public Task<ReuniaoDetalhe?> ObterDetalheAsync(Guid reuniaoId, CancellationToken cancellationToken) =>
+            Task.FromResult<ReuniaoDetalhe?>(null);
     }
 
     private sealed class JobQueryFake(JobResumo? job) : IJobQuery

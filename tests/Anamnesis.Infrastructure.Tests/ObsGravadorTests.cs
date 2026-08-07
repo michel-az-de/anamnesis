@@ -32,6 +32,7 @@ public sealed class ObsGravadorTests
                 new(new { currentProgramSceneName = "Cena pessoal", scenes = new[] { new { sceneName = "Cena pessoal" } } }),
                 new(new { inputs = Array.Empty<object>() }),
                 new(new { }),
+                new(new { }),
                 new(new { inputUuid = Guid.NewGuid(), sceneItemId = 1 }),
                 new(new { inputUuid = Guid.NewGuid(), sceneItemId = 2 }),
                 new(new { }),
@@ -61,6 +62,7 @@ public sealed class ObsGravadorTests
                 new(new { currentProgramSceneName = "Cena pessoal", scenes = new[] { new { sceneName = "Cena pessoal" } } }),
                 new(new { inputs = Array.Empty<object>() }),
                 new(new { }),
+                new(new { }),
                 new(new { inputUuid = Guid.NewGuid(), sceneItemId = 1 }),
                 new(new { inputUuid = Guid.NewGuid(), sceneItemId = 2 }),
                 new(new { }),
@@ -80,6 +82,7 @@ public sealed class ObsGravadorTests
         Assert.Equal([
             "GetSceneList",
             "GetInputList",
+            "GetSpecialInputs",
             "CreateScene",
             "CreateInput",
             "CreateInput",
@@ -88,15 +91,15 @@ public sealed class ObsGravadorTests
             "StopRecord",
             "SetCurrentProgramScene"
         ], servidor.TiposSolicitados);
-        var criacaoSistema = servidor.Solicitacoes[3].GetProperty("d").GetProperty("requestData");
+        var criacaoSistema = servidor.Solicitacoes[4].GetProperty("d").GetProperty("requestData");
         Assert.Equal("Anamnesis", criacaoSistema.GetProperty("sceneName").GetString());
         Assert.Equal("Anamnesis | Audio do sistema", criacaoSistema.GetProperty("inputName").GetString());
         Assert.Equal("wasapi_output_capture", criacaoSistema.GetProperty("inputKind").GetString());
         Assert.Equal("default", criacaoSistema.GetProperty("inputSettings").GetProperty("device_id").GetString());
-        var criacaoMicrofone = servidor.Solicitacoes[4].GetProperty("d").GetProperty("requestData");
+        var criacaoMicrofone = servidor.Solicitacoes[5].GetProperty("d").GetProperty("requestData");
         Assert.Equal("Anamnesis | Microfone", criacaoMicrofone.GetProperty("inputName").GetString());
         Assert.Equal("wasapi_input_capture", criacaoMicrofone.GetProperty("inputKind").GetString());
-        var restauracao = servidor.Solicitacoes[8].GetProperty("d").GetProperty("requestData");
+        var restauracao = servidor.Solicitacoes[9].GetProperty("d").GetProperty("requestData");
         Assert.Equal("Cena pessoal", restauracao.GetProperty("sceneName").GetString());
     }
 
@@ -119,6 +122,7 @@ public sealed class ObsGravadorTests
                     }
                 }),
                 new(new { }),
+                new(new { }),
                 new(new { })
             ],
             [
@@ -134,6 +138,7 @@ public sealed class ObsGravadorTests
         Assert.Equal([
             "GetSceneList",
             "GetInputList",
+            "GetSpecialInputs",
             "SetCurrentProgramScene",
             "StartRecord",
             "StopRecord",
@@ -159,6 +164,7 @@ public sealed class ObsGravadorTests
                         new { inputName = "Anamnesis | Microfone" }
                     }
                 }),
+                new(new { }),
                 new(new { }),
                 new(new { })
             ],
@@ -188,6 +194,7 @@ public sealed class ObsGravadorTests
                     scenes = new[] { new { sceneName = "Cena pessoal" }, new { sceneName = "Anamnesis" } }
                 }),
                 new(new { inputs = Array.Empty<object>() }),
+                new(new { }),
                 new(new { inputUuid = Guid.NewGuid(), sceneItemId = 1 }, EmitirEventoAntes: true),
                 new(new { inputUuid = Guid.NewGuid(), sceneItemId = 2 }, EmitirEventoAntes: true),
                 new(new { }),
@@ -204,7 +211,62 @@ public sealed class ObsGravadorTests
         var caminho = await gravador.FinalizarAsync(CancellationToken.None);
 
         Assert.Equal("C:\\gravacoes\\reuniao.mkv", caminho);
-        Assert.Equal(8, servidor.TiposSolicitados.Length);
+        Assert.Equal(9, servidor.TiposSolicitados.Length);
+    }
+
+    [Fact]
+    public async Task DeveRemoverFontesGerenciadasQuandoEntradasGlobaisJaCapturamAudio()
+    {
+        await using var servidor = new ServidorObsFake([
+            [
+                new(new
+                {
+                    currentProgramSceneName = "Cena pessoal",
+                    scenes = new[] { new { sceneName = "Cena pessoal" }, new { sceneName = "Anamnesis" } }
+                }),
+                new(new
+                {
+                    inputs = new[]
+                    {
+                        new { inputName = "Áudio do desktop", inputKind = "wasapi_output_capture" },
+                        new { inputName = "Mic/Aux", inputKind = "wasapi_input_capture" },
+                        new { inputName = "Anamnesis | Audio do sistema", inputKind = "wasapi_output_capture" },
+                        new { inputName = "Anamnesis | Microfone", inputKind = "wasapi_input_capture" }
+                    }
+                }),
+                new(new { desktop1 = "Áudio do desktop", mic1 = "Mic/Aux" }),
+                new(new { }),
+                new(new { }),
+                new(new { }),
+                new(new { })
+            ],
+            [
+                new(new { outputPath = "C:\\gravacoes\\sem-duplicacao.mkv" }),
+                new(new { })
+            ]
+        ]);
+        var gravador = new ObsGravador(new ObsWebSocketOptions(servidor.Endereco, null));
+
+        await gravador.IniciarAsync(CancellationToken.None);
+        await gravador.FinalizarAsync(CancellationToken.None);
+
+        Assert.Equal([
+            "GetSceneList",
+            "GetInputList",
+            "GetSpecialInputs",
+            "RemoveInput",
+            "RemoveInput",
+            "SetCurrentProgramScene",
+            "StartRecord",
+            "StopRecord",
+            "SetCurrentProgramScene"
+        ], servidor.TiposSolicitados);
+        Assert.Equal(
+            "Anamnesis | Audio do sistema",
+            servidor.Solicitacoes[3].GetProperty("d").GetProperty("requestData").GetProperty("inputName").GetString());
+        Assert.Equal(
+            "Anamnesis | Microfone",
+            servidor.Solicitacoes[4].GetProperty("d").GetProperty("requestData").GetProperty("inputName").GetString());
     }
 
     private sealed record Resposta(

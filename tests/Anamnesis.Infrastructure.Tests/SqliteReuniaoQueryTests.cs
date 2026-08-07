@@ -50,6 +50,56 @@ public sealed class SqliteReuniaoQueryTests : IAsyncLifetime
         Assert.NotNull(resumo.GravacaoFinalizadaEm);
     }
 
+    [Theory]
+    [InlineData("orçamento reservado", "Resumo", "orçamento reservado")]
+    [InlineData("contrato aprovado", "Decisões", "contrato aprovado")]
+    [InlineData("enviar proposta", "Tarefas", "Enviar proposta")]
+    [InlineData("incidente resolvido", "Transcrição", "incidente resolvido")]
+    public async Task DeveBuscarTodoConteudoERetornarSecaoETrecho(
+        string texto,
+        string secaoEsperada,
+        string trechoEsperado)
+    {
+        var reuniao = CriarArquivadaComConteudo(
+            "Reunião sem o termo pesquisado no título",
+            new DateTimeOffset(2026, 8, 7, 10, 0, 0, TimeSpan.Zero));
+        await new SqliteReuniaoRepository(_caminhoBanco)
+            .SalvarAsync(reuniao, CancellationToken.None);
+
+        var resultado = await new SqliteReuniaoQuery(_caminhoBanco).ListarAsync(
+            new ReuniaoQueryFiltro(texto, StatusReuniao.Arquivada, 100),
+            CancellationToken.None);
+
+        var resumo = Assert.Single(resultado);
+        Assert.Equal(secaoEsperada, resumo.SecaoCorrespondente);
+        Assert.Contains(trechoEsperado, resumo.TrechoCorrespondente, StringComparison.OrdinalIgnoreCase);
+        Assert.True(resumo.TrechoCorrespondente!.Length <= 180);
+    }
+
+    [Fact]
+    public async Task DeveCombinarBuscaComPeriodo()
+    {
+        var antiga = CriarArquivadaComConteudo(
+            "Reunião antiga",
+            new DateTimeOffset(2026, 7, 1, 10, 0, 0, TimeSpan.Zero));
+        var recente = CriarArquivadaComConteudo(
+            "Reunião recente",
+            new DateTimeOffset(2026, 8, 7, 10, 0, 0, TimeSpan.Zero));
+        var repository = new SqliteReuniaoRepository(_caminhoBanco);
+        await repository.SalvarAsync(antiga, CancellationToken.None);
+        await repository.SalvarAsync(recente, CancellationToken.None);
+
+        var resultado = await new SqliteReuniaoQuery(_caminhoBanco).ListarAsync(
+            new ReuniaoQueryFiltro(
+                "incidente resolvido",
+                StatusReuniao.Arquivada,
+                100,
+                new DateTimeOffset(2026, 8, 1, 0, 0, 0, TimeSpan.Zero)),
+            CancellationToken.None);
+
+        Assert.Equal([recente.Id], resultado.Select(item => item.Id));
+    }
+
     [Fact]
     public async Task DeveOrdenarPorCriacaoDescendenteEAplicarLimite()
     {
@@ -150,6 +200,23 @@ public sealed class SqliteReuniaoQueryTests : IAsyncLifetime
             "Resumo estruturado.",
             ["Aprovar a proposta."],
             [new Tarefa("Enviar proposta.", "Felipe", new DateOnly(2026, 8, 8))],
+            criadaEm.AddMinutes(33)));
+        reuniao.MarcarArquivada(criadaEm.AddMinutes(34));
+        return reuniao;
+    }
+
+    private static Reuniao CriarArquivadaComConteudo(string titulo, DateTimeOffset criadaEm)
+    {
+        var reuniao = CriarAguardandoProcessamento(titulo, criadaEm);
+        reuniao.IniciarTranscricao();
+        reuniao.RegistrarTranscricao(new Transcricao(
+            "A equipe analisou o cenário e declarou o incidente resolvido com segurança.",
+            "pt-BR",
+            criadaEm.AddMinutes(32)));
+        reuniao.RegistrarAta(new Ata(
+            "O orçamento reservado permite concluir o trabalho neste ciclo.",
+            ["O contrato aprovado será usado como referência."],
+            [new Tarefa("Enviar proposta revisada.", "Felipe", new DateOnly(2026, 8, 12))],
             criadaEm.AddMinutes(33)));
         reuniao.MarcarArquivada(criadaEm.AddMinutes(34));
         return reuniao;
