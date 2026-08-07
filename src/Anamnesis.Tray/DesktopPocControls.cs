@@ -380,6 +380,7 @@ internal sealed class DesktopNavigationButton : Button
         ForeColor = paleta.TextoNavegacao;
         Cursor = Cursors.Hand;
         TabStop = true;
+        AccessibleRole = AccessibleRole.MenuItem;
         SetStyle(
             ControlStyles.AllPaintingInWmPaint |
             ControlStyles.OptimizedDoubleBuffer |
@@ -409,47 +410,77 @@ internal sealed class DesktopNavigationButton : Button
         _hover.Definir(ativo: false);
     }
 
-    protected override void OnResize(EventArgs e)
-    {
-        base.OnResize(e);
-        Region?.Dispose();
-        using var caminho = DesktopPocDrawing.CriarCaminhoArredondado(ClientRectangle, _tokens.Geometria.RaioMedio);
-        Region = new Region(caminho);
-    }
-
     protected override void OnPaint(PaintEventArgs pevent)
     {
+        pevent.Graphics.Clear(_paleta.Navegacao);
         pevent.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-        var area = new Rectangle(1, 1, Math.Max(1, ClientSize.Width - 3), Math.Max(1, ClientSize.Height - 3));
-        using var caminho = DesktopPocDrawing.CriarCaminhoArredondado(area, _tokens.Geometria.RaioMedio);
-        var baseFundo = _selecionado ? _paleta.Selecao : _paleta.Navegacao;
-        var hoverFundo = _selecionado ? _paleta.Superficies.PainelHover : _paleta.Selecao;
-        var fundo = DesktopPocMotion.Misturar(baseFundo, hoverFundo, _hover.Valor);
-        using var pincel = new SolidBrush(fundo);
-        pevent.Graphics.FillPath(pincel, caminho);
+        pevent.Graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
+        var escala = Math.Max(1F, DeviceDpi / 96F);
+        var margemHorizontal = (int)Math.Round(6F * escala);
+        var margemVertical = (int)Math.Round(3F * escala);
+        var area = new Rectangle(
+            margemHorizontal,
+            margemVertical,
+            Math.Max(1, ClientSize.Width - margemHorizontal * 2),
+            Math.Max(1, ClientSize.Height - margemVertical * 2));
+
+        if (_selecionado || _hover.Valor > 0.01D)
+        {
+            using var caminho = DesktopPocDrawing.CriarCaminhoArredondado(
+                area,
+                _tokens.Geometria.RaioPequeno);
+            var fundo = _selecionado
+                ? DesktopPocMotion.Misturar(_paleta.Selecao, _paleta.Superficies.PainelHover, _hover.Valor)
+                : DesktopPocMotion.Misturar(_paleta.Navegacao, _paleta.Selecao, _hover.Valor);
+            using var pincel = new SolidBrush(fundo);
+            pevent.Graphics.FillPath(pincel, caminho);
+        }
 
         if (_selecionado)
         {
-            using var marcador = new Pen(_paleta.Destaque, 3F);
-            pevent.Graphics.DrawLine(marcador, 2F, 12F, 2F, ClientSize.Height - 12F);
-            using var borda = new Pen(DesktopPocMotion.Misturar(_paleta.Borda, _paleta.Destaque, 0.52D), 1F);
-            pevent.Graphics.DrawPath(borda, caminho);
+            using var marcador = new Pen(_paleta.Destaque, Math.Max(3F, 3F * escala))
+            {
+                StartCap = LineCap.Round,
+                EndCap = LineCap.Round
+            };
+            var x = area.Left + Math.Max(1F, escala);
+            pevent.Graphics.DrawLine(
+                marcador,
+                x,
+                area.Top + 9F * escala,
+                x,
+                area.Bottom - 9F * escala);
         }
 
         if (Focused)
         {
-            using var foco = new Pen(_paleta.Superficies.BordaForte, _tokens.Geometria.BordaFoco);
-            pevent.Graphics.DrawPath(foco, caminho);
+            var foco = Rectangle.Inflate(area, -(int)Math.Round(2F * escala), -(int)Math.Round(2F * escala));
+            ControlPaint.DrawFocusRectangle(pevent.Graphics, foco, _paleta.TextoNavegacao, _paleta.Navegacao);
         }
 
         var corIcone = _selecionado ? _paleta.Destaque : _paleta.TextoSecundario;
-        DesenharIcone(pevent.Graphics, new Rectangle(16, (ClientSize.Height - 20) / 2, 20, 20), corIcone);
+        var tamanhoIcone = (int)Math.Round(20F * escala);
+        var esquerdaIcone = (int)Math.Round(18F * escala);
+        DesenharIcone(
+            pevent.Graphics,
+            new Rectangle(
+                esquerdaIcone,
+                (ClientSize.Height - tamanhoIcone) / 2,
+                tamanhoIcone,
+                tamanhoIcone),
+            corIcone);
+
+        var esquerdaTexto = (int)Math.Round(52F * escala);
 
         TextRenderer.DrawText(
             pevent.Graphics,
             Text,
             Font,
-            new Rectangle(48, 0, Math.Max(1, ClientSize.Width - 56), ClientSize.Height),
+            new Rectangle(
+                esquerdaTexto,
+                0,
+                Math.Max(1, ClientSize.Width - esquerdaTexto - (int)Math.Round(12F * escala)),
+                ClientSize.Height),
             _paleta.TextoNavegacao,
             TextFormatFlags.Left |
             TextFormatFlags.VerticalCenter |
@@ -460,53 +491,57 @@ internal sealed class DesktopNavigationButton : Button
     private void DesenharIcone(Graphics graphics, Rectangle area, Color cor)
     {
         graphics.SmoothingMode = SmoothingMode.AntiAlias;
-        using var caneta = new Pen(cor, 1.6F)
+        graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
+        var escalaX = area.Width / 20F;
+        var escalaY = area.Height / 20F;
+        PointF P(float x, float y) => new(area.Left + x * escalaX, area.Top + y * escalaY);
+        float X(float x) => area.Left + x * escalaX;
+        float Y(float y) => area.Top + y * escalaY;
+        using var caneta = new Pen(cor, Math.Max(1.6F, 1.6F * Math.Min(escalaX, escalaY)))
         {
             StartCap = LineCap.Round,
             EndCap = LineCap.Round,
             LineJoin = LineJoin.Round
         };
-        var x = area.X;
-        var y = area.Y;
 
         switch (Icon)
         {
             case DesktopNavigationIcon.Home:
-                graphics.DrawLines(caneta, [new Point(x + 3, y + 9), new Point(x + 10, y + 3), new Point(x + 17, y + 9)]);
-                graphics.DrawRectangle(caneta, x + 5, y + 9, 10, 8);
+                graphics.DrawLines(caneta, [P(3, 9), P(10, 3), P(17, 9)]);
+                graphics.DrawRectangle(caneta, X(5), Y(9), 10 * escalaX, 8 * escalaY);
                 break;
             case DesktopNavigationIcon.Meetings:
-                graphics.DrawRectangle(caneta, x + 3, y + 4, 14, 13);
-                graphics.DrawLine(caneta, x + 3, y + 8, x + 17, y + 8);
-                graphics.DrawLine(caneta, x + 7, y + 2, x + 7, y + 6);
-                graphics.DrawLine(caneta, x + 13, y + 2, x + 13, y + 6);
+                graphics.DrawRectangle(caneta, X(3), Y(4), 14 * escalaX, 13 * escalaY);
+                graphics.DrawLine(caneta, P(3, 8), P(17, 8));
+                graphics.DrawLine(caneta, P(7, 2), P(7, 6));
+                graphics.DrawLine(caneta, P(13, 2), P(13, 6));
                 break;
             case DesktopNavigationIcon.Live:
-                graphics.DrawEllipse(caneta, x + 3, y + 3, 14, 14);
+                graphics.DrawEllipse(caneta, X(3), Y(3), 14 * escalaX, 14 * escalaY);
                 using (var ponto = new SolidBrush(cor))
                 {
-                    graphics.FillEllipse(ponto, x + 8, y + 8, 4, 4);
+                    graphics.FillEllipse(ponto, X(8), Y(8), 4 * escalaX, 4 * escalaY);
                 }
                 break;
             case DesktopNavigationIcon.Tasks:
-                graphics.DrawLines(caneta, [new Point(x + 2, y + 10), new Point(x + 6, y + 14), new Point(x + 12, y + 6)]);
-                graphics.DrawLine(caneta, x + 12, y + 7, x + 18, y + 7);
-                graphics.DrawLine(caneta, x + 12, y + 13, x + 18, y + 13);
+                graphics.DrawLines(caneta, [P(2, 10), P(6, 14), P(12, 6)]);
+                graphics.DrawLine(caneta, P(12, 7), P(18, 7));
+                graphics.DrawLine(caneta, P(12, 13), P(18, 13));
                 break;
             case DesktopNavigationIcon.Activity:
-                graphics.DrawLines(caneta, [new Point(x + 2, y + 13), new Point(x + 6, y + 9), new Point(x + 10, y + 12), new Point(x + 15, y + 5), new Point(x + 18, y + 8)]);
+                graphics.DrawLines(caneta, [P(2, 13), P(6, 9), P(10, 12), P(15, 5), P(18, 8)]);
                 break;
             case DesktopNavigationIcon.Observability:
-                graphics.DrawLines(caneta, [new Point(x + 3, y + 6), new Point(x + 8, y + 10), new Point(x + 3, y + 14)]);
-                graphics.DrawLine(caneta, x + 11, y + 14, x + 17, y + 14);
+                graphics.DrawLines(caneta, [P(3, 6), P(8, 10), P(3, 14)]);
+                graphics.DrawLine(caneta, P(11, 14), P(17, 14));
                 break;
             case DesktopNavigationIcon.Settings:
-                graphics.DrawEllipse(caneta, x + 5, y + 5, 10, 10);
-                graphics.DrawEllipse(caneta, x + 8, y + 8, 4, 4);
-                graphics.DrawLine(caneta, x + 10, y + 1, x + 10, y + 5);
-                graphics.DrawLine(caneta, x + 10, y + 15, x + 10, y + 19);
-                graphics.DrawLine(caneta, x + 1, y + 10, x + 5, y + 10);
-                graphics.DrawLine(caneta, x + 15, y + 10, x + 19, y + 10);
+                graphics.DrawEllipse(caneta, X(5), Y(5), 10 * escalaX, 10 * escalaY);
+                graphics.DrawEllipse(caneta, X(8), Y(8), 4 * escalaX, 4 * escalaY);
+                graphics.DrawLine(caneta, P(10, 1), P(10, 5));
+                graphics.DrawLine(caneta, P(10, 15), P(10, 19));
+                graphics.DrawLine(caneta, P(1, 10), P(5, 10));
+                graphics.DrawLine(caneta, P(15, 10), P(19, 10));
                 break;
         }
     }
@@ -523,6 +558,277 @@ internal sealed class DesktopNavigationButton : Button
     }
 }
 
+internal sealed class DesktopActivityButton : Button
+{
+    private readonly DesktopPocPalette _paleta;
+    private readonly DesktopPocDesignTokens _tokens;
+    private readonly DesktopInteractionAnimator _hover;
+    private readonly Font _fonteTitulo;
+    private readonly Font _fonteDetalhe;
+    private readonly Font _fonteEstado;
+
+    public DesktopActivityButton(
+        DesktopPocPalette paleta,
+        DesktopPocDesignTokens tokens,
+        DesktopPocEffectsPolicy politica,
+        Guid reuniaoId,
+        string titulo,
+        string detalhe,
+        string estado)
+    {
+        _paleta = paleta;
+        _tokens = tokens;
+        _hover = new DesktopInteractionAnimator(this, tokens.Motion, politica.AnimacoesAtivas);
+        _fonteTitulo = new Font(tokens.Tipografia.Interface, 10.5F, FontStyle.Bold, GraphicsUnit.Point);
+        _fonteDetalhe = new Font(tokens.Tipografia.Interface, 8.75F, FontStyle.Regular, GraphicsUnit.Point);
+        _fonteEstado = new Font(tokens.Tipografia.Interface, 8.75F, FontStyle.Bold, GraphicsUnit.Point);
+        ReuniaoId = reuniaoId;
+        Titulo = titulo;
+        Detalhe = detalhe;
+        Estado = estado;
+        Text = titulo;
+        AccessibleRole = AccessibleRole.PushButton;
+        AccessibleName = $"Abrir reunião: {titulo}";
+        AccessibleDescription = $"{estado}. {detalhe}. Pressione Enter ou Espaço para abrir a reunião.";
+        TabStop = true;
+        Cursor = Cursors.Hand;
+        FlatStyle = FlatStyle.Flat;
+        FlatAppearance.BorderSize = 0;
+        UseVisualStyleBackColor = false;
+        BackColor = paleta.Superficies.Canvas;
+        ForeColor = paleta.Texto;
+        DoubleBuffered = true;
+        SetStyle(
+            ControlStyles.AllPaintingInWmPaint |
+            ControlStyles.OptimizedDoubleBuffer |
+            ControlStyles.UserPaint,
+            true);
+    }
+
+    public Guid ReuniaoId { get; }
+
+    public string Titulo { get; }
+
+    public string Detalhe { get; }
+
+    public string Estado { get; }
+
+    protected override void OnMouseEnter(EventArgs e)
+    {
+        base.OnMouseEnter(e);
+        _hover.Definir(ativo: true);
+    }
+
+    protected override void OnMouseLeave(EventArgs e)
+    {
+        base.OnMouseLeave(e);
+        _hover.Definir(ativo: false);
+    }
+
+    protected override void OnGotFocus(EventArgs e)
+    {
+        base.OnGotFocus(e);
+        Invalidate();
+    }
+
+    protected override void OnLostFocus(EventArgs e)
+    {
+        base.OnLostFocus(e);
+        Invalidate();
+    }
+
+    protected override void OnPaint(PaintEventArgs pevent)
+    {
+        pevent.Graphics.Clear(_paleta.Superficies.Canvas);
+        pevent.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+        pevent.Graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
+        var escala = Math.Max(1F, DeviceDpi / 96F);
+        var area = new Rectangle(1, 1, Math.Max(1, ClientSize.Width - 3), Math.Max(1, ClientSize.Height - 3));
+        using var caminho = DesktopPocDrawing.CriarCaminhoArredondado(area, _tokens.Geometria.RaioMedio);
+        var fundo = DesktopPocMotion.Misturar(
+            _paleta.Superficies.Painel,
+            _paleta.Superficies.PainelHover,
+            _hover.Valor);
+        using (var pincel = new SolidBrush(fundo))
+        {
+            pevent.Graphics.FillPath(pincel, caminho);
+        }
+
+        var corEstado = CorDoEstado();
+        using (var borda = new Pen(Focused ? _paleta.Superficies.BordaForte : _paleta.Borda, Focused ? 2F : 1F))
+        {
+            pevent.Graphics.DrawPath(borda, caminho);
+        }
+
+        var x = (int)Math.Round(22F * escala);
+        var larguraDireita = (int)Math.Round(190F * escala);
+        var larguraTexto = Math.Max(120, ClientSize.Width - x - larguraDireita - (int)Math.Round(18F * escala));
+        var topoTitulo = (int)Math.Round(13F * escala);
+        var topoDetalhe = (int)Math.Round(42F * escala);
+        var alturaLinha = (int)Math.Round(24F * escala);
+
+        using (var marcador = new SolidBrush(corEstado))
+        {
+            var tamanho = Math.Max(8, (int)Math.Round(8F * escala));
+            pevent.Graphics.FillEllipse(
+                marcador,
+                (int)Math.Round(8F * escala),
+                topoTitulo + Math.Max(2, (int)Math.Round(3F * escala)),
+                tamanho,
+                tamanho);
+        }
+
+        TextRenderer.DrawText(
+            pevent.Graphics,
+            Titulo,
+            _fonteTitulo,
+            new Rectangle(x, topoTitulo, larguraTexto, alturaLinha),
+            _paleta.Texto,
+            TextFormatFlags.Left | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+        TextRenderer.DrawText(
+            pevent.Graphics,
+            Detalhe,
+            _fonteDetalhe,
+            new Rectangle(x, topoDetalhe, larguraTexto, alturaLinha),
+            _paleta.TextoSecundario,
+            TextFormatFlags.Left | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+
+        var direita = ClientSize.Width - larguraDireita;
+        TextRenderer.DrawText(
+            pevent.Graphics,
+            Estado,
+            _fonteEstado,
+            new Rectangle(direita, topoTitulo, larguraDireita - (int)Math.Round(18F * escala), alturaLinha),
+            corEstado,
+            TextFormatFlags.Right | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+        TextRenderer.DrawText(
+            pevent.Graphics,
+            "Abrir reunião  ›",
+            _fonteDetalhe,
+            new Rectangle(direita, topoDetalhe, larguraDireita - (int)Math.Round(18F * escala), alturaLinha),
+            _paleta.TextoSecundario,
+            TextFormatFlags.Right | TextFormatFlags.NoPrefix);
+    }
+
+    private Color CorDoEstado()
+    {
+        if (Estado.Contains("Falha", StringComparison.OrdinalIgnoreCase))
+        {
+            return _paleta.Perigo;
+        }
+
+        return Estado is "Ata pronta" or "Concluído"
+            ? _paleta.Positivo
+            : _paleta.Destaque;
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _hover.Dispose();
+            _fonteTitulo.Dispose();
+            _fonteDetalhe.Dispose();
+            _fonteEstado.Dispose();
+        }
+
+        base.Dispose(disposing);
+    }
+}
+
+internal sealed class DesktopOperationalSteps : Control
+{
+    private readonly DesktopPocPalette _paleta;
+    private readonly DesktopPocDesignTokens _tokens;
+
+    public DesktopOperationalSteps(DesktopPocPalette paleta, DesktopPocDesignTokens tokens)
+    {
+        _paleta = paleta;
+        _tokens = tokens;
+        Estado = FluxoOperacionalDesktop.Criar(null);
+        DoubleBuffered = true;
+        BackColor = paleta.Superficies.PainelElevado;
+        SetStyle(
+            ControlStyles.AllPaintingInWmPaint |
+            ControlStyles.OptimizedDoubleBuffer |
+            ControlStyles.UserPaint,
+            true);
+        AtualizarAcessibilidade();
+    }
+
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public EstadoFluxoOperacional Estado { get; private set; }
+
+    public void DefinirEstado(EstadoFluxoOperacional estado)
+    {
+        Estado = estado;
+        AtualizarAcessibilidade();
+        Invalidate();
+    }
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        base.OnPaint(e);
+        e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+        var itens = Estado.Itens;
+        if (itens.Count == 0)
+        {
+            return;
+        }
+
+        var larguraCelula = ClientSize.Width / (float)itens.Count;
+        var centroY = 13F;
+        using var fonte = new Font(
+            _tokens.Tipografia.Interface,
+            8F,
+            FontStyle.Regular,
+            GraphicsUnit.Point);
+        for (var indice = 0; indice < itens.Count; indice++)
+        {
+            var item = itens[indice];
+            var centroX = larguraCelula * indice + larguraCelula / 2F;
+            if (indice < itens.Count - 1)
+            {
+                var proximoX = larguraCelula * (indice + 1) + larguraCelula / 2F;
+                using var ligacao = new Pen(
+                    item.Estado == EstadoItemEtapa.Concluida ? _paleta.Positivo : _paleta.Borda,
+                    2F);
+                e.Graphics.DrawLine(ligacao, centroX + 7F, centroY, proximoX - 7F, centroY);
+            }
+
+            var cor = item.Estado switch
+            {
+                EstadoItemEtapa.Concluida => _paleta.Positivo,
+                EstadoItemEtapa.Atual when item.Etapa == EtapaFluxoOperacional.Falha => _paleta.Perigo,
+                EstadoItemEtapa.Atual => _paleta.Destaque,
+                _ => _paleta.Borda
+            };
+            using var preenchimento = new SolidBrush(cor);
+            e.Graphics.FillEllipse(preenchimento, centroX - 6F, centroY - 6F, 12F, 12F);
+            var areaTexto = new RectangleF(
+                larguraCelula * indice + 2F,
+                25F,
+                Math.Max(1F, larguraCelula - 4F),
+                Math.Max(1F, ClientSize.Height - 25F));
+            using var texto = new SolidBrush(
+                item.Estado == EstadoItemEtapa.Pendente ? _paleta.TextoSecundario : _paleta.Texto);
+            using var formato = new StringFormat
+            {
+                Alignment = StringAlignment.Center,
+                LineAlignment = StringAlignment.Near,
+                Trimming = StringTrimming.EllipsisWord
+            };
+            e.Graphics.DrawString(item.Nome, fonte, texto, areaTexto, formato);
+        }
+    }
+
+    private void AtualizarAcessibilidade()
+    {
+        AccessibleName = "Etapas da reunião";
+        AccessibleDescription = $"Etapa atual: {Estado.Itens.Single(item => item.Etapa == Estado.Atual).Nome}.";
+    }
+}
+
 internal sealed class DesktopSignalMeter : Control
 {
     private readonly DesktopPocPalette _paleta;
@@ -532,6 +838,7 @@ internal sealed class DesktopSignalMeter : Control
     private System.Windows.Forms.Timer? _timer;
     private double _valorExibido;
     private int _value;
+    private readonly List<int> _historico = [];
 
     public DesktopSignalMeter(
         DesktopPocPalette paleta,
@@ -560,6 +867,13 @@ internal sealed class DesktopSignalMeter : Control
         set
         {
             _value = Math.Clamp(value, 0, 100);
+            Disponivel = true;
+            AccessibleDescription = $"Nível atual: {_value} por cento.";
+            _historico.Add(_value);
+            if (_historico.Count > 48)
+            {
+                _historico.RemoveAt(0);
+            }
             if (!_animacoesAtivas)
             {
                 _valorExibido = _value;
@@ -575,6 +889,23 @@ internal sealed class DesktopSignalMeter : Control
         }
     }
 
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public bool Disponivel { get; private set; }
+
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public IReadOnlyList<int> Historico => _historico;
+
+    public void DefinirSemLeitura()
+    {
+        Disponivel = false;
+        _value = 0;
+        _valorExibido = 0;
+        _historico.Clear();
+        AccessibleDescription = "Sem leitura de nível disponível.";
+        _timer?.Stop();
+        Invalidate();
+    }
+
     protected override void OnPaint(PaintEventArgs e)
     {
         base.OnPaint(e);
@@ -583,6 +914,18 @@ internal sealed class DesktopSignalMeter : Control
         using var caminho = DesktopPocDrawing.CriarCaminhoArredondado(area, _tokens.Geometria.RaioPequeno);
         using var fundo = new SolidBrush(_paleta.Superficies.PainelElevado);
         e.Graphics.FillPath(fundo, caminho);
+
+        if (!Disponivel)
+        {
+            using var indisponivel = new Pen(_paleta.TextoSecundario, 1.5F)
+            {
+                DashStyle = DashStyle.Dash
+            };
+            e.Graphics.DrawLine(indisponivel, 8, area.Height / 2F, area.Width - 8, area.Height / 2F);
+            using var bordaIndisponivel = new Pen(_paleta.Borda, 1F);
+            e.Graphics.DrawPath(bordaIndisponivel, caminho);
+            return;
+        }
 
         var larguraAtiva = Math.Max(0, (int)Math.Round(area.Width * (_valorExibido / 100D)));
         if (larguraAtiva > 0)
@@ -598,13 +941,23 @@ internal sealed class DesktopSignalMeter : Control
         using var grade = new Pen(
             DesktopPocMotion.Misturar(_paleta.Superficies.PainelElevado, _paleta.Fundo, 0.72D),
             1F);
-        for (var x = 12; x < area.Width; x += 14)
+        for (var x = 42; x < area.Width; x += 48)
         {
             e.Graphics.DrawLine(grade, x, 2, x, area.Height - 2);
         }
 
         using var borda = new Pen(DesktopPocMotion.Misturar(_paleta.Borda, _accentColor, 0.45D), 1F);
         e.Graphics.DrawPath(borda, caminho);
+
+        if (_historico.Count > 1)
+        {
+            var pontos = _historico.Select((valor, indice) => new PointF(
+                indice * area.Width / Math.Max(1F, _historico.Count - 1F),
+                area.Height - 2F - ((area.Height - 4F) * valor / 100F)))
+                .ToArray();
+            using var linha = new Pen(_paleta.Texto, 1.5F);
+            e.Graphics.DrawLines(linha, pontos);
+        }
     }
 
     protected override void Dispose(bool disposing)

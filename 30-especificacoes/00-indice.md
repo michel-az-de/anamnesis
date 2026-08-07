@@ -64,6 +64,7 @@ related: ["[[Especificacoes MOC]]", "[[Protocolo de Agentes]]", "[[Roadmap de Pr
 | SPEK-048 | [[SPEK-048 Inicializacao Concorrente do Journal SQLite]] | concluido | `Infrastructure` |
 | SPEK-049 | [[SPEK-049 Release Canonico do Instalador Windows]] | concluído | `Installer`, `Scripts`, `CI`, `Docs` |
 | SPEK-050 | [[SPEK-050 Fluxo de Processamento Assistido no Tray]] | concluído | `Application`, `Infrastructure`, `Tray` |
+| SPEK-051 | [[SPEK-051 Experiencia Operacional em Tempo Real e Diagnostico Guiado]] | em validação | `Application`, `Infrastructure`, `Tray` |
 
 ## Release oficial atual
 

@@ -17,7 +17,7 @@ public sealed class Reuniao
     }
 
     public Guid Id { get; }
-    public string Titulo { get; }
+    public string Titulo { get; private set; }
     public DateTimeOffset CriadaEm { get; }
     public StatusReuniao Status { get; private set; } = StatusReuniao.Agendada;
     public Gravacao? Gravacao { get; private set; }
@@ -129,6 +129,41 @@ public sealed class Reuniao
         MotivoFalha = null;
         ArquivadaEm = null;
         Status = StatusReuniao.AguardandoProcessamento;
+    }
+
+    public void EditarTitulo(string titulo)
+    {
+        if (string.IsNullOrWhiteSpace(titulo))
+        {
+            throw new ArgumentException("O título da reunião é obrigatório.", nameof(titulo));
+        }
+
+        ExigirNaoExcluida();
+        Titulo = titulo.Trim();
+    }
+
+    public void EditarTranscricao(string texto)
+    {
+        if (string.IsNullOrWhiteSpace(texto))
+        {
+            throw new ArgumentException("A transcrição não pode ficar vazia.", nameof(texto));
+        }
+
+        ExigirNaoExcluida();
+        if (Transcricao is null)
+        {
+            throw new InvalidOperationException("A reunião ainda não possui transcrição editável.");
+        }
+
+        Transcricao = Transcricao with { Texto = texto.Trim() };
+    }
+
+    private void ExigirNaoExcluida()
+    {
+        if (Status == StatusReuniao.Excluida)
+        {
+            throw new InvalidOperationException("Uma reunião excluída não pode ser editada.");
+        }
     }
 
     private void ExigirStatus(StatusReuniao esperado)

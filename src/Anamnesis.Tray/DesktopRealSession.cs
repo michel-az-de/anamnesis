@@ -22,7 +22,9 @@ internal sealed class DesktopRealSession(
     DesktopRuntimeInfo? ambiente = null,
     IEventoOperacionalQuery? eventoQuery = null,
     IJobMetricasQuery? jobMetricasQuery = null,
-    JornalOperacional? journal = null) : IDesktopSession
+    JornalOperacional? journal = null,
+    INivelAudioSource? nivelAudioSource = null,
+    EditarReuniaoHandler? editarReuniao = null) : IDesktopSession
 {
     private IReadOnlyList<ReuniaoDesktopPoc> _reunioes = [];
     private IReadOnlyList<EventoObservabilidadePoc> _eventosOperacionais = [];
@@ -72,6 +74,8 @@ internal sealed class DesktopRealSession(
 
     public DesktopRuntimeInfo? Ambiente => ambiente;
 
+    public NivelAudioLeitura NivelAudio { get; private set; } = NivelAudioLeitura.SemLeitura();
+
     public async Task AtualizarAsync(CancellationToken cancellationToken)
     {
         await _comandos.WaitAsync(cancellationToken);
@@ -82,6 +86,28 @@ internal sealed class DesktopRealSession(
         finally
         {
             _comandos.Release();
+        }
+    }
+
+    public async Task AtualizarNivelAudioAsync(CancellationToken cancellationToken)
+    {
+        if (nivelAudioSource is null)
+        {
+            NivelAudio = NivelAudioLeitura.SemLeitura();
+            return;
+        }
+
+        try
+        {
+            NivelAudio = await nivelAudioSource.LerAsync(cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            NivelAudio = NivelAudioLeitura.SemLeitura("Core Audio não respondeu à leitura local.");
         }
     }
 
@@ -230,6 +256,33 @@ internal sealed class DesktopRealSession(
 
         var job = await jobQuery.ObterMaisRecenteAsync(reuniaoId, cancellationToken);
         return MapearDetalhe(detalhe, job);
+    }
+
+    public async Task SalvarEdicaoAsync(
+        Guid reuniaoId,
+        string titulo,
+        string transcricao,
+        CancellationToken cancellationToken)
+    {
+        if (editarReuniao is null)
+        {
+            throw new NotSupportedException("A edição de reuniões não está configurada.");
+        }
+
+        await _comandos.WaitAsync(cancellationToken);
+        try
+        {
+            await editarReuniao.ExecutarAsync(
+                reuniaoId,
+                titulo,
+                transcricao,
+                cancellationToken);
+            await AtualizarSemTravaAsync(cancellationToken);
+        }
+        finally
+        {
+            _comandos.Release();
+        }
     }
 
     public Task AbrirArquivoAsync(string caminho, CancellationToken cancellationToken) =>
