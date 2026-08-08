@@ -860,6 +860,7 @@ internal sealed class DesktopSelectField : Control
     private readonly DesktopPocPalette _paleta;
     private readonly DesktopPocDesignTokens _tokens;
     private readonly List<string> _opcoes = [];
+    private ContextMenuStrip? _menuOpcoes;
     private int _selectedIndex = -1;
 
     public DesktopSelectField(
@@ -989,11 +990,42 @@ internal sealed class DesktopSelectField : Control
             [new Point(centroX - 4, centroY - 2), new Point(centroX, centroY + 2), new Point(centroX + 4, centroY - 2)]);
     }
 
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            var menu = _menuOpcoes;
+            _menuOpcoes = null;
+            if (menu is not null && !menu.IsDisposed)
+            {
+                menu.Dispose();
+            }
+        }
+
+        base.Dispose(disposing);
+    }
+
     private void MostrarOpcoes()
     {
         if (_opcoes.Count == 0)
         {
             return;
+        }
+
+        var menu = CriarMenuOpcoes();
+        menu.Show(this, new Point(0, Height + 2));
+    }
+
+    internal ContextMenuStrip CriarMenuOpcoes()
+    {
+        if (_menuOpcoes is { IsDisposed: false } menuAnterior)
+        {
+            if (menuAnterior.Visible)
+            {
+                menuAnterior.Close();
+            }
+
+            AgendarDescarteMenu(menuAnterior);
         }
 
         var menu = new ContextMenuStrip
@@ -1022,8 +1054,32 @@ internal sealed class DesktopSelectField : Control
             menu.Items.Add(item);
         }
 
-        menu.Closed += (_, _) => menu.Dispose();
-        menu.Show(this, new Point(0, Height + 2));
+        _menuOpcoes = menu;
+        menu.Closed += (_, _) => AgendarDescarteMenu(menu);
+        return menu;
+    }
+
+    private void AgendarDescarteMenu(ContextMenuStrip menu)
+    {
+        if (menu.IsDisposed || IsDisposed || Disposing || !IsHandleCreated)
+        {
+            return;
+        }
+
+        BeginInvoke((MethodInvoker)(() => DescartarMenu(menu)));
+    }
+
+    private void DescartarMenu(ContextMenuStrip menu)
+    {
+        if (ReferenceEquals(_menuOpcoes, menu))
+        {
+            _menuOpcoes = null;
+        }
+
+        if (!menu.IsDisposed)
+        {
+            menu.Dispose();
+        }
     }
 }
 

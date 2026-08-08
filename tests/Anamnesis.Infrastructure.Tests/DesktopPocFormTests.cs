@@ -295,6 +295,36 @@ public sealed class DesktopPocFormTests
     }
 
     [Fact]
+    public void SelectDeveDescartarMenuSomenteDepoisDeConcluirFechamento()
+    {
+        ExecutarEmSta(() =>
+        {
+            var paleta = DesktopPocPalette.Criar(TemaDesktopPoc.Escuro);
+            using var form = new Form { Size = new Size(480, 320) };
+            using var campo = new DesktopSelectField(
+                paleta,
+                DesktopPocDesignTokens.Padrao,
+                ["Todos", "Alertas"])
+            {
+                Location = new Point(20, 20),
+                Width = 220
+            };
+            form.Controls.Add(campo);
+            form.Show();
+            System.Windows.Forms.Application.DoEvents();
+
+            var menu = campo.CriarMenuOpcoes();
+            menu.Show(campo, new Point(0, campo.Height + 2));
+            System.Windows.Forms.Application.DoEvents();
+            menu.Close();
+
+            Assert.False(menu.IsDisposed);
+            System.Windows.Forms.Application.DoEvents();
+            Assert.True(menu.IsDisposed);
+        });
+    }
+
+    [Fact]
     public void TelaReunioesDeveOrganizarBuscaFiltrosEContagemDeResultados()
     {
         ExecutarEmSta(() =>

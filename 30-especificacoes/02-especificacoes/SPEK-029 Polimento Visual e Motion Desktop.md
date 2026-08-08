@@ -214,3 +214,14 @@ O teste visual da tela inicial mostrou uma ação principal desconectada do cont
 - Green: a captura passou para uma superfície de comando com ação acessível; OBS, Worker e SQLite compartilham uma única superfície; o histórico recente ganhou hierarquia própria sem alterar comandos nem dados reais.
 - Evidências visuais dark: `artifacts/poc-desktop/editorial-evidence/home-before.png` e `artifacts/poc-desktop/editorial-evidence/home-after.png`.
 - Validação Release: 351 testes verdes, sendo 3 de Domain, 61 de Application e 287 de Infrastructure; os 24 testes de `DesktopPocFormTests` também passaram em conjunto.
+
+## Correção do ciclo de vida dos selects 2026-08-08
+
+O uso dos filtros de Observabilidade expôs uma `ObjectDisposedException`: o `ContextMenuStrip` era descartado dentro do próprio evento `Closed`, antes de o WinForms concluir o fechamento nativo.
+
+- O menu de opções não pode ser descartado durante a execução síncrona de `Closed`.
+- O descarte deve ocorrer na próxima passagem da fila da interface e continuar obrigatório ao destruir o `DesktopSelectField`.
+- Abrir, selecionar, fechar e reabrir filtros não pode produzir exceção não tratada.
+- Red: um teste de ciclo de vida exige que o menu permaneça válido ao retornar de `Close` e seja descartado após o processamento da fila WinForms.
+- Green: o select agenda o descarte, mantém uma única referência de menu aberto e encerra o recurso no `Dispose` do controle.
+- Validação Release: 352 testes verdes, sendo 3 de Domain, 61 de Application e 288 de Infrastructure; os 25 testes de `DesktopPocFormTests` passaram em conjunto.
