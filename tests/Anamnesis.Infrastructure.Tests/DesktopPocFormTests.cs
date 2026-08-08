@@ -504,6 +504,71 @@ public sealed class DesktopPocFormTests
         });
     }
 
+    [Fact]
+    public void NavegacaoRapidaComAnimacaoDeveConcluirSomenteNaUltimaPagina()
+    {
+        ExecutarEmSta(() =>
+        {
+            using var form = new DesktopPocForm(
+                TemaDesktopPoc.Escuro,
+                new DesktopPocEffectsPolicy(AnimacoesAtivas: true),
+                new DesktopSessionRealFake());
+            form.Show();
+            System.Windows.Forms.Application.DoEvents();
+
+            EncontrarBotao(form, "Reuniões").PerformClick();
+            EncontrarBotao(form, "Observabilidade").PerformClick();
+
+            var conteudo = Assert.IsType<Panel>(typeof(DesktopPocForm)
+                .GetField("_conteudo", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+                .GetValue(form));
+            AguardarInterface(() =>
+                conteudo.Controls.Count == 1 &&
+                conteudo.Controls[0].Dock == DockStyle.Fill &&
+                EncontrarLabels(conteudo.Controls[0]).Any(label => label.Text == "Observabilidade"));
+
+            var pagina = Assert.Single(conteudo.Controls.Cast<Control>());
+            Assert.Equal(conteudo.DisplayRectangle.Left, pagina.Left);
+            Assert.DoesNotContain(EncontrarLabels(pagina), label => label.Text == "Reuniões");
+        });
+    }
+
+    [Fact]
+    public void NavegacaoLateralDeveReservarFolgaParaPinturaDosCantos()
+    {
+        ExecutarEmSta(() =>
+        {
+            using var form = new DesktopPocForm(TemaDesktopPoc.Escuro);
+            form.Show();
+            System.Windows.Forms.Application.DoEvents();
+
+            Assert.All(
+                EncontrarControles(form).OfType<DesktopNavigationButton>(),
+                botao => Assert.True(
+                    botao.Right <= botao.Parent!.ClientSize.Width - 2,
+                    $"'{botao.Text}' termina em {botao.Right}px para {botao.Parent.ClientSize.Width}px disponíveis."));
+        });
+    }
+
+    [Fact]
+    public void EstadoDeAtencaoNaoDeveReutilizarFundoVerdeDeSucesso()
+    {
+        ExecutarEmSta(() =>
+        {
+            var sessao = new DesktopSessionRealFake(incluirFalha: true);
+            var paleta = DesktopPocPalette.Criar(TemaDesktopPoc.Escuro);
+            using var form = new DesktopPocForm(
+                TemaDesktopPoc.Escuro,
+                new DesktopPocEffectsPolicy(AnimacoesAtivas: false),
+                sessao);
+            form.Show();
+            AguardarInterface(() => sessao.Atualizacoes > 0);
+
+            var estado = EncontrarLabels(form).Single(label => label.Text == "Ação necessária");
+            Assert.NotEqual(paleta.FundoPositivo, estado.BackColor);
+        });
+    }
+
     private static Button EncontrarBotao(Control raiz, string texto) =>
         EncontrarControles(raiz)
             .OfType<Button>()
@@ -591,10 +656,33 @@ public sealed class DesktopPocFormTests
 
     private sealed class DesktopSessionRealFake : IDesktopSession
     {
+        public DesktopSessionRealFake(bool incluirFalha = false)
+        {
+            Reunioes = incluirFalha
+                ?
+                [
+                    new ReuniaoDesktopPoc
+                    {
+                        Id = Guid.NewGuid(),
+                        Titulo = "Reunião com falha",
+                        Data = "Agora",
+                        Plataforma = "Captura OBS",
+                        Duracao = "00:01:00",
+                        Status = "Falha",
+                        Resumo = "Falha pendente.",
+                        PontosPrincipais = [],
+                        Transcricao = [],
+                        Decisoes = [],
+                        Tarefas = []
+                    }
+                ]
+                : [];
+        }
+
         public bool ModoDemonstracao => false;
         public EtapaDesktopPoc Etapa => EtapaDesktopPoc.Pronto;
         public TimeSpan DuracaoGravacao => TimeSpan.Zero;
-        public IReadOnlyList<ReuniaoDesktopPoc> Reunioes => [];
+        public IReadOnlyList<ReuniaoDesktopPoc> Reunioes { get; }
         public IReadOnlyList<EventoObservabilidadePoc> EventosOperacionais { get; } =
         [
             new EventoObservabilidadePoc(

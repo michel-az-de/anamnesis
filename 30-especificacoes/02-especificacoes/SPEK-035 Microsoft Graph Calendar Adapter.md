@@ -65,7 +65,7 @@ Implementar o provider Microsoft da SPEK-033 para listar ocorrencias do calendar
 
 ## Decisoes pendentes
 
-- Aprovar o ADR da SPEK-033 e a dependencia MSAL.NET antes do codigo.
+- [x] Aprovar o ADR da SPEK-033 e a dependencia MSAL.NET antes do codigo. ([[ADR-019 OAuth Desktop e Cache Protegido para Agendas]])
 - Validar WAM em Windows 10 e 11 e definir fallback para navegador do sistema.
 - Confirmar em conta pessoal e corporativa quais dados chegam com `Calendars.ReadBasic`.
 - Definir tipos de conta, tenant suportado e fallback WAM ou navegador a partir da POC de autenticacao.

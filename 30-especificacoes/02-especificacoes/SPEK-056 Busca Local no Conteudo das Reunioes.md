@@ -53,4 +53,4 @@ Transformar o historico em memoria recuperavel, permitindo localizar uma reuniao
 - Green: `SqliteReuniaoQuery` pesquisa cinco fontes locais com filtro literal, estado, periodo, limite e ordem preservados.
 - Desktop: espera cancelavel de 280 ms, trecho destacado e abertura direta da aba correspondente.
 - Evidencia visual: `artifacts/evidencias/SPEK-056/busca-conteudo.png`.
-- Validacao final: 324 testes Release verdes no conjunto do produto.
+- Validacao final: 327 testes Release verdes no conjunto do produto.

@@ -55,4 +55,4 @@ Permitir que uma ata concluida vire um documento compartilhavel sem depender de 
 - Interface: a aba Arquivos oferece PDF, DOCX e publicacao no Obsidian.
 - Evidencias: `artifacts/evidencias/SPEK-057/ata.pdf`, `ata.docx` e `desktop-exportacao.png`.
 - Renderizacao: PDF validado pelo Poppler; DOCX renderizado pelo Word local em modo invisivel porque LibreOffice nao estava instalado; todas as paginas foram inspecionadas.
-- Validacao final: 324 testes Release verdes no conjunto do produto.
+- Validacao final: 327 testes Release verdes no conjunto do produto.

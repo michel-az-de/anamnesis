@@ -66,7 +66,7 @@ Implementar o provider Google da SPEK-033 para listar eventos do calendario prin
 
 ## Decisoes pendentes
 
-- Aprovar o ADR da SPEK-033 e registrar qualquer biblioteca OAuth nova antes do codigo.
+- [x] Aprovar o ADR da SPEK-033 e registrar qualquer biblioteca OAuth nova antes do codigo. ([[ADR-019 OAuth Desktop e Cache Protegido para Agendas]])
 - Validar exigencias de verificacao OAuth para distribuicao publica do aplicativo.
 - Comparar os escopos `calendar.events.owned.readonly` e `calendar.events.readonly` com convites recebidos no calendario principal.
 - Revalidar cotas e politicas oficiais no inicio da implementacao.

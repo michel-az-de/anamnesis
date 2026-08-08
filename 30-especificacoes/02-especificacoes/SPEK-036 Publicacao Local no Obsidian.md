@@ -92,4 +92,4 @@ flowchart LR
 - A nota e idempotente, preserva edicao manual e remove embeds remotos e HTML ativo.
 - A interface exige confirmacao adicional para caminhos possivelmente sincronizados.
 - Seis testes cobrem publicacao, idempotencia, traversal, vault invalido, reparse point tardio e isolamento arquitetural.
-- Validacao final: 324 testes Release verdes no conjunto do produto.
+- Validacao final: 327 testes Release verdes no conjunto do produto.

@@ -81,6 +81,6 @@ Criar o contrato comum e o cache local que permitem conectar uma ou mais contas 
 
 ## Decisoes pendentes
 
-- Aprovar ADR de OAuth desktop, armazenamento protegido e polling antes do codigo.
+- [x] Aprovar ADR de OAuth desktop, cache protegido e polling antes do código. ([[ADR-019 OAuth Desktop e Cache Protegido para Agendas]])
 - Escolher a fronteira minima entre `AgendaAdapter`, `AgendaSyncService` e cache local.
 - Definir a janela inicial depois de medir o uso, com proposta de 7 dias passados e 30 futuros.

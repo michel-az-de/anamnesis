@@ -4,7 +4,7 @@ aliases: [SPEK-029, Polimento Visual Desktop, Command Deck]
 tags: [especificacao, desktop, design-system, motion, windows, pos-alpha]
 type: spek
 created: 2026-08-05
-updated: 2026-08-06
+updated: 2026-08-07
 status: completed
 summary: Revisão visual sólida e precisa da POC para uma experiência desktop premium, sem transparências ou decoração excessiva.
 related: ["[[Status Alpha]]", "[[Design System Desktop]]", "[[SPEK-027 Desktop Windows para Estado Visivel]]", "[[SPEK-028 Console Local de Observabilidade]]"]
@@ -34,6 +34,9 @@ Transformar a POC desktop em um `Command Deck` premium, sólido, preciso e recon
 - Cartões usam contraste entre planos, borda discreta e raio contido. Não usam brilho, gradiente ou sombra pesada.
 - Botões principais, secundários, perigosos e itens de navegação possuem estados default, hover, pressionado, selecionado, foco e desabilitado.
 - A navegação usa transição espacial curta e direta, sem atrasar a interação.
+- Um novo comando de navegação conclui a transição anterior antes de iniciar outra; páginas nunca ficam sobrepostas, deslocadas ou presas fora do destino.
+- Itens laterais mantêm folga mínima para que cantos e bordas não sejam recortados pelo contêiner.
+- Estados globais de sucesso, processamento e atenção usam fundo e texto semanticamente coerentes.
 - O canvas não possui animação contínua.
 - O aplicativo respeita `SPI_GETCLIENTAREAANIMATION`.
 - Motion usa durações Fluent de 83 ms, 167 ms e 250 ms com curva de desaceleração.
@@ -80,6 +83,9 @@ hover ou clique -> mudança precisa de cor/borda -> transição espacial -> cont
 - [x] Inputs, selects e toggles não exibem aparência WinForms padrão.
 - [x] A troca de páginas possui transição curta quando motion estiver habilitado.
 - [x] A troca de páginas é imediata quando motion estiver desabilitado.
+- [x] Cliques consecutivos durante motion terminam com somente a última página visível, preenchendo todo o canvas.
+- [x] A navegação lateral não exibe pixels ou bordas recortadas no lado direito.
+- [x] O estado `Ação necessária` não reutiliza o fundo verde de sucesso.
 - [x] O DWM mantém tema e cantos, com backdrop desativado.
 - [x] Dark e light mode permanecem legíveis em 1280 x 720.
 - [x] Teclado, foco e acessibilidade continuam funcionais.
@@ -149,3 +155,10 @@ O feedback visual de 2026-08-05 reprovou a direção translúcida por parecer de
 
 - Avaliar a migração para WinUI 3 depois que a linguagem visual e os fluxos reais estiverem validados.
 - Definir na SPEK-030 a conexão da interface com reuniões, jobs, eventos e artefatos reais.
+
+## Correção de regressão 2026-08-07
+
+- Red: três testes reproduziram páginas sobrepostas em navegação rápida, pintura recortada na lateral e fundo verde em estado de atenção.
+- Green: uma única transição de página fica ativa; novo clique conclui a anterior antes de iniciar a próxima.
+- A largura dos itens laterais reserva dois pixels para pintura dos cantos e o estado global escolhe fundo semântico.
+- Validação isolada: 327 testes Release verdes, sem incluir as alterações de agenda ainda em andamento no checkout principal.

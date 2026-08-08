@@ -29,7 +29,7 @@ Abra esta pasta no Obsidian e comece por `00-home.md`.
 
 ## Status da alpha
 
-O escopo ponderado da alpha e os fluxos E2E hermético e real estão em **100%**. A suíte Release possui **324 testes verdes**. A versão canônica declarada em [`release/versao.json`](release/versao.json) possui Desktop real, ícone próprio, menu na bandeja, instância única, Worker interno e instalador por usuário validado pelo smoke em `windows-2025` e pela release imutável [`v0.2.0-beta.6`](https://github.com/michel-az-de/anamnesis/releases/tag/v0.2.0-beta.6). Consulte o [painel de alpha](10-painel/Status%20Alpha.md) para evidências e limitações atuais.
+O escopo ponderado da alpha e os fluxos E2E hermético e real estão em **100%**. A suíte Release possui **327 testes verdes**. A versão canônica declarada em [`release/versao.json`](release/versao.json) possui Desktop real, ícone próprio, menu na bandeja, instância única, Worker interno e instalador por usuário validado pelo smoke em `windows-2025` e pela release imutável [`v0.2.0-beta.6`](https://github.com/michel-az-de/anamnesis/releases/tag/v0.2.0-beta.6). Consulte o [painel de alpha](10-painel/Status%20Alpha.md) para evidências e limitações atuais.
 
 ## Instalar no Windows
 

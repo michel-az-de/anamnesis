@@ -26,6 +26,8 @@ internal sealed class DesktopPocForm : Form
     private readonly System.Windows.Forms.Timer _timerProcessamento = new() { Interval = 2800 };
     private readonly System.Windows.Forms.Timer _timerPolling = new() { Interval = 2000 };
     private readonly CancellationTokenSource _lifetime = new();
+    private System.Windows.Forms.Timer? _timerTransicaoPagina;
+    private Control? _paginaDestinoTransicao;
     private string _paginaAtual = "inicio";
     private Guid? _reuniaoDetalheId;
     private Guid? _reuniaoAcompanhadaId;
@@ -269,9 +271,9 @@ internal sealed class DesktopPocForm : Form
         var botao = new DesktopNavigationButton(_paleta, _tokens, _politicaVisual, icon)
         {
             Text = texto,
-            Width = 176,
+            Width = 174,
             Height = 42,
-            Margin = new Padding(0, 0, 0, 4),
+            Margin = new Padding(0, 0, 2, 4),
             Font = new Font(_tokens.Tipografia.Interface, 9.5F, FontStyle.Regular, GraphicsUnit.Point)
         };
         botao.Click += (_, _) => Navegar(pagina);
@@ -281,6 +283,7 @@ internal sealed class DesktopPocForm : Form
 
     private void Navegar(string pagina, string? filtroObservabilidade = null)
     {
+        ConcluirTransicaoPagina();
         _versaoNavegacao++;
         _paginaAtual = pagina;
         _filtroObservabilidade = pagina == "observabilidade" ? filtroObservabilidade : null;
@@ -333,22 +336,20 @@ internal sealed class DesktopPocForm : Form
 
             var relogio = Stopwatch.StartNew();
             var timer = new System.Windows.Forms.Timer { Interval = 15 };
-            var versao = _versaoNavegacao;
+            _timerTransicaoPagina = timer;
+            _paginaDestinoTransicao = novaPagina;
             var deslocamento = _tokens.Motion.DeslocamentoPagina;
 
             void Encerrar()
             {
+                if (ReferenceEquals(_timerTransicaoPagina, timer))
+                {
+                    ConcluirTransicaoPagina();
+                    return;
+                }
+
                 timer.Stop();
                 timer.Dispose();
-                if (_versaoNavegacao == versao && paginaAnterior != null && !paginaAnterior.IsDisposed)
-                {
-                    _conteudo.Controls.Remove(paginaAnterior);
-                    paginaAnterior.Dispose();
-                }
-                if (novaPagina != null && !novaPagina.IsDisposed)
-                {
-                    novaPagina.Dock = DockStyle.Fill;
-                }
             }
 
             timer.Tick += (_, _) =>
@@ -375,8 +376,6 @@ internal sealed class DesktopPocForm : Form
                 novaPagina.Left = largura - atual;
             };
 
-            paginaAnterior.Disposed += (_, _) => { if (timer.Enabled) { timer.Stop(); timer.Dispose(); } };
-            novaPagina.Disposed += (_, _) => { if (timer.Enabled) { timer.Stop(); timer.Dispose(); } };
             timer.Start();
         }
         else
@@ -809,6 +808,35 @@ internal sealed class DesktopPocForm : Form
                 exception,
                 "abrir_artefato");
         }
+    }
+
+    private void ConcluirTransicaoPagina()
+    {
+        var timer = _timerTransicaoPagina;
+        var destino = _paginaDestinoTransicao;
+        _timerTransicaoPagina = null;
+        _paginaDestinoTransicao = null;
+
+        timer?.Stop();
+        timer?.Dispose();
+
+        if (destino is null || destino.IsDisposed)
+        {
+            return;
+        }
+
+        foreach (var controle in _conteudo.Controls.Cast<Control>()
+                     .Where(controle => !ReferenceEquals(controle, destino))
+                     .ToArray())
+        {
+            _conteudo.Controls.Remove(controle);
+            controle.Dispose();
+        }
+
+        destino.Dock = DockStyle.Fill;
+        destino.Location = Point.Empty;
+        destino.BringToFront();
+        _conteudo.PerformLayout();
     }
 
     private async Task SolicitarExportacaoAtaAsync(
@@ -2170,8 +2198,7 @@ internal sealed class DesktopPocForm : Form
 
             _timerProcessamento.Stop();
             _timerGravacao.Start();
-            _estadoGlobal.Text = "Gravando";
-            _estadoGlobal.ForeColor = _paleta.Perigo;
+            DefinirEstadoGlobal("Gravando", _paleta.Perigo, FundoEstadoAtencao());
             Navegar("ao-vivo");
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -2231,8 +2258,10 @@ internal sealed class DesktopPocForm : Form
             }
 
             AtualizarReuniaoAcompanhada();
-            _estadoGlobal.Text = "Processando localmente";
-            _estadoGlobal.ForeColor = _paleta.Destaque;
+            DefinirEstadoGlobal(
+                "Processando localmente",
+                _paleta.Destaque,
+                _paleta.Superficies.DestaqueSuave);
             Navegar("atividade");
             if (_sessao.ModoDemonstracao)
             {
@@ -2247,8 +2276,10 @@ internal sealed class DesktopPocForm : Form
             }
 
             _timerGravacao.Stop();
-            _estadoGlobal.Text = "Processamento pendente";
-            _estadoGlobal.ForeColor = _paleta.Destaque;
+            DefinirEstadoGlobal(
+                "Processamento pendente",
+                _paleta.Destaque,
+                _paleta.Superficies.DestaqueSuave);
             AtualizarReuniaoAcompanhada();
             Navegar("atividade");
             MostrarFalhaSegura(
@@ -2280,8 +2311,7 @@ internal sealed class DesktopPocForm : Form
         {
             _observabilidade.RegistrarConclusaoProcessamento();
         }
-        _estadoGlobal.Text = "Tudo funcionando";
-        _estadoGlobal.ForeColor = _paleta.Positivo;
+        DefinirEstadoGlobal("Tudo funcionando", _paleta.Positivo, _paleta.FundoPositivo);
         AtualizarReuniaoAcompanhada();
         AtualizarAcompanhamentoProcessamento();
         _atualizarConsoleObservabilidade?.Invoke();
@@ -2358,9 +2388,11 @@ internal sealed class DesktopPocForm : Form
         }
         catch (Exception exception)
         {
-            _estadoGlobal.Text = "Ação necessária";
-            _estadoGlobal.ForeColor = _paleta.Perigo;
-            _estadoGlobal.AccessibleDescription = exception.Message;
+            DefinirEstadoGlobal(
+                "Ação necessária",
+                _paleta.Perigo,
+                FundoEstadoAtencao(),
+                exception.Message);
             await _sessao.RegistrarFalhaOperacionalAsync(
                 "atualizar_desktop",
                 exception,
@@ -2376,26 +2408,47 @@ internal sealed class DesktopPocForm : Form
     {
         if (_sessao.RecuperacaoPendente)
         {
-            _estadoGlobal.Text = "Recuperação pendente";
-            _estadoGlobal.ForeColor = _paleta.Destaque;
-            _estadoGlobal.AccessibleDescription =
-                "Uma gravação anterior exige que você escolha encerrar ou manter.";
+            DefinirEstadoGlobal(
+                "Recuperação pendente",
+                _paleta.Destaque,
+                _paleta.Superficies.DestaqueSuave,
+                "Uma gravação anterior exige que você escolha encerrar ou manter.");
             return;
         }
 
         if (_sessao.Reunioes.Any(reuniao => string.Equals(reuniao.Status, "Falha", StringComparison.Ordinal)))
         {
-            _estadoGlobal.Text = "Ação necessária";
-            _estadoGlobal.ForeColor = _paleta.Perigo;
+            DefinirEstadoGlobal("Ação necessária", _paleta.Perigo, FundoEstadoAtencao());
             return;
         }
 
-        (_estadoGlobal.Text, _estadoGlobal.ForeColor) = _sessao.Etapa switch
+        var (texto, corTexto, corFundo) = _sessao.Etapa switch
         {
-            EtapaDesktopPoc.Gravando => ("Gravando", _paleta.Perigo),
-            EtapaDesktopPoc.Processando => ("Processando localmente", _paleta.Destaque),
-            _ => ("Tudo funcionando", _paleta.Positivo)
+            EtapaDesktopPoc.Gravando => ("Gravando", _paleta.Perigo, FundoEstadoAtencao()),
+            EtapaDesktopPoc.Processando => (
+                "Processando localmente",
+                _paleta.Destaque,
+                _paleta.Superficies.DestaqueSuave),
+            _ => ("Tudo funcionando", _paleta.Positivo, _paleta.FundoPositivo)
         };
+        DefinirEstadoGlobal(texto, corTexto, corFundo);
+    }
+
+    private Color FundoEstadoAtencao() => DesktopPocMotion.Misturar(
+        _paleta.Superficies.Painel,
+        _paleta.Perigo,
+        _tema == TemaDesktopPoc.Escuro ? 0.24D : 0.12D);
+
+    private void DefinirEstadoGlobal(
+        string texto,
+        Color corTexto,
+        Color corFundo,
+        string? descricaoAcessivel = null)
+    {
+        _estadoGlobal.Text = texto;
+        _estadoGlobal.ForeColor = corTexto;
+        _estadoGlobal.BackColor = corFundo;
+        _estadoGlobal.AccessibleDescription = descricaoAcessivel;
     }
 
     private void MostrarFalhaSegura(
@@ -2409,8 +2462,7 @@ internal sealed class DesktopPocForm : Form
             return;
         }
 
-        _estadoGlobal.Text = "Ação necessária";
-        _estadoGlobal.ForeColor = _paleta.Perigo;
+        DefinirEstadoGlobal("Ação necessária", _paleta.Perigo, FundoEstadoAtencao());
         if (!_sessao.ModoDemonstracao && exception is not null)
         {
             _ = _sessao.RegistrarFalhaOperacionalAsync(
