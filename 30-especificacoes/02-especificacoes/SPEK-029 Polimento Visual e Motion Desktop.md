@@ -199,3 +199,18 @@ O teste visual da listagem real mostrou filtros fragmentados, um vazio central s
 - Evidências visuais dark: `artifacts/poc-desktop/editorial-evidence/meetings-before.png` e `artifacts/poc-desktop/editorial-evidence/meetings-after.png`.
 - Validação Release: build com 0 avisos e 0 erros; 341 testes verdes, sendo 3 de Domain, 61 de Application e 277 de Infrastructure.
 - Prévia instalada: `0.2.0-beta.13-ux-preview.1`, com hash do binário instalado igual ao payload, SQLite íntegro, 25 reuniões e 23 jobs preservados.
+
+## Revisão editorial da tela Início 2026-08-08
+
+O teste visual da tela inicial mostrou uma ação principal desconectada do contexto, três cartões técnicos com o mesmo peso e uma grande área vazia. A página funcionava, mas não comunicava com clareza o próximo passo do usuário.
+
+- A captura local ocupa uma única superfície de comando, com estado honesto, explicação curta e uma ação dominante.
+- Recuperação pendente, gravação ativa e prontidão mantêm textos e destinos compatíveis com o estado real da sessão.
+- OBS, Worker e SQLite formam uma única área contínua de prontidão, sem cartões técnicos concorrentes.
+- Reuniões recentes permanecem acessíveis abaixo do comando principal, com acesso direto ao histórico completo.
+- A hierarquia usa os contextos `CAPTURA LOCAL`, `PRONTIDÃO DO SISTEMA` e `REUNIÕES RECENTES` para orientar a leitura.
+- Tema claro/escuro, foco visível, teclado e largura útil em 1280 x 720 continuam obrigatórios.
+- Red: o teste de interface reprovou a ausência dos contextos editoriais, antes de alcançar a ação sem nome acessível e os estados técnicos fragmentados em cartões independentes.
+- Green: a captura passou para uma superfície de comando com ação acessível; OBS, Worker e SQLite compartilham uma única superfície; o histórico recente ganhou hierarquia própria sem alterar comandos nem dados reais.
+- Evidências visuais dark: `artifacts/poc-desktop/editorial-evidence/home-before.png` e `artifacts/poc-desktop/editorial-evidence/home-after.png`.
+- Validação Release: 351 testes verdes, sendo 3 de Domain, 61 de Application e 287 de Infrastructure; os 24 testes de `DesktopPocFormTests` também passaram em conjunto.

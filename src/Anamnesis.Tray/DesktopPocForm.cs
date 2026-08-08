@@ -380,46 +380,268 @@ internal sealed class DesktopPocForm : Form
                 }
             },
             recuperacao || gravando ? DesktopActionIcon.Live : DesktopActionIcon.Record);
+        iniciar.AccessibleName = textoAcao;
+        iniciar.AccessibleDescription = recuperacao
+            ? "Abre a revisão segura da gravação anterior"
+            : gravando
+                ? "Abre o acompanhamento da gravação em andamento"
+                : "Inicia uma nova gravação local";
+        iniciar.MinimumSize = new Size(190, 46);
+        iniciar.Height = 46;
+
         var pagina = CriarPagina(
-            "Bom dia, Felipe",
-            recuperacao
-                ? "Uma gravação anterior aguarda sua decisão."
-                : gravando
-                    ? "A captura atual permanece visível e pode ser encerrada a qualquer momento."
-                    : "Pronto para registrar sua próxima reunião.",
-            iniciar,
+            "Início",
+            "Visão geral da captura, dos serviços locais e das reuniões recentes.",
+            null,
             out var corpo);
 
-        var status = new TableLayoutPanel
+        var comando = CriarComandoCapturaInicio(iniciar, recuperacao, gravando);
+        var grade = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 2,
+            RowCount = 1,
+            BackColor = _paleta.Superficies.Canvas,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty
+        };
+        grade.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 68F));
+        grade.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 32F));
+        grade.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+
+        var historico = new Panel
+        {
+            Dock = DockStyle.Fill,
+            BackColor = _paleta.Superficies.Canvas,
+            Margin = Padding.Empty
+        };
+        var cabecalhoHistorico = CriarCabecalhoInicio(
+            "REUNIÕES RECENTES",
+            "Últimos registros locais",
+            "Ver histórico",
+            (_, _) => Navegar("reunioes"));
+        var lista = CriarListaReunioes(_sessao.Reunioes.Take(3));
+        historico.Controls.Add(lista);
+        historico.Controls.Add(cabecalhoHistorico);
+
+        var colunaProntidao = new Panel
+        {
+            Dock = DockStyle.Fill,
+            BackColor = _paleta.Superficies.Canvas,
+            Margin = Padding.Empty,
+            Padding = new Padding(18, 0, 0, 0)
+        };
+        colunaProntidao.Controls.Add(CriarProntidaoInicio());
+
+        grade.Controls.Add(historico, 0, 0);
+        grade.Controls.Add(colunaProntidao, 1, 0);
+
+        corpo.Controls.Add(grade);
+        corpo.Controls.Add(new Panel
         {
             Dock = DockStyle.Top,
-            Height = 102,
-            ColumnCount = 3,
-            Padding = new Padding(0, 0, 0, 16)
-        };
-        status.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.333F));
-        status.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.333F));
-        status.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.334F));
-        if (_sessao.ModoDemonstracao)
-        {
-            status.Controls.Add(CriarCartaoStatus("OBS", "Pronto", "Captura universal"), 0, 0);
-            status.Controls.Add(CriarCartaoStatus("Docker e Whisper", "Prontos", "Transcrição local"), 1, 0);
-            status.Controls.Add(CriarCartaoStatus("Codex CLI", "Autenticado", "Ata estruturada"), 2, 0);
-        }
-        else
-        {
-            status.Controls.Add(CriarCartaoStatus("OBS", "Configurado", "Comando real pelo caso de uso"), 0, 0);
-            status.Controls.Add(CriarCartaoStatus("Worker", "Local", "Processamento assíncrono"), 1, 0);
-            status.Controls.Add(CriarCartaoStatus("SQLite", "Ativo", "Histórico persistido"), 2, 0);
-        }
-
-        var tituloLista = CriarCabecalhoSecao("Reuniões recentes", "Ver todas", (_, _) => Navegar("reunioes"));
-        var lista = CriarListaReunioes(_sessao.Reunioes.Take(3));
-
-        corpo.Controls.Add(lista);
-        corpo.Controls.Add(tituloLista);
-        corpo.Controls.Add(status);
+            Height = 18,
+            BackColor = _paleta.Superficies.Canvas
+        });
+        corpo.Controls.Add(comando);
         return pagina;
+    }
+
+    private DesktopSurfacePanel CriarComandoCapturaInicio(
+        DesktopActionButton acao,
+        bool recuperacao,
+        bool gravando)
+    {
+        var titulo = recuperacao
+            ? "Uma gravação anterior precisa de revisão"
+            : gravando
+                ? "Gravação em andamento"
+                : "Pronto para sua próxima reunião";
+        var descricao = recuperacao
+            ? "Revise o arquivo preservado antes de iniciar uma nova captura."
+            : gravando
+                ? "A captura atual está visível e pode ser encerrada com segurança."
+                : "Áudio do sistema e microfone serão registrados localmente pelo OBS.";
+        var estado = recuperacao ? "Ação necessária" : gravando ? "Gravando" : "Tudo pronto";
+
+        var comando = new DesktopSurfacePanel(
+            _paleta,
+            _tokens,
+            _politicaVisual,
+            DesktopSurfaceVariant.Elevated)
+        {
+            Dock = DockStyle.Top,
+            Height = 154,
+            CornerRadius = _tokens.Geometria.RaioMedio,
+            AccentColor = recuperacao ? _paleta.Destaque : gravando ? _paleta.Destaque : _paleta.Positivo,
+            AccessibleRole = AccessibleRole.Grouping,
+            AccessibleName = "Comando de captura local",
+            AccessibleDescription = descricao
+        };
+        var contexto = CriarLabel(
+            "CAPTURA LOCAL",
+            8.5F,
+            _paleta.Destaque,
+            new Point(24, 20),
+            FontStyle.Bold);
+        var tituloLabel = CriarLabel(
+            titulo,
+            17F,
+            _paleta.Texto,
+            new Point(24, 46),
+            FontStyle.Bold);
+        var descricaoLabel = CriarLabel(
+            descricao,
+            9.5F,
+            _paleta.TextoSecundario,
+            new Point(25, 81));
+        tituloLabel.AutoEllipsis = true;
+        descricaoLabel.AutoEllipsis = true;
+        tituloLabel.Size = new Size(560, 28);
+        descricaoLabel.Size = new Size(590, 24);
+
+        var badge = new DesktopStatusBadge(_paleta, _tokens, estado)
+        {
+            Location = new Point(24, 111)
+        };
+        acao.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        acao.Location = new Point(comando.Width - acao.Width - 24, 55);
+        comando.Resize += (_, _) =>
+        {
+            acao.Left = comando.ClientSize.Width - acao.Width - 24;
+            var larguraTexto = Math.Max(240, acao.Left - 48);
+            tituloLabel.Width = larguraTexto;
+            descricaoLabel.Width = larguraTexto;
+        };
+
+        comando.Controls.Add(acao);
+        comando.Controls.Add(badge);
+        comando.Controls.Add(descricaoLabel);
+        comando.Controls.Add(tituloLabel);
+        comando.Controls.Add(contexto);
+        return comando;
+    }
+
+    private DesktopSurfacePanel CriarProntidaoInicio()
+    {
+        var itens = _sessao.ModoDemonstracao
+            ? new[]
+            {
+                ("OBS", "Pronto", "Captura universal"),
+                ("Docker e Whisper", "Prontos", "Transcrição local"),
+                ("Codex CLI", "Autenticado", "Ata estruturada")
+            }
+            : new[]
+            {
+                ("OBS", "Configurado", "Captura local"),
+                ("Worker", "Local", "Processamento assíncrono"),
+                ("SQLite", "Ativo", "Histórico persistido")
+            };
+
+        var superficie = new DesktopSurfacePanel(
+            _paleta,
+            _tokens,
+            _politicaVisual,
+            DesktopSurfaceVariant.Base)
+        {
+            Dock = DockStyle.Top,
+            Height = 244,
+            CornerRadius = _tokens.Geometria.RaioMedio,
+            Padding = new Padding(20, 18, 20, 14),
+            AccessibleRole = AccessibleRole.Grouping,
+            AccessibleName = "Prontidão do sistema"
+        };
+        var grade = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 5,
+            BackColor = _paleta.Superficies.Painel,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty
+        };
+        grade.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        grade.RowStyles.Add(new RowStyle(SizeType.Absolute, 24F));
+        grade.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
+        grade.RowStyles.Add(new RowStyle(SizeType.Percent, 33.333F));
+        grade.RowStyles.Add(new RowStyle(SizeType.Percent, 33.333F));
+        grade.RowStyles.Add(new RowStyle(SizeType.Percent, 33.334F));
+
+        grade.Controls.Add(new Label
+        {
+            Text = "PRONTIDÃO DO SISTEMA",
+            Dock = DockStyle.Fill,
+            ForeColor = _paleta.Destaque,
+            Font = new Font(_tokens.Tipografia.Interface, 8.5F, FontStyle.Bold, GraphicsUnit.Point),
+            TextAlign = ContentAlignment.MiddleLeft
+        }, 0, 0);
+        grade.Controls.Add(new Label
+        {
+            Text = "Serviços essenciais para o fluxo local",
+            Dock = DockStyle.Fill,
+            ForeColor = _paleta.TextoSecundario,
+            Font = new Font(_tokens.Tipografia.Interface, 9F, FontStyle.Regular, GraphicsUnit.Point),
+            TextAlign = ContentAlignment.TopLeft
+        }, 0, 1);
+
+        for (var indice = 0; indice < itens.Length; indice++)
+        {
+            grade.Controls.Add(
+                CriarLinhaProntidaoInicio(itens[indice].Item1, itens[indice].Item2, itens[indice].Item3),
+                0,
+                indice + 2);
+        }
+
+        superficie.Controls.Add(grade);
+        return superficie;
+    }
+
+    private Panel CriarLinhaProntidaoInicio(string nome, string estado, string detalhe)
+    {
+        var linha = new Panel
+        {
+            Dock = DockStyle.Fill,
+            BackColor = _paleta.Superficies.Painel,
+            Margin = Padding.Empty
+        };
+        var nomeLabel = CriarLabel(nome, 9.5F, _paleta.Texto, new Point(0, 9), FontStyle.Bold);
+        var detalheLabel = CriarLabel(detalhe, 8.5F, _paleta.TextoSecundario, new Point(0, 30));
+        var estadoLabel = CriarLabel(estado, 9F, _paleta.Positivo, Point.Empty, FontStyle.Bold);
+        estadoLabel.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        estadoLabel.Location = new Point(linha.Width - estadoLabel.Width, 18);
+        linha.Resize += (_, _) => estadoLabel.Left = linha.ClientSize.Width - estadoLabel.Width;
+        linha.Paint += (_, e) =>
+        {
+            using var separador = new Pen(_paleta.Borda, 1F);
+            e.Graphics.DrawLine(separador, 0, linha.ClientSize.Height - 1, linha.ClientSize.Width, linha.ClientSize.Height - 1);
+        };
+        linha.Controls.Add(estadoLabel);
+        linha.Controls.Add(detalheLabel);
+        linha.Controls.Add(nomeLabel);
+        return linha;
+    }
+
+    private Panel CriarCabecalhoInicio(
+        string contexto,
+        string titulo,
+        string acao,
+        EventHandler clique)
+    {
+        var painel = new Panel
+        {
+            Dock = DockStyle.Top,
+            Height = 68,
+            BackColor = _paleta.Superficies.Canvas
+        };
+        painel.Controls.Add(CriarLabel(contexto, 8.5F, _paleta.Destaque, new Point(1, 4), FontStyle.Bold));
+        painel.Controls.Add(CriarLabel(titulo, 13F, _paleta.Texto, new Point(0, 29), FontStyle.Bold));
+
+        var botao = CriarBotaoSecundario(acao, clique);
+        botao.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        botao.Location = new Point(painel.Width - botao.Width, 14);
+        painel.Resize += (_, _) => botao.Left = painel.ClientSize.Width - botao.Width;
+        painel.Controls.Add(botao);
+        return painel;
     }
 
     private Panel CriarTelaReunioes()
@@ -2028,25 +2250,6 @@ internal sealed class DesktopPocForm : Form
         pagina.Controls.Add(corpo);
         pagina.Controls.Add(cabecalho);
         return pagina;
-    }
-
-    private DesktopShadowPanel CriarCartaoStatus(string titulo, string estado, string detalhe)
-    {
-        var cartao = new DesktopShadowPanel(_paleta, _tokens, _politicaVisual, DesktopSurfaceVariant.Base)
-        {
-            Dock = DockStyle.Fill,
-            Margin = new Padding(0, 0, 12, 0),
-            Padding = new Padding(16),
-            Interactive = true,
-            CornerRadius = _tokens.Geometria.RaioMedio
-        };
-        cartao.Controls.Add(CriarLabel(detalhe, 8.5F, _paleta.TextoSecundario, new Point(16, 62)));
-        cartao.Controls.Add(new DesktopStatusBadge(_paleta, _tokens, estado)
-        {
-            Location = new Point(16, 32)
-        });
-        cartao.Controls.Add(CriarLabel(titulo, 9F, _paleta.Texto, new Point(16, 12), FontStyle.Bold));
-        return cartao;
     }
 
     private DesktopSurfacePanel CriarCartao(

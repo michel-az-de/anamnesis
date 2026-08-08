@@ -258,6 +258,43 @@ public sealed class DesktopPocFormTests
     }
 
     [Fact]
+    public void TelaInicioDevePriorizarCapturaEUnificarProntidaoDoSistema()
+    {
+        ExecutarEmSta(() =>
+        {
+            using var form = new DesktopPocForm(
+                TemaDesktopPoc.Escuro,
+                new DesktopPocEffectsPolicy(AnimacoesAtivas: false),
+                new DesktopSessionRealFake());
+            form.Show();
+            System.Windows.Forms.Application.DoEvents();
+
+            Assert.Contains(EncontrarLabels(form), label => label.Text == "CAPTURA LOCAL");
+            Assert.Contains(EncontrarLabels(form), label => label.Text == "PRONTIDÃO DO SISTEMA");
+            Assert.Contains(EncontrarLabels(form), label => label.Text == "REUNIÕES RECENTES");
+
+            var iniciar = EncontrarBotao(form, "Iniciar gravação");
+            Assert.Equal("Iniciar gravação", iniciar.AccessibleName);
+
+            var comando = Assert.Single(
+                EncontrarControles(form).OfType<DesktopSurfacePanel>(),
+                painel => painel.AccessibleName == "Comando de captura local");
+            Assert.True(comando.Width >= form.ClientSize.Width / 2);
+
+            var estados = EncontrarLabels(form)
+                .Where(label => label.Text is "OBS" or "Worker" or "SQLite")
+                .ToArray();
+            Assert.Equal(3, estados.Length);
+            var superficies = estados
+                .Select(label => EncontrarAncestral<DesktopSurfacePanel>(label))
+                .ToArray();
+            Assert.All(superficies, superficie => Assert.NotNull(superficie));
+            Assert.Single(superficies.Distinct());
+            CapturarQuandoSolicitado(form, "ANAMNESIS_HOME_SCREENSHOT");
+        });
+    }
+
+    [Fact]
     public void TelaReunioesDeveOrganizarBuscaFiltrosEContagemDeResultados()
     {
         ExecutarEmSta(() =>
@@ -728,6 +765,20 @@ public sealed class DesktopPocFormTests
                 yield return filho;
             }
         }
+    }
+
+    private static T? EncontrarAncestral<T>(Control controle)
+        where T : Control
+    {
+        for (var atual = controle.Parent; atual is not null; atual = atual.Parent)
+        {
+            if (atual is T ancestral)
+            {
+                return ancestral;
+            }
+        }
+
+        return null;
     }
 
     private static void CapturarEvidenciaQuandoSolicitado(Form form) =>
