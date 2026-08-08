@@ -442,16 +442,13 @@ internal sealed class DesktopShadowPanel : Panel
 }
 
 /// <summary>
-/// Item de reunião na lista com hover states melhorados, badge de status,
-/// sombra suave e layout organizado. Não deriva de DesktopSurfacePanel pois ele é sealed.
+/// Linha contínua e acionável do histórico de reuniões.
 /// </summary>
 internal sealed class DesktopReuniaoListItem : Panel
 {
     private readonly DesktopPocPalette _paleta;
     private readonly DesktopPocDesignTokens _tokens;
-    private readonly DesktopPocEffectsPolicy _politica;
     private readonly DesktopInteractionAnimator _hover;
-    private int _cornerRadius;
 
     public DesktopReuniaoListItem(
         DesktopPocPalette paleta,
@@ -461,18 +458,24 @@ internal sealed class DesktopReuniaoListItem : Panel
     {
         _paleta = paleta;
         _tokens = tokens;
-        _politica = politica;
         _hover = new DesktopInteractionAnimator(this, tokens.Motion, politica.AnimacoesAtivas);
-        _cornerRadius = tokens.Geometria.RaioMedio;
-        Height = string.IsNullOrWhiteSpace(reuniao.TrechoCorrespondente) ? 78 : 108;
-        Margin = new Padding(0, 0, 0, 10);
+        Height = string.IsNullOrWhiteSpace(reuniao.TrechoCorrespondente) ? 76 : 102;
+        Margin = Padding.Empty;
+        Padding = new Padding(18, 12, 18, 10);
+        BackColor = paleta.Superficies.Painel;
         Cursor = Cursors.Hand;
         DoubleBuffered = true;
         ResizeRedraw = true;
+        TabStop = true;
+        AccessibleRole = AccessibleRole.ListItem;
+        AccessibleName = $"Abrir reunião {reuniao.Titulo}";
+        AccessibleDescription = $"{reuniao.Plataforma}, {reuniao.Data}, {reuniao.Duracao}, estado {reuniao.Status}";
+        AccessibleDefaultActionDescription = "Abrir reunião";
         SetStyle(
             ControlStyles.AllPaintingInWmPaint |
             ControlStyles.OptimizedDoubleBuffer |
-            ControlStyles.ResizeRedraw,
+            ControlStyles.ResizeRedraw |
+            ControlStyles.Selectable,
             true);
 
         ConstruirLayout(reuniao);
@@ -480,31 +483,22 @@ internal sealed class DesktopReuniaoListItem : Panel
 
     private void ConstruirLayout(ReuniaoDesktopPoc reuniao)
     {
-        var painel = new Panel
-        {
-            Dock = DockStyle.Fill,
-            BackColor = _paleta.Superficies.Painel,
-            Padding = new Padding(18, 14, 18, 12)
-        };
-
-        // Título
         var titulo = new Label
         {
             Text = reuniao.Titulo,
             AutoSize = true,
             ForeColor = _paleta.Texto,
             Font = new Font(_tokens.Tipografia.Interface, 11F, FontStyle.Bold, GraphicsUnit.Point),
-            Location = new Point(0, 0)
+            Location = new Point(18, 13)
         };
 
-        // Detalhe
         var detalhe = new Label
         {
             Text = $"{reuniao.Plataforma}  •  {reuniao.Data}",
             AutoSize = true,
             ForeColor = _paleta.TextoSecundario,
             Font = new Font(_tokens.Tipografia.Interface, 9F, FontStyle.Regular, GraphicsUnit.Point),
-            Location = new Point(0, 26)
+            Location = new Point(18, 39)
         };
 
         Label? trecho = null;
@@ -516,21 +510,19 @@ internal sealed class DesktopReuniaoListItem : Panel
                 AutoEllipsis = true,
                 ForeColor = _paleta.Destaque,
                 Font = new Font(_tokens.Tipografia.Interface, 8.5F, FontStyle.Regular, GraphicsUnit.Point),
-                Location = new Point(0, 50),
-                Size = new Size(650, 22),
+                Location = new Point(18, 65),
+                Size = new Size(650, 21),
                 Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
             };
         }
 
-        // Badge de status
         var badge = new DesktopStatusBadge(_paleta, _tokens, reuniao.Status)
         {
             Anchor = AnchorStyles.Top | AnchorStyles.Right
         };
-        badge.Location = new Point(painel.Width - badge.Width, 2);
-        painel.Resize += (_, _) => badge.Left = painel.ClientSize.Width - badge.Width;
+        badge.Location = new Point(Width - badge.Width - 18, 12);
+        Resize += (_, _) => badge.Left = ClientSize.Width - badge.Width - 18;
 
-        // Duração no canto direito inferior
         var duracao = new Label
         {
             Text = reuniao.Duracao,
@@ -539,31 +531,38 @@ internal sealed class DesktopReuniaoListItem : Panel
             Font = new Font(_tokens.Tipografia.Mono, 9F, FontStyle.Regular, GraphicsUnit.Point),
             Anchor = AnchorStyles.Top | AnchorStyles.Right
         };
-        duracao.Location = new Point(painel.Width - duracao.Width, 30);
-        painel.Resize += (_, _) => duracao.Left = painel.ClientSize.Width - duracao.Width;
+        duracao.Location = new Point(Width - duracao.Width - 18, 43);
+        Resize += (_, _) => duracao.Left = ClientSize.Width - duracao.Width - 18;
 
-        painel.Controls.Add(duracao);
-        painel.Controls.Add(badge);
+        Controls.Add(duracao);
+        Controls.Add(badge);
         if (trecho is not null)
         {
-            painel.Controls.Add(trecho);
+            Controls.Add(trecho);
         }
-        painel.Controls.Add(detalhe);
-        painel.Controls.Add(titulo);
+        Controls.Add(detalhe);
+        Controls.Add(titulo);
 
-        Controls.Add(painel);
-        EncaminharCliqueDosFilhos(painel);
+        foreach (Control filho in Controls)
+        {
+            EncaminharInteracao(filho);
+        }
     }
 
-    private void EncaminharCliqueDosFilhos(Control controle)
+    private void EncaminharInteracao(Control controle)
     {
         controle.Cursor = Cursors.Hand;
         controle.Click += (_, evento) => OnClick(evento);
+        controle.MouseEnter += (_, _) => _hover.Definir(ativo: true);
+        controle.MouseLeave += (_, _) => AtualizarHoverPelaPosicaoDoCursor();
         foreach (Control filho in controle.Controls)
         {
-            EncaminharCliqueDosFilhos(filho);
+            EncaminharInteracao(filho);
         }
     }
+
+    private void AtualizarHoverPelaPosicaoDoCursor() =>
+        _hover.Definir(ClientRectangle.Contains(PointToClient(Cursor.Position)));
 
     protected override void OnMouseEnter(EventArgs e)
     {
@@ -574,13 +573,30 @@ internal sealed class DesktopReuniaoListItem : Panel
     protected override void OnMouseLeave(EventArgs e)
     {
         base.OnMouseLeave(e);
-        _hover.Definir(ativo: false);
+        AtualizarHoverPelaPosicaoDoCursor();
     }
 
-    protected override void OnResize(EventArgs e)
+    protected override void OnKeyDown(KeyEventArgs e)
     {
-        base.OnResize(e);
-        AtualizarRegiao();
+        base.OnKeyDown(e);
+        if (e.KeyCode is Keys.Enter or Keys.Space)
+        {
+            OnClick(EventArgs.Empty);
+            e.Handled = true;
+            e.SuppressKeyPress = true;
+        }
+    }
+
+    protected override void OnEnter(EventArgs e)
+    {
+        base.OnEnter(e);
+        Invalidate();
+    }
+
+    protected override void OnLeave(EventArgs e)
+    {
+        base.OnLeave(e);
+        Invalidate();
     }
 
     protected override void OnPaintBackground(PaintEventArgs e)
@@ -588,33 +604,13 @@ internal sealed class DesktopReuniaoListItem : Panel
         if (ClientSize.Width <= 1 || ClientSize.Height <= 1)
             return;
 
-        e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-        var area = new Rectangle(1, 1, ClientSize.Width - 3, ClientSize.Height - 3);
-        using var caminho = DesktopPocDrawing.CriarCaminhoArredondado(area, _cornerRadius);
-
         var fundo = _paleta.Superficies.Painel;
         if (_hover.Valor > 0D)
         {
             fundo = DesktopPocMotion.Misturar(fundo, _paleta.Superficies.PainelHover, _hover.Valor);
         }
 
-        // Sombra suave
-        for (var i = 2; i >= 1; i--)
-        {
-            var alpha = (int)(6 * (3 - i));
-            var offset = i;
-            var areaSombra = new Rectangle(
-                offset,
-                offset + 1,
-                ClientSize.Width - offset * 2 - 1,
-                ClientSize.Height - offset * 2 - 1);
-            using var caminhoSombra = DesktopPocDrawing.CriarCaminhoArredondado(areaSombra, _cornerRadius);
-            using var sombra = new SolidBrush(Color.FromArgb(alpha, 0, 0, 0));
-            e.Graphics.FillPath(sombra, caminhoSombra);
-        }
-
-        using var material = new SolidBrush(fundo);
-        e.Graphics.FillPath(material, caminho);
+        e.Graphics.Clear(fundo);
     }
 
     protected override void OnPaint(PaintEventArgs e)
@@ -623,27 +619,24 @@ internal sealed class DesktopReuniaoListItem : Panel
         if (ClientSize.Width <= 1 || ClientSize.Height <= 1)
             return;
 
-        e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-        var area = new Rectangle(1, 1, ClientSize.Width - 3, ClientSize.Height - 3);
-        using var caminho = DesktopPocDrawing.CriarCaminhoArredondado(area, _cornerRadius);
+        using var separador = new Pen(_paleta.Borda, 1F);
+        e.Graphics.DrawLine(separador, 18, ClientSize.Height - 1, ClientSize.Width - 18, ClientSize.Height - 1);
 
-        var destaque = _paleta.Destaque;
-        var intensidade = 0.15D + (_hover.Valor * 0.3D);
-        var borda = DesktopPocMotion.Misturar(_paleta.Borda, destaque, intensidade);
-        using var caneta = new Pen(borda, _hover.Valor > 0.35D ? 1.3F : 0.8F);
-        e.Graphics.DrawPath(caneta, caminho);
-    }
-
-    private void AtualizarRegiao()
-    {
-        Region?.Dispose();
-        if (_cornerRadius <= 0 || ClientSize.Width <= 1 || ClientSize.Height <= 1)
+        if (_hover.Valor > 0.05D || Focused)
         {
-            Region = null;
-            return;
+            using var marcador = new Pen(_paleta.Destaque, 3F)
+            {
+                StartCap = LineCap.Round,
+                EndCap = LineCap.Round
+            };
+            e.Graphics.DrawLine(marcador, 2F, 14F, 2F, ClientSize.Height - 14F);
         }
-        using var caminho = DesktopPocDrawing.CriarCaminhoArredondado(ClientRectangle, _cornerRadius);
-        Region = new Region(caminho);
+
+        if (Focused)
+        {
+            var foco = Rectangle.Inflate(ClientRectangle, -6, -5);
+            ControlPaint.DrawFocusRectangle(e.Graphics, foco, _paleta.Texto, BackColor);
+        }
     }
 
     protected override void Dispose(bool disposing)

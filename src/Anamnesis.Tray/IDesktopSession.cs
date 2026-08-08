@@ -1,4 +1,5 @@
 using Anamnesis.Application.Modelos;
+using Anamnesis.Infrastructure.Configuracao;
 
 namespace Anamnesis.Tray;
 
@@ -7,7 +8,8 @@ internal sealed record DesktopRuntimeInfo(
     string CaminhoBanco,
     string DiretorioArquivo,
     string NomeCli,
-    IReadOnlyList<ProntidaoDesktopItem>? Prontidao = null);
+    IReadOnlyList<ProntidaoDesktopItem>? Prontidao = null,
+    ConfiguracaoAnamnesis? Configuracao = null);
 
 internal sealed record ProntidaoDesktopItem(
     string Nome,

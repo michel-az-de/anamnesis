@@ -4,7 +4,7 @@ aliases: [Índice de Especificações, Indice de SPEKs]
 tags: [especificacao, indice]
 type: moc
 created: 2026-08-04
-updated: 2026-08-07
+updated: 2026-08-08
 status: evergreen
 summary: Fonte de verdade para a ordem de leitura e estado das especificações.
 related: ["[[Especificacoes MOC]]", "[[Protocolo de Agentes]]", "[[Roadmap de Produto]]"]
@@ -71,6 +71,7 @@ related: ["[[Especificacoes MOC]]", "[[Protocolo de Agentes]]", "[[Roadmap de Pr
 | SPEK-055 | [[SPEK-055 Diarizacao Local de Locutores]] | rascunho | `Application`, `Infrastructure`, `Worker` |
 | SPEK-056 | [[SPEK-056 Busca Local no Conteudo das Reunioes]] | concluído | `Application`, `Infrastructure`, `Tray` |
 | SPEK-057 | [[SPEK-057 Exportacao Local de Ata em PDF e DOCX]] | concluído | `Application`, `Infrastructure`, `Tray` |
+| SPEK-058 | [[SPEK-058 Experiencia de Configuracao e Abertura]] | concluído | `Tray`, `Infrastructure` |
 
 ## Release oficial atual
 

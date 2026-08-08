@@ -102,6 +102,7 @@ public sealed class DesktopPocFormTests
                 EncontrarLabels(form),
                 label => label.Text.StartsWith("Atenção:", StringComparison.Ordinal) &&
                          label.ForeColor == paleta.Destaque);
+            CapturarQuandoSolicitado(form, "ANAMNESIS_REAL_SETTINGS_SCREENSHOT");
         });
     }
 
@@ -122,14 +123,14 @@ public sealed class DesktopPocFormTests
             EncontrarBotao(form, "Transcrição").PerformClick();
             System.Windows.Forms.Application.DoEvents();
             var tituloAntes = EncontrarLabels(form)
-                .Single(label => label.Text == "Transcrição com timestamps");
+                .Single(label => label.Text == "Conteúdo transcrito");
             var paginaAntes = tituloAntes.Parent!.Parent!;
 
             sessao.EstadoJob = "EmProcessamento";
             form.AtualizarAgoraAsync().GetAwaiter().GetResult();
 
             var tituloDepois = EncontrarLabels(form)
-                .Single(label => label.Text == "Transcrição com timestamps");
+                .Single(label => label.Text == "Conteúdo transcrito");
             Assert.Same(paginaAntes, tituloDepois.Parent!.Parent!);
         });
     }
@@ -213,7 +214,7 @@ public sealed class DesktopPocFormTests
             CapturarQuandoSolicitado(form, "ANAMNESIS_SEARCH_SCREENSHOT");
             DispararClique(EncontrarLabels(form).Single(label => label.Text == "Reunião real"));
             AguardarInterface(() => EncontrarLabels(form)
-                .Any(label => label.Text == "Transcrição com timestamps"));
+                .Any(label => label.Text == "Conteúdo transcrito"));
         });
     }
 
@@ -253,6 +254,118 @@ public sealed class DesktopPocFormTests
             Assert.Equal(reuniaoId, reuniaoRecebida);
             Assert.Equal("Felipe: concluir atividade.", tarefaRecebida);
             Assert.Equal(horario, horarioRecebido);
+        });
+    }
+
+    [Fact]
+    public void TelaReunioesDeveOrganizarBuscaFiltrosEContagemDeResultados()
+    {
+        ExecutarEmSta(() =>
+        {
+            var reuniaoId = Guid.NewGuid();
+            using var form = new DesktopPocForm(
+                TemaDesktopPoc.Escuro,
+                new DesktopPocEffectsPolicy(AnimacoesAtivas: false),
+                new DesktopSessionDetalheFake(reuniaoId));
+            form.Show();
+            System.Windows.Forms.Application.DoEvents();
+            EncontrarBotao(form, "Reuniões").PerformClick();
+            System.Windows.Forms.Application.DoEvents();
+
+            Assert.Contains(EncontrarLabels(form), label => label.Text == "BUSCAR E FILTRAR");
+            Assert.Contains(EncontrarLabels(form), label => label.Text == "HISTÓRICO LOCAL");
+            Assert.Contains(EncontrarLabels(form), label => label.Text == "1 reunião encontrada");
+
+            var busca = Assert.Single(EncontrarControles(form).OfType<DesktopTextField>());
+            Assert.Equal(DockStyle.Fill, busca.Dock);
+            Assert.Equal("Buscar reuniões", busca.AccessibleName);
+            Assert.All(
+                EncontrarControles(form).OfType<DesktopSelectField>(),
+                filtro => Assert.Equal(DockStyle.Fill, filtro.Dock));
+            CapturarQuandoSolicitado(form, "ANAMNESIS_MEETINGS_SCREENSHOT");
+        });
+    }
+
+    [Fact]
+    public void ReuniaoNaListaDeveSerContinuaAcessivelEAbrirPorTeclado()
+    {
+        ExecutarEmSta(() =>
+        {
+            var reuniaoId = Guid.NewGuid();
+            using var form = new DesktopPocForm(
+                TemaDesktopPoc.Escuro,
+                new DesktopPocEffectsPolicy(AnimacoesAtivas: false),
+                new DesktopSessionDetalheFake(reuniaoId));
+            form.Show();
+            System.Windows.Forms.Application.DoEvents();
+            EncontrarBotao(form, "Reuniões").PerformClick();
+            System.Windows.Forms.Application.DoEvents();
+
+            var item = Assert.Single(EncontrarControles(form).OfType<DesktopReuniaoListItem>());
+            Assert.True(item.TabStop);
+            Assert.Equal(AccessibleRole.ListItem, item.AccessibleRole);
+            Assert.Null(item.Region);
+            Assert.Equal(0, item.Margin.Bottom);
+
+            typeof(Control)
+                .GetMethod("OnKeyDown", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+                .Invoke(item, [new KeyEventArgs(Keys.Enter)]);
+            AguardarInterface(() => EncontrarLabels(form).Any(label => label.Text == "DETALHES DA REUNIÃO"));
+        });
+    }
+
+    [Fact]
+    public void DetalheDeveUsarAbasContinuasComUmaSelecaoClara()
+    {
+        ExecutarEmSta(() =>
+        {
+            var reuniaoId = Guid.NewGuid();
+            using var form = new DesktopPocForm(
+                TemaDesktopPoc.Escuro,
+                new DesktopPocEffectsPolicy(AnimacoesAtivas: false),
+                new DesktopSessionDetalheFake(reuniaoId));
+            form.Show();
+            System.Windows.Forms.Application.DoEvents();
+            form.AbrirDetalheAgoraAsync(reuniaoId, "Decisões").GetAwaiter().GetResult();
+
+            var abas = EncontrarControles(form).OfType<DesktopTabButton>().ToArray();
+            Assert.Equal(5, abas.Length);
+            Assert.All(abas, aba =>
+            {
+                Assert.Null(aba.Region);
+                Assert.Equal(AccessibleRole.PageTab, aba.AccessibleRole);
+                Assert.True(aba.Height >= 42);
+            });
+            Assert.Single(abas, aba => aba.Selecionado);
+            Assert.True(abas.Single(aba => aba.Text == "Decisões").Selecionado);
+        });
+    }
+
+    [Fact]
+    public void DetalheDeveTerHierarquiaEditorialETextoConfortavel()
+    {
+        ExecutarEmSta(() =>
+        {
+            var reuniaoId = Guid.NewGuid();
+            using var form = new DesktopPocForm(
+                TemaDesktopPoc.Escuro,
+                new DesktopPocEffectsPolicy(AnimacoesAtivas: false),
+                new DesktopSessionDetalheFake(reuniaoId));
+            form.Show();
+            System.Windows.Forms.Application.DoEvents();
+            EncontrarBotao(form, "Reuniões").PerformClick();
+            System.Windows.Forms.Application.DoEvents();
+            form.AbrirDetalheAgoraAsync(reuniaoId, "Decisões").GetAwaiter().GetResult();
+
+            Assert.Contains(EncontrarLabels(form), label => label.Text == "DETALHES DA REUNIÃO");
+            Assert.Contains(EncontrarLabels(form), label => label.Text == "O que ficou decidido");
+            Assert.Contains(EncontrarLabels(form), label => label.Text == "Transcrevendo");
+
+            var texto = Assert.Single(EncontrarControles(form).OfType<RichTextBox>());
+            Assert.True(texto.Font.Size >= 10.5F);
+            var bloco = Assert.IsType<DesktopShadowPanel>(texto.Parent!.Parent);
+            Assert.True(bloco.Height <= 220);
+            CapturarQuandoSolicitado(form, "ANAMNESIS_DETAIL_SCREENSHOT");
         });
     }
 
@@ -337,7 +450,7 @@ public sealed class DesktopPocFormTests
             form.AtualizarAgoraAsync().GetAwaiter().GetResult();
 
             EncontrarBotao(form, "Abrir transcrição").PerformClick();
-            AguardarInterface(() => EncontrarLabels(form).Any(label => label.Text == "Transcrição com timestamps"));
+            AguardarInterface(() => EncontrarLabels(form).Any(label => label.Text == "Conteúdo transcrito"));
             Assert.Contains(
                 EncontrarControles(form).OfType<RichTextBox>(),
                 texto => texto.Text.Contains("Transcrição final da reunião manual", StringComparison.Ordinal));
@@ -481,7 +594,7 @@ public sealed class DesktopPocFormTests
     }
 
     [Fact]
-    public void DeveConcluirTransicaoEspacialDePagina()
+    public void NavegacaoComMotionAtivoDeveTrocarPaginaSemDeslocarConteudo()
     {
         ExecutarEmSta(() =>
         {
@@ -493,14 +606,12 @@ public sealed class DesktopPocFormTests
             EncontrarBotao(form, "Reuniões").PerformClick();
             var titulo = EncontrarLabels(form).Single(label => label.Text == "Reuniões");
             var pagina = titulo.Parent!.Parent!;
-            var esquerdaFinal = pagina.Parent!.DisplayRectangle.Left;
-            var largura = pagina.Parent!.ClientSize.Width;
-            Assert.Equal(DockStyle.None, pagina.Dock);
-            Assert.True(pagina.Left >= largura - 1);
+            var conteudo = pagina.Parent!;
 
-            AguardarInterface(() => pagina.Dock == DockStyle.Fill);
+            Assert.Single(conteudo.Controls.Cast<Control>());
             Assert.Equal(DockStyle.Fill, pagina.Dock);
-            Assert.Equal(esquerdaFinal, pagina.Left);
+            Assert.Equal(conteudo.DisplayRectangle.Left, pagina.Left);
+            Assert.Equal(conteudo.DisplayRectangle.Top, pagina.Top);
         });
     }
 
@@ -530,6 +641,31 @@ public sealed class DesktopPocFormTests
             var pagina = Assert.Single(conteudo.Controls.Cast<Control>());
             Assert.Equal(conteudo.DisplayRectangle.Left, pagina.Left);
             Assert.DoesNotContain(EncontrarLabels(pagina), label => label.Text == "Reuniões");
+        });
+    }
+
+    [Fact]
+    public void TrocaDeMenuNaoDeveAlterarGeometriaDaNavegacaoLateral()
+    {
+        ExecutarEmSta(() =>
+        {
+            using var form = new DesktopPocForm(
+                TemaDesktopPoc.Escuro,
+                new DesktopPocEffectsPolicy(AnimacoesAtivas: true));
+            form.Show();
+            System.Windows.Forms.Application.DoEvents();
+
+            var geometriaInicial = EncontrarControles(form)
+                .OfType<DesktopNavigationButton>()
+                .ToDictionary(botao => botao.Text, botao => botao.Bounds);
+
+            EncontrarBotao(form, "Reuniões").PerformClick();
+            EncontrarBotao(form, "Atividade").PerformClick();
+            EncontrarBotao(form, "Observabilidade").PerformClick();
+
+            Assert.All(
+                EncontrarControles(form).OfType<DesktopNavigationButton>(),
+                botao => Assert.Equal(geometriaInicial[botao.Text], botao.Bounds));
         });
     }
 
@@ -899,7 +1035,11 @@ public sealed class DesktopPocFormTests
             Resumo = "Resumo real.",
             PontosPrincipais = pontos,
             Transcricao = ["Pessoa 1: decisão importante.", "Pessoa 2: confirmado."],
-            Decisoes = [],
+            Decisoes =
+            [
+                "Adotar um reporte mensal das atividades.",
+                "Iniciar o acompanhamento em agosto de 2026."
+            ],
             Tarefas = ["Felipe: concluir atividade."],
             SecaoCorrespondente = "Transcrição",
             TrechoCorrespondente = "...incidente resolvido com segurança..."

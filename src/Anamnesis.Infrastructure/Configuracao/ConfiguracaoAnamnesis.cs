@@ -2,6 +2,7 @@ namespace Anamnesis.Infrastructure.Configuracao;
 
 public sealed record ConfiguracaoAnamnesis
 {
+    public bool PrimeiroUsoConcluido { get; init; } = true;
     public string CaminhoBanco { get; init; } = string.Empty;
     public string DiretorioArquivo { get; init; } = string.Empty;
     public string EnderecoObs { get; init; } = "ws://127.0.0.1:4455";

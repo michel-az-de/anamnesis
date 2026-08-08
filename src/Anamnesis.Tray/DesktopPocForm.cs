@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Diagnostics;
 using Anamnesis.Application.Modelos;
 using Anamnesis.Application.UseCases;
+using Anamnesis.Infrastructure.Configuracao;
 
 namespace Anamnesis.Tray;
 
@@ -18,6 +19,9 @@ internal sealed class DesktopPocForm : Form
     private readonly DesktopPocEffectsPolicy _politicaVisual;
     private readonly IDesktopSession _sessao;
     private readonly Func<Guid, string, DateTimeOffset, CancellationToken, Task>? _criarLembrete;
+    private readonly Func<ConfiguracaoAnamnesis, CancellationToken, Task>? _salvarConfiguracao;
+    private readonly Func<bool>? _obterInicializacaoWindows;
+    private readonly Action<bool>? _definirInicializacaoWindows;
     private readonly DesktopPocObservabilityState _observabilidade;
     private readonly Panel _conteudo = new();
     private readonly Label _estadoGlobal = new();
@@ -26,13 +30,12 @@ internal sealed class DesktopPocForm : Form
     private readonly System.Windows.Forms.Timer _timerProcessamento = new() { Interval = 2800 };
     private readonly System.Windows.Forms.Timer _timerPolling = new() { Interval = 2000 };
     private readonly CancellationTokenSource _lifetime = new();
-    private System.Windows.Forms.Timer? _timerTransicaoPagina;
-    private Control? _paginaDestinoTransicao;
     private string _paginaAtual = "inicio";
     private Guid? _reuniaoDetalheId;
     private Guid? _reuniaoAcompanhadaId;
     private string? _filtroObservabilidade;
     private Panel? _areaListaReunioes;
+    private Label? _resultadoReunioes;
     private int _versaoBuscaReunioes;
     private bool _pollingEmAndamento;
     private int _versaoNavegacao;
@@ -48,6 +51,7 @@ internal sealed class DesktopPocForm : Form
     private DesktopActionButton? _abrirTranscricaoProcessamento;
     private Action? _atualizarConsoleObservabilidade;
     private int _onda;
+    private ConfiguracaoAnamnesis? _configuracaoAtual;
 
     public DesktopPocForm()
         : this(
@@ -74,10 +78,17 @@ internal sealed class DesktopPocForm : Form
         TemaDesktopPoc tema,
         DesktopPocEffectsPolicy politicaVisual,
         IDesktopSession sessao,
-        Func<Guid, string, DateTimeOffset, CancellationToken, Task>? criarLembrete = null)
+        Func<Guid, string, DateTimeOffset, CancellationToken, Task>? criarLembrete = null,
+        Func<ConfiguracaoAnamnesis, CancellationToken, Task>? salvarConfiguracao = null,
+        Func<bool>? obterInicializacaoWindows = null,
+        Action<bool>? definirInicializacaoWindows = null)
     {
         _sessao = sessao ?? throw new ArgumentNullException(nameof(sessao));
         _criarLembrete = criarLembrete;
+        _salvarConfiguracao = salvarConfiguracao;
+        _obterInicializacaoWindows = obterInicializacaoWindows;
+        _definirInicializacaoWindows = definirInicializacaoWindows;
+        _configuracaoAtual = sessao.Ambiente?.Configuracao;
         _observabilidade = new DesktopPocObservabilityState(
             incluirHistorico: sessao.ModoDemonstracao);
         _tema = tema;
@@ -283,7 +294,6 @@ internal sealed class DesktopPocForm : Form
 
     private void Navegar(string pagina, string? filtroObservabilidade = null)
     {
-        ConcluirTransicaoPagina();
         _versaoNavegacao++;
         _paginaAtual = pagina;
         _filtroObservabilidade = pagina == "observabilidade" ? filtroObservabilidade : null;
@@ -304,7 +314,6 @@ internal sealed class DesktopPocForm : Form
             }
         }
 
-        var paginaAnterior = _conteudo.Controls.Count > 0 ? _conteudo.Controls[0] : null;
         LimparReferenciasDaPagina();
 
         var novaPagina = pagina switch
@@ -319,82 +328,22 @@ internal sealed class DesktopPocForm : Form
         };
 
         _conteudo.SuspendLayout();
-
-        if (Visible && _politicaVisual.AnimacoesAtivas && paginaAnterior != null)
+        foreach (var controle in _conteudo.Controls.Cast<Control>().ToArray())
         {
-            var largura = _conteudo.ClientSize.Width;
-            var altura = _conteudo.ClientSize.Height;
-
-            paginaAnterior.Dock = DockStyle.None;
-            paginaAnterior.SetBounds(0, 0, largura, altura);
-
-            novaPagina.Dock = DockStyle.None;
-            novaPagina.SetBounds(largura, 0, largura, altura);
-
-            _conteudo.Controls.Add(novaPagina);
-            _conteudo.ResumeLayout(performLayout: true);
-
-            var relogio = Stopwatch.StartNew();
-            var timer = new System.Windows.Forms.Timer { Interval = 15 };
-            _timerTransicaoPagina = timer;
-            _paginaDestinoTransicao = novaPagina;
-            var deslocamento = _tokens.Motion.DeslocamentoPagina;
-
-            void Encerrar()
-            {
-                if (ReferenceEquals(_timerTransicaoPagina, timer))
-                {
-                    ConcluirTransicaoPagina();
-                    return;
-                }
-
-                timer.Stop();
-                timer.Dispose();
-            }
-
-            timer.Tick += (_, _) =>
-            {
-                if (paginaAnterior.IsDisposed || novaPagina.IsDisposed)
-                {
-                    Encerrar();
-                    return;
-                }
-
-                var progresso = relogio.Elapsed.TotalMilliseconds / _tokens.Motion.NormalMs;
-                if (progresso >= 1D)
-                {
-                    Encerrar();
-                    return;
-                }
-
-                var suave = DesktopPocMotion.SuavizarSaida(progresso);
-                var atual = (int)Math.Round(deslocamento * suave);
-                var progressoSaida = Math.Min(1D, progresso * 1.25D);
-                var suaveSaida = DesktopPocMotion.SuavizarSaida(progressoSaida);
-                var atualSaida = (int)Math.Round(deslocamento * suaveSaida);
-                paginaAnterior.Left = -atualSaida;
-                novaPagina.Left = largura - atual;
-            };
-
-            timer.Start();
+            _conteudo.Controls.Remove(controle);
+            controle.Dispose();
         }
-        else
-        {
-            _conteudo.Controls.Clear();
-            _conteudo.Controls.Add(novaPagina);
-            _conteudo.ResumeLayout(performLayout: true);
-
-            if (Visible && _politicaVisual.AnimacoesAtivas)
-            {
-                DesktopPocMotion.AnimarEntrada(novaPagina, novaPagina.Bounds, _tokens.Motion, animacoesAtivas: true);
-            }
-        }
+        novaPagina.Dock = DockStyle.Fill;
+        _conteudo.Controls.Add(novaPagina);
+        novaPagina.BringToFront();
+        _conteudo.ResumeLayout(performLayout: true);
     }
 
     private void LimparReferenciasDaPagina()
     {
         _versaoBuscaReunioes++;
         _areaListaReunioes = null;
+        _resultadoReunioes = null;
         _cronometro = null;
         _audioSistema = null;
         _microfone = null;
@@ -429,7 +378,8 @@ internal sealed class DesktopPocForm : Form
                 {
                     IniciarGravacao();
                 }
-            });
+            },
+            recuperacao || gravando ? DesktopActionIcon.Live : DesktopActionIcon.Record);
         var pagina = CriarPagina(
             "Bom dia, Felipe",
             recuperacao
@@ -482,10 +432,42 @@ internal sealed class DesktopPocForm : Form
             null,
             out var corpo);
 
-        var barra = new Panel { Dock = DockStyle.Top, Height = 54, Padding = new Padding(0, 0, 0, 12) };
+        var barra = new Panel
+        {
+            Dock = DockStyle.Top,
+            Height = 98,
+            BackColor = _paleta.Superficies.Canvas,
+            Padding = new Padding(0, 0, 0, 14)
+        };
+        barra.Controls.Add(new Label
+        {
+            Text = "BUSCAR E FILTRAR",
+            AutoSize = true,
+            ForeColor = _paleta.Destaque,
+            Font = new Font(_tokens.Tipografia.Interface, 8.5F, FontStyle.Bold, GraphicsUnit.Point),
+            Location = new Point(1, 0)
+        });
+
+        var campos = new TableLayoutPanel
+        {
+            Dock = DockStyle.Bottom,
+            Height = 54,
+            ColumnCount = 3,
+            RowCount = 1,
+            BackColor = _paleta.Superficies.Canvas,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty
+        };
+        campos.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        campos.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 192F));
+        campos.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 192F));
+        campos.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+
         var busca = CriarCampoTexto("Buscar em título, resumo, decisões, tarefas e transcrição");
-        busca.Width = 340;
-        busca.Dock = DockStyle.Left;
+        busca.Dock = DockStyle.Fill;
+        busca.Margin = new Padding(0, 0, 12, 0);
+        busca.AccessibleName = "Buscar reuniões";
+        busca.AccessibleDescription = "Busca no título, resumo, decisões, tarefas e transcrição";
 
         var estadosDisponiveis = _sessao.Reunioes
             .Select(reuniao => reuniao.Status)
@@ -494,17 +476,43 @@ internal sealed class DesktopPocForm : Form
             .Prepend("Todos os estados")
             .ToArray();
         var estado = CriarCombo(estadosDisponiveis);
-        estado.Width = 180;
-        estado.Dock = DockStyle.Right;
+        estado.Dock = DockStyle.Fill;
+        estado.Margin = Padding.Empty;
+        estado.AccessibleName = "Filtrar por estado";
 
         var periodo = CriarCombo(["Todo o período", "Últimos 30 dias", "Esta semana", "Este ano"]);
-        periodo.Width = 180;
-        periodo.Dock = DockStyle.Right;
-        periodo.Margin = new Padding(0, 0, 10, 0);
+        periodo.Dock = DockStyle.Fill;
+        periodo.Margin = new Padding(0, 0, 12, 0);
+        periodo.AccessibleName = "Filtrar por período";
 
-        barra.Controls.Add(periodo);
-        barra.Controls.Add(estado);
-        barra.Controls.Add(busca);
+        campos.Controls.Add(busca, 0, 0);
+        campos.Controls.Add(periodo, 1, 0);
+        campos.Controls.Add(estado, 2, 0);
+        barra.Controls.Add(campos);
+
+        var cabecalhoLista = new Panel
+        {
+            Dock = DockStyle.Top,
+            Height = 58,
+            BackColor = _paleta.Superficies.Canvas
+        };
+        cabecalhoLista.Controls.Add(new Label
+        {
+            Text = "HISTÓRICO LOCAL",
+            AutoSize = true,
+            ForeColor = _paleta.Texto,
+            Font = new Font(_tokens.Tipografia.Interface, 9F, FontStyle.Bold, GraphicsUnit.Point),
+            Location = new Point(1, 6)
+        });
+        _resultadoReunioes = new Label
+        {
+            AutoSize = true,
+            ForeColor = _paleta.TextoSecundario,
+            Font = new Font(_tokens.Tipografia.Interface, 9F, FontStyle.Regular, GraphicsUnit.Point),
+            Location = new Point(1, 31),
+            AccessibleName = "Quantidade de reuniões encontradas"
+        };
+        cabecalhoLista.Controls.Add(_resultadoReunioes);
 
         var areaLista = new Panel { Dock = DockStyle.Fill, BackColor = _paleta.Superficies.Canvas };
         _areaListaReunioes = areaLista;
@@ -515,9 +523,11 @@ internal sealed class DesktopPocForm : Form
                 (string.IsNullOrWhiteSpace(filtro) ||
                  reuniao.Titulo.Contains(filtro, StringComparison.OrdinalIgnoreCase) ||
                  reuniao.Plataforma.Contains(filtro, StringComparison.OrdinalIgnoreCase)) &&
-                (estado.SelectedIndex <= 0 || string.Equals(reuniao.Status, estado.Text, StringComparison.Ordinal)));
+                (estado.SelectedIndex <= 0 || string.Equals(reuniao.Status, estado.Text, StringComparison.Ordinal)))
+                .ToArray();
             areaLista.Controls.Clear();
             areaLista.Controls.Add(CriarListaReunioes(reunioes));
+            AtualizarResumoReunioes(reunioes.Length);
         }
 
         async void SolicitarBusca(object? _, EventArgs __)
@@ -543,6 +553,7 @@ internal sealed class DesktopPocForm : Form
         periodo.SelectedIndexChanged += SolicitarBusca;
 
         corpo.Controls.Add(areaLista);
+        corpo.Controls.Add(cabecalhoLista);
         corpo.Controls.Add(barra);
         AtualizarListaLocal();
         return pagina;
@@ -566,6 +577,22 @@ internal sealed class DesktopPocForm : Form
 
         _areaListaReunioes.Controls.Clear();
         _areaListaReunioes.Controls.Add(CriarListaReunioes(resultados));
+        AtualizarResumoReunioes(resultados.Count);
+    }
+
+    private void AtualizarResumoReunioes(int quantidade)
+    {
+        if (_resultadoReunioes is null || _resultadoReunioes.IsDisposed)
+        {
+            return;
+        }
+
+        _resultadoReunioes.Text = quantidade switch
+        {
+            0 => "Nenhuma reunião encontrada",
+            1 => "1 reunião encontrada",
+            _ => $"{quantidade} reuniões encontradas"
+        };
     }
 
     private static DateTimeOffset? ResolverCriadaDesde(string? periodo)
@@ -587,20 +614,16 @@ internal sealed class DesktopPocForm : Form
     private Panel CriarTelaDetalhe(ReuniaoDesktopPoc reuniao, string abaInicial = "Resumo")
     {
         var voltar = CriarBotaoSecundario("←  Voltar", (_, _) => Navegar("reunioes"));
-        var pagina = CriarPagina(
-            reuniao.Titulo,
-            $"{reuniao.Data}  •  {reuniao.Duracao}  •  {reuniao.Plataforma}",
-            voltar,
-            out var corpo);
+        var pagina = CriarPaginaDetalhe(reuniao, voltar, out var corpo);
 
         var abas = new FlowLayoutPanel
         {
             Dock = DockStyle.Top,
-            Height = 52,
+            Height = 54,
             FlowDirection = FlowDirection.LeftToRight,
             WrapContents = false,
             BackColor = _paleta.Superficies.Canvas,
-            Padding = new Padding(0, 2, 0, 8)
+            Padding = new Padding(0, 4, 0, 5)
         };
         var detalhe = new Panel { Dock = DockStyle.Fill, BackColor = _paleta.Superficies.Canvas };
         var nomes = new[] { "Resumo", "Transcrição", "Decisões", "Tarefas", "Arquivos" };
@@ -631,7 +654,9 @@ internal sealed class DesktopPocForm : Form
             var botao = new DesktopTabButton(_paleta, _tokens, _politicaVisual, icone)
             {
                 Text = nome,
-                Margin = new Padding(0, 0, 6, 0)
+                Margin = new Padding(0, 0, 14, 0),
+                Font = new Font(_tokens.Tipografia.Interface, 9.5F, FontStyle.Bold, GraphicsUnit.Point),
+                AccessibleName = $"Aba {nome}"
             };
             botao.Click += (_, _) => Selecionar(nome);
             botoes.Add(botao);
@@ -653,20 +678,22 @@ internal sealed class DesktopPocForm : Form
             FlowDirection = FlowDirection.TopDown,
             WrapContents = false,
             BackColor = _paleta.Superficies.Canvas,
-            Padding = new Padding(0, 10, 10, 10)
+            Padding = new Padding(0, 18, 10, 10)
         };
         rolagem.SizeChanged += (_, _) => AjustarLarguraFilhos(rolagem);
+
+        rolagem.Controls.Add(CriarIntroducaoDetalhe(aba, reuniao));
 
         switch (aba)
         {
             case "Transcrição":
-                rolagem.Controls.Add(CriarBlocoTexto("Transcrição com timestamps", reuniao.Transcricao));
+                rolagem.Controls.Add(CriarBlocoTexto("Conteúdo transcrito", reuniao.Transcricao));
                 break;
             case "Decisões":
-                rolagem.Controls.Add(CriarBlocoTexto("Decisões", reuniao.Decisoes.Select(item => $"•  {item}")));
+                rolagem.Controls.Add(CriarBlocoTexto("Decisões registradas", reuniao.Decisoes.Select(item => $"•  {item}")));
                 break;
             case "Tarefas":
-                rolagem.Controls.Add(CriarBlocoTexto("Tarefas", reuniao.Tarefas.Select(item => $"□  {item}")));
+                rolagem.Controls.Add(CriarBlocoTexto("Itens de ação", reuniao.Tarefas.Select(item => $"□  {item}")));
                 if (_criarLembrete is not null && reuniao.Tarefas.Count > 0)
                 {
                     rolagem.Controls.Add(CriarBlocoLembretes(reuniao.Id, reuniao.Tarefas));
@@ -693,6 +720,110 @@ internal sealed class DesktopPocForm : Form
         AjustarLarguraFilhos(rolagem);
         return rolagem;
     }
+
+    private Panel CriarPaginaDetalhe(ReuniaoDesktopPoc reuniao, Control voltar, out Panel corpo)
+    {
+        var pagina = new Panel { Dock = DockStyle.Fill, BackColor = _paleta.Superficies.Canvas };
+        var cabecalho = new Panel
+        {
+            Dock = DockStyle.Top,
+            Height = 94,
+            BackColor = _paleta.Superficies.Canvas
+        };
+        var contexto = new Label
+        {
+            Text = "DETALHES DA REUNIÃO",
+            AutoSize = true,
+            ForeColor = _paleta.Destaque,
+            Font = new Font(_tokens.Tipografia.Interface, 8.5F, FontStyle.Bold, GraphicsUnit.Point),
+            Location = new Point(2, 0)
+        };
+        var titulo = new Label
+        {
+            Text = reuniao.Titulo,
+            AutoSize = true,
+            MaximumSize = new Size(680, 32),
+            AutoEllipsis = true,
+            ForeColor = _paleta.Texto,
+            Font = new Font(_tokens.Tipografia.Display, 21F, FontStyle.Bold, GraphicsUnit.Point),
+            Location = new Point(0, 20),
+            AccessibleName = $"Reunião: {reuniao.Titulo}"
+        };
+        var metadadosTexto = $"{reuniao.Data}   •   {reuniao.Duracao}   •   {reuniao.Plataforma}";
+        var metadados = new Label
+        {
+            Text = metadadosTexto,
+            AutoSize = true,
+            ForeColor = _paleta.TextoSecundario,
+            Font = new Font(_tokens.Tipografia.Interface, 9.5F, FontStyle.Regular, GraphicsUnit.Point),
+            Location = new Point(2, 61)
+        };
+        var larguraMetadados = TextRenderer.MeasureText(metadadosTexto, metadados.Font).Width;
+        var status = new Label
+        {
+            Text = reuniao.Status,
+            AutoSize = true,
+            ForeColor = _paleta.Positivo,
+            BackColor = _paleta.FundoPositivo,
+            Font = new Font(_tokens.Tipografia.Interface, 8.5F, FontStyle.Bold, GraphicsUnit.Point),
+            Padding = new Padding(8, 3, 8, 3),
+            Location = new Point(Math.Min(560, larguraMetadados + 18), 57),
+            AccessibleName = $"Estado da reunião: {reuniao.Status}"
+        };
+        AplicarRegiaoArredondada(status, _tokens.Geometria.RaioPequeno);
+
+        voltar.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        voltar.Location = new Point(cabecalho.Width - voltar.Width, 2);
+        cabecalho.Resize += (_, _) => voltar.Left = cabecalho.ClientSize.Width - voltar.Width;
+
+        cabecalho.Controls.Add(voltar);
+        cabecalho.Controls.Add(status);
+        cabecalho.Controls.Add(metadados);
+        cabecalho.Controls.Add(titulo);
+        cabecalho.Controls.Add(contexto);
+        corpo = new Panel { Dock = DockStyle.Fill, BackColor = _paleta.Superficies.Canvas };
+        pagina.Controls.Add(corpo);
+        pagina.Controls.Add(cabecalho);
+        return pagina;
+    }
+
+    private Panel CriarIntroducaoDetalhe(string aba, ReuniaoDesktopPoc reuniao)
+    {
+        var (titulo, descricao) = aba switch
+        {
+            "Transcrição" => ("Transcrição completa", "Registro local da conversa, disponível para seleção e cópia."),
+            "Decisões" => ("O que ficou decidido", $"{reuniao.Decisoes.Count} {Pluralizar(reuniao.Decisoes.Count, "decisão consolidada", "decisões consolidadas")} nesta reunião."),
+            "Tarefas" => ("Próximas ações", $"{reuniao.Tarefas.Count} {Pluralizar(reuniao.Tarefas.Count, "tarefa registrada", "tarefas registradas")} para acompanhamento."),
+            "Arquivos" => ("Arquivos e exportação", "Abra os artefatos locais ou gere uma cópia da ata."),
+            _ => ("Visão geral", "Síntese da reunião e principais pontos registrados localmente.")
+        };
+        var painel = new Panel
+        {
+            Height = 66,
+            Margin = new Padding(0, 0, 0, 10),
+            BackColor = _paleta.Superficies.Canvas
+        };
+        painel.Controls.Add(new Label
+        {
+            Text = descricao,
+            AutoSize = true,
+            ForeColor = _paleta.TextoSecundario,
+            Font = new Font(_tokens.Tipografia.Interface, 9.5F, FontStyle.Regular, GraphicsUnit.Point),
+            Location = new Point(1, 36)
+        });
+        painel.Controls.Add(new Label
+        {
+            Text = titulo,
+            AutoSize = true,
+            ForeColor = _paleta.Texto,
+            Font = new Font(_tokens.Tipografia.Display, 15F, FontStyle.Bold, GraphicsUnit.Point),
+            Location = Point.Empty
+        });
+        return painel;
+    }
+
+    private static string Pluralizar(int quantidade, string singular, string plural) =>
+        quantidade == 1 ? singular : plural;
 
     private DesktopSurfacePanel CriarBlocoArquivosPersistidos(ReuniaoDesktopPoc reuniao)
     {
@@ -808,35 +939,6 @@ internal sealed class DesktopPocForm : Form
                 exception,
                 "abrir_artefato");
         }
-    }
-
-    private void ConcluirTransicaoPagina()
-    {
-        var timer = _timerTransicaoPagina;
-        var destino = _paginaDestinoTransicao;
-        _timerTransicaoPagina = null;
-        _paginaDestinoTransicao = null;
-
-        timer?.Stop();
-        timer?.Dispose();
-
-        if (destino is null || destino.IsDisposed)
-        {
-            return;
-        }
-
-        foreach (var controle in _conteudo.Controls.Cast<Control>()
-                     .Where(controle => !ReferenceEquals(controle, destino))
-                     .ToArray())
-        {
-            _conteudo.Controls.Remove(controle);
-            controle.Dispose();
-        }
-
-        destino.Dock = DockStyle.Fill;
-        destino.Location = Point.Empty;
-        destino.BringToFront();
-        _conteudo.PerformLayout();
     }
 
     private async Task SolicitarExportacaoAtaAsync(
@@ -973,7 +1075,7 @@ internal sealed class DesktopPocForm : Form
                 Padding = new Padding(28),
                 CornerRadius = _tokens.Geometria.RaioMedio
             };
-            var iniciar = CriarBotaoPrimario("Iniciar gravação", (_, _) => IniciarGravacao());
+            var iniciar = CriarBotaoPrimario("Iniciar gravação", (_, _) => IniciarGravacao(), DesktopActionIcon.Record);
             iniciar.Location = new Point(28, 142);
             cartao.Controls.Add(iniciar);
             cartao.Controls.Add(CriarLabel("O Anamnesis iniciará OBS e Docker automaticamente no fluxo real.", 10F, _paleta.TextoSecundario, new Point(28, 92)));
@@ -1011,7 +1113,8 @@ internal sealed class DesktopPocForm : Form
 
         var encerrar = CriarBotaoPerigo(
             recuperacao ? "Encerrar gravação anterior" : "Encerrar e transcrever",
-            (_, _) => EncerrarGravacao());
+            (_, _) => EncerrarGravacao(),
+            DesktopActionIcon.Stop);
         if (_sessao.ModoDemonstracao)
         {
             var sistemaTexto = CriarLabel("Áudio do sistema", 10F, _paleta.Texto, new Point(30, 180));
@@ -1577,6 +1680,7 @@ internal sealed class DesktopPocForm : Form
                 BackColor = _paleta.Superficies.Canvas,
                 Padding = new Padding(0, 0, 8, 0)
             };
+            conteudo.Controls.Add(CriarFormularioConfiguracaoReal(ambiente));
             conteudo.Controls.Add(CriarBlocoTexto(
                 "Configuração local em uso",
                 ambiente is null
@@ -1669,6 +1773,228 @@ internal sealed class DesktopPocForm : Form
         return fluxo;
     }
 
+    private DesktopShadowPanel CriarFormularioConfiguracaoReal(DesktopRuntimeInfo? ambiente)
+    {
+        var configuracao = _configuracaoAtual ?? ambiente?.Configuracao ??
+            ConfiguracaoAnamnesis.CriarPadrao() with
+            {
+                CaminhoBanco = ambiente?.CaminhoBanco ?? ConfiguracaoAnamnesis.CriarPadrao().CaminhoBanco,
+                DiretorioArquivo = ambiente?.DiretorioArquivo ?? ConfiguracaoAnamnesis.CriarPadrao().DiretorioArquivo,
+                NomeCli = ambiente?.NomeCli ?? "CLI configurada"
+            };
+        var iniciarComWindows = _obterInicializacaoWindows?.Invoke() ?? false;
+        var cartao = new DesktopShadowPanel(
+            _paleta,
+            _tokens,
+            _politicaVisual,
+            DesktopSurfaceVariant.Elevated)
+        {
+            Height = 510,
+            Padding = new Padding(24),
+            CornerRadius = _tokens.Geometria.RaioMedio,
+            AccessibleName = "Formulário de configurações do Anamnesis"
+        };
+        var titulo = CriarLabel(
+            "Ajustes do produto",
+            15F,
+            _paleta.Texto,
+            new Point(24, 22),
+            FontStyle.Bold);
+        var descricao = CriarLabel(
+            "Altere somente o necessário. Senhas e opções avançadas permanecem preservadas.",
+            9.5F,
+            _paleta.TextoSecundario,
+            new Point(24, 54));
+        cartao.Controls.Add(titulo);
+        cartao.Controls.Add(descricao);
+
+        var grade = new TableLayoutPanel
+        {
+            Location = new Point(24, 90),
+            Height = 330,
+            ColumnCount = 2,
+            RowCount = 1,
+            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
+            BackColor = _paleta.Superficies.Painel,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty
+        };
+        grade.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+        grade.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+        grade.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+        cartao.Resize += (_, _) => grade.Width = Math.Max(320, cartao.ClientSize.Width - 48);
+
+        var esquerda = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
+            BackColor = _paleta.Superficies.Painel,
+            Padding = new Padding(0, 0, 16, 0)
+        };
+        var direita = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
+            BackColor = _paleta.Superficies.Painel,
+            Padding = new Padding(16, 0, 0, 0)
+        };
+        esquerda.SizeChanged += (_, _) => AjustarLarguraFilhos(esquerda, 0);
+        direita.SizeChanged += (_, _) => AjustarLarguraFilhos(direita, 0);
+
+        var inicializacao = new DesktopToggle(_paleta, _tokens)
+        {
+            Checked = iniciarComWindows,
+            AccessibleName = "Iniciar Anamnesis com o Windows"
+        };
+        esquerda.Controls.Add(CriarCampoToggleConfiguracao(
+            "Iniciar com o Windows",
+            "Mantém o Anamnesis pronto na bandeja.",
+            inicializacao));
+        var enderecoObs = new DesktopTextField(_paleta, _tokens, "ws://127.0.0.1:4455")
+        {
+            Text = configuracao.EnderecoObs,
+            AccessibleName = "Endereço local do OBS"
+        };
+        esquerda.Controls.Add(CriarCampoFormularioConfiguracao(
+            "Endereço local do OBS",
+            "WebSocket local usado para iniciar e encerrar a captura.",
+            enderecoObs));
+        var diretorio = new DesktopTextField(_paleta, _tokens, "Escolha uma pasta local")
+        {
+            Text = configuracao.DiretorioArquivo,
+            AccessibleName = "Pasta das reuniões"
+        };
+        esquerda.Controls.Add(CriarCampoFormularioConfiguracao(
+            "Pasta das reuniões",
+            "Destino local das atas, transcrições e artefatos.",
+            diretorio));
+
+        var nomeCli = new DesktopTextField(_paleta, _tokens, "Exemplo: Codex CLI")
+        {
+            Text = configuracao.NomeCli,
+            AccessibleName = "Nome da CLI de atas"
+        };
+        direita.Controls.Add(CriarCampoFormularioConfiguracao(
+            "CLI para gerar atas",
+            "Nome visível da ferramenta autenticada.",
+            nomeCli));
+        var executavelCli = new DesktopTextField(_paleta, _tokens, "Caminho do executável")
+        {
+            Text = configuracao.CaminhoExecutavelCli,
+            AccessibleName = "Executável da CLI de atas"
+        };
+        direita.Controls.Add(CriarCampoFormularioConfiguracao(
+            "Executável da CLI",
+            "Deixe o caminho descoberto automaticamente ou ajuste aqui.",
+            executavelCli));
+        direita.Controls.Add(CriarLinhaDiagnostico(
+            "Aplicação das mudanças",
+            "Reinício"));
+
+        grade.Controls.Add(esquerda, 0, 0);
+        grade.Controls.Add(direita, 1, 0);
+        cartao.Controls.Add(grade);
+
+        var retorno = CriarLabel(
+            _salvarConfiguracao is null
+                ? "Prévia visual: o salvamento real está disponível no aplicativo instalado."
+                : "Nenhuma alteração pendente.",
+            9F,
+            _paleta.TextoSecundario,
+            new Point(24, 456));
+        retorno.AccessibleRole = AccessibleRole.StatusBar;
+        retorno.Anchor = AnchorStyles.Left | AnchorStyles.Bottom;
+        cartao.Controls.Add(retorno);
+        DesktopActionButton? salvar = null;
+        salvar = CriarBotaoPrimario(
+            "Salvar alterações",
+            async (_, _) =>
+            {
+                try
+                {
+                    salvar!.Enabled = false;
+                    retorno.Text = "Validando e salvando localmente...";
+                    retorno.ForeColor = _paleta.TextoSecundario;
+                    var rascunho = new DesktopConfigurationDraft(
+                        diretorio.Text,
+                        enderecoObs.Text,
+                        nomeCli.Text,
+                        executavelCli.Text,
+                        inicializacao.Checked);
+                    var novaConfiguracao = rascunho.Build(configuracao);
+                    if (_salvarConfiguracao is not null)
+                    {
+                        await _salvarConfiguracao(novaConfiguracao, _lifetime.Token);
+                        _definirInicializacaoWindows?.Invoke(inicializacao.Checked);
+                        _configuracaoAtual = novaConfiguracao;
+                        configuracao = novaConfiguracao;
+                        retorno.Text = "Configuração salva. As mudanças entram em vigor na próxima abertura.";
+                        retorno.ForeColor = _paleta.Positivo;
+                    }
+                    else
+                    {
+                        retorno.Text = "Prévia validada. Nenhum arquivo foi alterado no modo de demonstração.";
+                        retorno.ForeColor = _paleta.Positivo;
+                    }
+                }
+                catch (Exception exception) when (exception is InvalidOperationException or IOException or UnauthorizedAccessException)
+                {
+                    retorno.Text = exception.Message;
+                    retorno.ForeColor = _paleta.Perigo;
+                }
+                finally
+                {
+                    salvar!.Enabled = true;
+                }
+            },
+            DesktopActionIcon.Save);
+        salvar.Anchor = AnchorStyles.Right | AnchorStyles.Bottom;
+        salvar.Location = new Point(cartao.ClientSize.Width - salvar.Width - 24, 440);
+        cartao.Resize += (_, _) => salvar.Left = cartao.ClientSize.Width - salvar.Width - 24;
+        cartao.Controls.Add(salvar);
+        return cartao;
+    }
+
+    private Panel CriarCampoFormularioConfiguracao(
+        string titulo,
+        string descricao,
+        Control campo)
+    {
+        var grupo = new Panel
+        {
+            Height = 104,
+            BackColor = _paleta.Superficies.Painel,
+            Margin = Padding.Empty
+        };
+        campo.Location = new Point(0, 54);
+        campo.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+        grupo.Resize += (_, _) => campo.Width = grupo.ClientSize.Width;
+        grupo.Controls.Add(campo);
+        grupo.Controls.Add(CriarLabel(descricao, 8.8F, _paleta.TextoSecundario, new Point(0, 27)));
+        grupo.Controls.Add(CriarLabel(titulo, 10F, _paleta.Texto, new Point(0, 2), FontStyle.Bold));
+        return grupo;
+    }
+
+    private Panel CriarCampoToggleConfiguracao(
+        string titulo,
+        string descricao,
+        DesktopToggle toggle)
+    {
+        var grupo = new Panel
+        {
+            Height = 104,
+            BackColor = _paleta.Superficies.Painel,
+            Margin = Padding.Empty
+        };
+        toggle.Location = new Point(0, 54);
+        grupo.Controls.Add(toggle);
+        grupo.Controls.Add(CriarLabel(descricao, 8.8F, _paleta.TextoSecundario, new Point(0, 27)));
+        grupo.Controls.Add(CriarLabel(titulo, 10F, _paleta.Texto, new Point(0, 2), FontStyle.Bold));
+        return grupo;
+    }
+
     private Panel CriarPagina(string titulo, string subtitulo, Control? acao, out Panel corpo)
     {
         var pagina = new Panel { Dock = DockStyle.Fill, BackColor = _paleta.Superficies.Canvas };
@@ -1759,7 +2085,9 @@ internal sealed class DesktopPocForm : Form
             WrapContents = false,
             AutoScroll = true,
             BackColor = _paleta.Superficies.Canvas,
-            Padding = new Padding(0, 0, 8, 0)
+            Padding = new Padding(0, 0, 8, 0),
+            AccessibleRole = AccessibleRole.List,
+            AccessibleName = "Histórico de reuniões"
         };
 
         foreach (var reuniao in itens)
@@ -1879,10 +2207,10 @@ internal sealed class DesktopPocForm : Form
         var conteudo = itens.Length == 0
             ? "Nenhum conteúdo disponível."
             : string.Join(Environment.NewLine, itens);
-        var linhasVisiveis = itens.Sum(item => Math.Max(1, (item.Length + 95) / 96));
+        var linhasVisiveis = itens.Sum(item => Math.Max(1, (item.Length + 109) / 110));
         var bloco = new DesktopShadowPanel(_paleta, _tokens, _politicaVisual, DesktopSurfaceVariant.Base)
         {
-            Height = Math.Clamp(120 + linhasVisiveis * 24, 180, 560),
+            Height = Math.Clamp(106 + linhasVisiveis * 22, 156, 460),
             Margin = new Padding(0, 0, 0, 12),
             Padding = new Padding(24, 20, 24, 20),
             CornerRadius = _tokens.Geometria.RaioMedio
@@ -1898,7 +2226,7 @@ internal sealed class DesktopPocForm : Form
             Padding = Padding.Empty
         };
         grade.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        grade.RowStyles.Add(new RowStyle(SizeType.Absolute, 42F));
+        grade.RowStyles.Add(new RowStyle(SizeType.Absolute, 38F));
         grade.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
 
         var cabecalho = new Panel
@@ -1912,7 +2240,7 @@ internal sealed class DesktopPocForm : Form
             Text = titulo,
             Dock = DockStyle.Fill,
             ForeColor = _paleta.Texto,
-            Font = new Font(Font.FontFamily, 13F, FontStyle.Bold, GraphicsUnit.Point),
+            Font = new Font(_tokens.Tipografia.Display, 11.5F, FontStyle.Bold, GraphicsUnit.Point),
             TextAlign = ContentAlignment.MiddleLeft
         };
         var copiar = CriarBotaoSecundario("Copiar texto", (_, _) =>
@@ -1920,7 +2248,7 @@ internal sealed class DesktopPocForm : Form
             Clipboard.SetText(conteudo);
         });
         copiar.Dock = DockStyle.Right;
-        copiar.MinimumSize = new Size(112, 32);
+        copiar.MinimumSize = new Size(104, 32);
         copiar.Height = 32;
         copiar.Padding = new Padding(10, 0, 10, 0);
 
@@ -1937,7 +2265,7 @@ internal sealed class DesktopPocForm : Form
             BorderStyle = BorderStyle.None,
             BackColor = _paleta.Superficies.Painel,
             ForeColor = _paleta.Texto,
-            Font = new Font(_tokens.Tipografia.Interface, 9.5F, FontStyle.Regular, GraphicsUnit.Point),
+            Font = new Font(_tokens.Tipografia.Interface, 10.5F, FontStyle.Regular, GraphicsUnit.Point),
             TabStop = true,
             AccessibleName = $"{titulo}: texto selecionável"
         };
@@ -2141,20 +2469,34 @@ internal sealed class DesktopPocForm : Form
     private DesktopSelectField CriarCombo(string[] opcoes)
         => new(_paleta, _tokens, opcoes);
 
-    private DesktopActionButton CriarBotaoPrimario(string texto, EventHandler clique) =>
-        CriarBotao(texto, DesktopActionVariant.Primary, clique);
+    private DesktopActionButton CriarBotaoPrimario(
+        string texto,
+        EventHandler clique,
+        DesktopActionIcon icon = DesktopActionIcon.None) =>
+        CriarBotao(texto, DesktopActionVariant.Primary, clique, icon);
 
-    private DesktopActionButton CriarBotaoPerigo(string texto, EventHandler clique) =>
-        CriarBotao(texto, DesktopActionVariant.Danger, clique);
+    private DesktopActionButton CriarBotaoPerigo(
+        string texto,
+        EventHandler clique,
+        DesktopActionIcon icon = DesktopActionIcon.None) =>
+        CriarBotao(texto, DesktopActionVariant.Danger, clique, icon);
 
-    private DesktopActionButton CriarBotaoSecundario(string texto, EventHandler clique) =>
-        CriarBotao(texto, DesktopActionVariant.Secondary, clique);
+    private DesktopActionButton CriarBotaoSecundario(
+        string texto,
+        EventHandler clique,
+        DesktopActionIcon icon = DesktopActionIcon.None) =>
+        CriarBotao(texto, DesktopActionVariant.Secondary, clique, icon);
 
-    private DesktopActionButton CriarBotao(string texto, DesktopActionVariant variant, EventHandler clique)
+    private DesktopActionButton CriarBotao(
+        string texto,
+        DesktopActionVariant variant,
+        EventHandler clique,
+        DesktopActionIcon icon = DesktopActionIcon.None)
     {
         var botao = new DesktopActionButton(_paleta, _tokens, _politicaVisual, variant)
         {
             Text = texto,
+            Icon = icon,
             AutoSize = true,
             MinimumSize = new Size(132, 40),
             Height = 40,

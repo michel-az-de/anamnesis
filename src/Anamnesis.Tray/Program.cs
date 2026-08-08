@@ -83,8 +83,15 @@ internal static class Program
         }
 
         var caminhoConfiguracao = ObterCaminhoConfiguracao();
+        var configuracaoExistia = File.Exists(caminhoConfiguracao);
         var arquivoConfiguracao = new ArquivoConfiguracao(caminhoConfiguracao);
         var configuracao = arquivoConfiguracao.CarregarAsync(CancellationToken.None).GetAwaiter().GetResult();
+        if (!configuracaoExistia)
+        {
+            configuracao = configuracao with { PrimeiroUsoConcluido = false };
+            arquivoConfiguracao.SalvarAsync(configuracao, CancellationToken.None).GetAwaiter().GetResult();
+        }
+
         if (diagnosticoDeteccao is not null)
         {
             return ExecutarDiagnosticoDeteccaoAsync(
@@ -93,6 +100,43 @@ internal static class Program
                     diagnosticoDeteccao)
                 .GetAwaiter()
                 .GetResult();
+        }
+
+        var inicializacaoWindows = new InicializacaoWindows(Environment.ProcessPath!);
+        if (modoValidacao is null)
+        {
+            ApplicationConfiguration.Initialize();
+            DesktopPocTheme.HerdarDoWindows();
+            var tema = DesktopPocTheme.ObterAtual();
+            var politicaVisual = DesktopPocSystemPreferences.Obter();
+            if (DesktopStartupExperience.DeveExibirSplash(argumentos))
+            {
+                DesktopSplashForm.Exibir(tema, politicaVisual);
+            }
+
+            if (DesktopStartupExperience.DeveExibirWizard(configuracao, argumentos))
+            {
+                using var primeiroAcesso = new PrimeiroAcessoForm(
+                    configuracao,
+                    inicializacaoWindows.EstaAtiva,
+                    tema,
+                    politicaVisual);
+                if (primeiroAcesso.ShowDialog() != DialogResult.OK)
+                {
+                    return 0;
+                }
+
+                configuracao = primeiroAcesso.Configuracao;
+                arquivoConfiguracao.SalvarAsync(configuracao, CancellationToken.None).GetAwaiter().GetResult();
+                if (primeiroAcesso.IniciarComWindows)
+                {
+                    inicializacaoWindows.Ativar();
+                }
+                else
+                {
+                    inicializacaoWindows.Desativar();
+                }
+            }
         }
 
         var workerLauncher = CriarWorkerLauncher(modoValidacao, caminhoConfiguracao);
@@ -134,7 +178,8 @@ internal static class Program
                         item.Nome,
                         item.Disponivel,
                         item.Mensagem))
-                    .ToArray()),
+                    .ToArray(),
+                configuracao),
             eventoRepository,
             jobQuery,
             journal,
@@ -152,8 +197,6 @@ internal static class Program
         // anterior. Essa leitura é local e nunca consulta ou comanda o OBS.
         sessaoDesktop.AtualizarAsync(CancellationToken.None).GetAwaiter().GetResult();
 
-        ApplicationConfiguration.Initialize();
-        DesktopPocTheme.HerdarDoWindows();
         using var iconeAplicacao = IconeAnamnesis.Carregar();
         using var icone = new NotifyIcon
         {
@@ -184,7 +227,6 @@ internal static class Program
         var encerrar = new ToolStripMenuItem("Encerrar gravação") { Enabled = false };
         var processarPendencias = new ToolStripMenuItem("Processar pendências");
         var estado = new ToolStripMenuItem("Estado: Pronto") { Enabled = false };
-        var inicializacaoWindows = new InicializacaoWindows(Environment.ProcessPath!);
         var iniciarComWindows = new ToolStripMenuItem("Iniciar com o Windows")
         {
             Checked = inicializacaoWindows.EstaAtiva,
@@ -207,6 +249,23 @@ internal static class Program
                         tarefa,
                         horario,
                         cancellationToken);
+                },
+                async (novaConfiguracao, cancellationToken) =>
+                {
+                    await arquivoConfiguracao.SalvarAsync(novaConfiguracao, cancellationToken);
+                    configuracao = novaConfiguracao;
+                },
+                () => inicializacaoWindows.EstaAtiva,
+                ativo =>
+                {
+                    if (ativo)
+                    {
+                        inicializacaoWindows.Ativar();
+                    }
+                    else
+                    {
+                        inicializacaoWindows.Desativar();
+                    }
                 });
             novaJanela.FormClosing += (_, evento) =>
             {

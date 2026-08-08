@@ -21,6 +21,18 @@ internal enum DesktopActionVariant
     Ghost
 }
 
+internal enum DesktopActionIcon
+{
+    None,
+    Record,
+    Live,
+    Stop,
+    Save,
+    ArrowLeft,
+    ArrowRight,
+    Check
+}
+
 internal enum DesktopNavigationIcon
 {
     None,
@@ -258,10 +270,14 @@ internal sealed class DesktopActionButton : Button
 
     public DesktopActionVariant Variant { get; }
 
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public DesktopActionIcon Icon { get; init; }
+
     public override Size GetPreferredSize(Size proposedSize)
     {
         var texto = TextRenderer.MeasureText(Text, Font);
-        return new Size(Math.Max(MinimumSize.Width, texto.Width + 34), Math.Max(MinimumSize.Height, 40));
+        var espacoIcone = Icon == DesktopActionIcon.None ? 0 : 26;
+        return new Size(Math.Max(MinimumSize.Width, texto.Width + 34 + espacoIcone), Math.Max(MinimumSize.Height, 40));
     }
 
     protected override void OnMouseEnter(EventArgs e)
@@ -320,16 +336,35 @@ internal sealed class DesktopActionButton : Button
             Focused ? _tokens.Geometria.BordaFoco : _tokens.Geometria.Borda);
         pevent.Graphics.DrawPath(caneta, caminho);
 
-        TextRenderer.DrawText(
-            pevent.Graphics,
-            Text,
-            Font,
-            area,
-            texto,
-            TextFormatFlags.HorizontalCenter |
-            TextFormatFlags.VerticalCenter |
-            TextFormatFlags.EndEllipsis |
-            TextFormatFlags.NoPrefix);
+        if (Icon == DesktopActionIcon.None)
+        {
+            TextRenderer.DrawText(
+                pevent.Graphics,
+                Text,
+                Font,
+                area,
+                texto,
+                TextFormatFlags.HorizontalCenter |
+                TextFormatFlags.VerticalCenter |
+                TextFormatFlags.EndEllipsis |
+                TextFormatFlags.NoPrefix);
+        }
+        else
+        {
+            var medida = TextRenderer.MeasureText(pevent.Graphics, Text, Font, Size.Empty, TextFormatFlags.NoPadding);
+            const int tamanhoIcone = 18;
+            const int intervalo = 9;
+            var larguraGrupo = tamanhoIcone + intervalo + medida.Width;
+            var inicioX = area.Left + Math.Max(8, (area.Width - larguraGrupo) / 2);
+            DesenharIcone(pevent.Graphics, new Rectangle(inicioX, area.Top + ((area.Height - tamanhoIcone) / 2), tamanhoIcone, tamanhoIcone), texto);
+            TextRenderer.DrawText(
+                pevent.Graphics,
+                Text,
+                Font,
+                new Rectangle(inicioX + tamanhoIcone + intervalo, area.Top, Math.Max(1, area.Right - inicioX - tamanhoIcone - intervalo), area.Height),
+                texto,
+                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+        }
     }
 
     protected override void Dispose(bool disposing)
@@ -362,6 +397,56 @@ internal sealed class DesktopActionButton : Button
             _paleta.Texto,
             _paleta.Borda)
     };
+
+    private void DesenharIcone(Graphics graphics, Rectangle area, Color cor)
+    {
+        graphics.SmoothingMode = SmoothingMode.AntiAlias;
+        using var caneta = new Pen(cor, 1.8F)
+        {
+            StartCap = LineCap.Round,
+            EndCap = LineCap.Round,
+            LineJoin = LineJoin.Round
+        };
+        var cx = area.Left + (area.Width / 2);
+        var cy = area.Top + (area.Height / 2);
+        switch (Icon)
+        {
+            case DesktopActionIcon.Record:
+                graphics.DrawEllipse(caneta, area.Left + 2, area.Top + 2, area.Width - 5, area.Height - 5);
+                using (var ponto = new SolidBrush(cor))
+                {
+                    graphics.FillEllipse(ponto, cx - 3, cy - 3, 6, 6);
+                }
+                break;
+            case DesktopActionIcon.Live:
+                using (var ponto = new SolidBrush(cor))
+                {
+                    graphics.FillEllipse(ponto, cx - 2, cy - 2, 4, 4);
+                }
+                graphics.DrawArc(caneta, area.Left + 3, area.Top + 3, area.Width - 7, area.Height - 7, -52, 104);
+                graphics.DrawArc(caneta, area.Left, area.Top, area.Width - 1, area.Height - 1, -52, 104);
+                break;
+            case DesktopActionIcon.Stop:
+                graphics.DrawRectangle(caneta, area.Left + 4, area.Top + 4, area.Width - 9, area.Height - 9);
+                break;
+            case DesktopActionIcon.Save:
+                graphics.DrawRectangle(caneta, area.Left + 2, area.Top + 2, area.Width - 5, area.Height - 5);
+                graphics.DrawRectangle(caneta, area.Left + 5, area.Top + 3, area.Width - 11, 5);
+                graphics.DrawRectangle(caneta, area.Left + 5, area.Top + 11, area.Width - 11, 4);
+                break;
+            case DesktopActionIcon.ArrowLeft:
+                graphics.DrawLines(caneta, [new Point(area.Left + 11, area.Top + 3), new Point(area.Left + 5, cy), new Point(area.Left + 11, area.Bottom - 4)]);
+                graphics.DrawLine(caneta, area.Left + 5, cy, area.Right - 3, cy);
+                break;
+            case DesktopActionIcon.ArrowRight:
+                graphics.DrawLine(caneta, area.Left + 3, cy, area.Right - 5, cy);
+                graphics.DrawLines(caneta, [new Point(area.Right - 11, area.Top + 3), new Point(area.Right - 5, cy), new Point(area.Right - 11, area.Bottom - 4)]);
+                break;
+            case DesktopActionIcon.Check:
+                graphics.DrawLines(caneta, [new Point(area.Left + 2, cy), new Point(area.Left + 7, area.Bottom - 4), new Point(area.Right - 2, area.Top + 3)]);
+                break;
+        }
+    }
 }
 
 internal sealed class DesktopNavigationButton : Button
@@ -999,6 +1084,7 @@ internal sealed class DesktopBrandMark : Control
 {
     private readonly DesktopPocPalette _paleta;
     private readonly DesktopPocDesignTokens _tokens;
+    private double _progresso = 1D;
 
     public DesktopBrandMark(DesktopPocPalette paleta, DesktopPocDesignTokens tokens)
     {
@@ -1007,6 +1093,16 @@ internal sealed class DesktopBrandMark : Control
         DoubleBuffered = true;
         BackColor = paleta.Superficies.PainelElevado;
         Size = new Size(36, 36);
+        AccessibleRole = AccessibleRole.Graphic;
+        AccessibleName = "Marca Anamnesis";
+    }
+
+    public double Progresso => _progresso;
+
+    public void DefinirProgresso(double progresso)
+    {
+        _progresso = Math.Clamp(progresso, 0D, 1D);
+        Invalidate();
     }
 
     protected override void OnResize(EventArgs e)
@@ -1021,20 +1117,46 @@ internal sealed class DesktopBrandMark : Control
     {
         e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
         e.Graphics.Clear(_paleta.Superficies.PainelElevado);
-        var area = new Rectangle(1, 1, Width - 3, Height - 3);
+        var area = new Rectangle(1, 1, Math.Max(1, Width - 3), Math.Max(1, Height - 3));
         using var caminho = DesktopPocDrawing.CriarCaminhoArredondado(area, _tokens.Geometria.RaioMedio);
         using var borda = new Pen(_paleta.Borda, 1F);
         e.Graphics.DrawPath(borda, caminho);
         var centro = new Point(Width / 2, Height / 2);
-        var losango = new[]
+        var raio = Math.Max(6F, (Math.Min(Width, Height) * 0.30F) * (float)(0.72D + (_progresso * 0.28D)));
+        var raioInterno = raio * 0.34F;
+        var pontos = new PointF[16];
+        var rotacao = (float)((1D - _progresso) * -22D);
+        for (var indice = 0; indice < pontos.Length; indice++)
         {
-            new Point(centro.X, centro.Y - 8),
-            new Point(centro.X + 5, centro.Y),
-            new Point(centro.X, centro.Y + 8),
-            new Point(centro.X - 5, centro.Y)
+            var angulo = ((indice * 22.5F) - 90F + rotacao) * (MathF.PI / 180F);
+            var distancia = indice % 2 == 0 ? raio : raioInterno;
+            pontos[indice] = new PointF(
+                centro.X + (MathF.Cos(angulo) * distancia),
+                centro.Y + (MathF.Sin(angulo) * distancia));
+        }
+
+        var margemAnel = Math.Max(4, (int)Math.Round(Math.Min(Width, Height) * 0.13D));
+        var anel = new Rectangle(
+            margemAnel,
+            margemAnel,
+            Math.Max(1, Width - (margemAnel * 2) - 1),
+            Math.Max(1, Height - (margemAnel * 2) - 1));
+        using var canetaAnel = new Pen(_paleta.Destaque, Math.Max(1.5F, Math.Min(Width, Height) * 0.035F))
+        {
+            StartCap = LineCap.Round,
+            EndCap = LineCap.Round
         };
+        e.Graphics.DrawArc(canetaAnel, anel, -90F, Math.Max(1F, (float)(_progresso * 360D)));
         using var marca = new SolidBrush(_paleta.Destaque);
-        e.Graphics.FillPolygon(marca, losango);
+        e.Graphics.FillPolygon(marca, pontos);
+        using var nucleo = new SolidBrush(_paleta.TextoSobreDestaque);
+        var tamanhoNucleo = Math.Max(3F, raio * 0.18F);
+        e.Graphics.FillEllipse(
+            nucleo,
+            centro.X - tamanhoNucleo,
+            centro.Y - tamanhoNucleo,
+            tamanhoNucleo * 2F,
+            tamanhoNucleo * 2F);
     }
 }
 
@@ -1112,8 +1234,6 @@ internal sealed class DesktopTabButton : Button
     private bool _selecionado;
     private bool _pressionado;
 
-    private readonly DesktopTabIcon _icon;
-
     public DesktopTabButton(
         DesktopPocPalette paleta,
         DesktopPocDesignTokens tokens,
@@ -1122,19 +1242,19 @@ internal sealed class DesktopTabButton : Button
     {
         _paleta = paleta;
         _tokens = tokens;
-        _icon = icon;
         _hover = new DesktopInteractionAnimator(this, tokens.Motion, politica.AnimacoesAtivas);
         DoubleBuffered = true;
         FlatStyle = FlatStyle.Flat;
         FlatAppearance.BorderSize = 0;
         UseVisualStyleBackColor = false;
-        BackColor = paleta.Fundo;
+        BackColor = paleta.Superficies.Canvas;
         ForeColor = paleta.TextoSecundario;
         Cursor = Cursors.Hand;
-        Height = 38;
+        Height = 44;
         AutoSize = true;
-        Padding = new Padding(12, 0, 14, 0);
+        Padding = new Padding(14, 0, 14, 0);
         TabStop = true;
+        AccessibleRole = AccessibleRole.PageTab;
         SetStyle(
             ControlStyles.AllPaintingInWmPaint |
             ControlStyles.OptimizedDoubleBuffer |
@@ -1147,6 +1267,7 @@ internal sealed class DesktopTabButton : Button
     public void DefinirSelecionado(bool selecionado)
     {
         _selecionado = selecionado;
+        AccessibleDescription = selecionado ? "Aba selecionada" : "Aba disponível";
         Invalidate();
     }
 
@@ -1177,23 +1298,14 @@ internal sealed class DesktopTabButton : Button
         Invalidate();
     }
 
-    protected override void OnResize(EventArgs e)
-    {
-        base.OnResize(e);
-        Region?.Dispose();
-        using var caminho = DesktopPocDrawing.CriarCaminhoArredondado(ClientRectangle, _tokens.Geometria.RaioPequeno);
-        Region = new Region(caminho);
-    }
-
     protected override void OnPaint(PaintEventArgs pevent)
     {
-        pevent.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-        var area = new Rectangle(1, 1, Math.Max(1, ClientSize.Width - 3), Math.Max(1, ClientSize.Height - 3));
-        using var caminho = DesktopPocDrawing.CriarCaminhoArredondado(area, _tokens.Geometria.RaioPequeno);
-
-        var fundoBase = _selecionado ? _paleta.FundoDestaque : _paleta.Fundo;
-        var hoverFundo = _selecionado ? DesktopPocMotion.Misturar(_paleta.FundoDestaque, _paleta.Destaque, 0.08D) : _paleta.FundoDestaque;
-        var fundo = DesktopPocMotion.Misturar(fundoBase, hoverFundo, _hover.Valor);
+        pevent.Graphics.Clear(BackColor);
+        var area = ClientRectangle;
+        var fundo = DesktopPocMotion.Misturar(
+            BackColor,
+            _selecionado ? _paleta.Superficies.DestaqueSuave : _paleta.Superficies.PainelHover,
+            _selecionado ? 0.28D : _hover.Valor * 0.72D);
 
         if (_pressionado)
         {
@@ -1201,7 +1313,7 @@ internal sealed class DesktopTabButton : Button
         }
 
         using var pincel = new SolidBrush(fundo);
-        pevent.Graphics.FillPath(pincel, caminho);
+        pevent.Graphics.FillRectangle(pincel, area);
 
         var corTexto = _selecionado ? _paleta.Destaque : _paleta.TextoSecundario;
         var hoverTexto = _selecionado ? _paleta.Destaque : _paleta.Texto;
@@ -1209,36 +1321,25 @@ internal sealed class DesktopTabButton : Button
 
         if (_selecionado)
         {
-            using var bordaAtiva = new Pen(Color.FromArgb(80, _paleta.Destaque), 1.2F);
-            pevent.Graphics.DrawPath(bordaAtiva, caminho);
-        }
-        else if (_hover.Valor > 0.01D)
-        {
-            using var bordaHover = new Pen(DesktopPocMotion.Misturar(_paleta.Borda, _paleta.Destaque, _hover.Valor * 0.35D), 1F);
-            pevent.Graphics.DrawPath(bordaHover, caminho);
+            using var marcador = new Pen(_paleta.Destaque, 3F)
+            {
+                StartCap = LineCap.Round,
+                EndCap = LineCap.Round
+            };
+            pevent.Graphics.DrawLine(marcador, 10F, ClientSize.Height - 2F, ClientSize.Width - 10F, ClientSize.Height - 2F);
         }
 
         if (Focused)
         {
-            using var foco = new Pen(_paleta.Superficies.BordaForte, _tokens.Geometria.BordaFoco);
-            pevent.Graphics.DrawPath(foco, caminho);
-        }
-
-        var temIcone = _icon != DesktopTabIcon.Resumo;
-        var offsetIcone = temIcone ? 20 : 0;
-        var areaTexto = new Rectangle(area.X + offsetIcone, area.Y, Math.Max(1, area.Width - offsetIcone), area.Height);
-
-        if (temIcone)
-        {
-            var areaIcone = new Rectangle(area.X + 10, (area.Height - 14) / 2 + 1, 14, 14);
-            DesenharIcone(pevent.Graphics, areaIcone, corTexto);
+            var foco = Rectangle.Inflate(ClientRectangle, -3, -4);
+            ControlPaint.DrawFocusRectangle(pevent.Graphics, foco, _paleta.Texto, BackColor);
         }
 
         TextRenderer.DrawText(
             pevent.Graphics,
             Text,
             Font,
-            areaTexto,
+            area,
             corTexto,
             TextFormatFlags.HorizontalCenter |
             TextFormatFlags.VerticalCenter |
@@ -1246,51 +1347,11 @@ internal sealed class DesktopTabButton : Button
             TextFormatFlags.NoPrefix);
     }
 
-    private void DesenharIcone(Graphics g, Rectangle area, Color cor)
-    {
-        g.SmoothingMode = SmoothingMode.AntiAlias;
-        using var caneta = new Pen(cor, 1.4F)
-        {
-            StartCap = LineCap.Round,
-            EndCap = LineCap.Round,
-            LineJoin = LineJoin.Round
-        };
-        var x = area.X;
-        var y = area.Y;
-
-        switch (_icon)
-        {
-            case DesktopTabIcon.Transcricao:
-                // Três linhas horizontais (texto)
-                for (int i = 0; i < 3; i++)
-                {
-                    g.DrawLine(caneta, x + 1, y + 3 + i * 5, x + 12, y + 3 + i * 5);
-                }
-                break;
-            case DesktopTabIcon.Decisoes:
-                // Checkmark
-                g.DrawLines(caneta, [new Point(x + 2, y + 7), new Point(x + 5, y + 10), new Point(x + 11, y + 4)]);
-                break;
-            case DesktopTabIcon.Tarefas:
-                // Quadrado com check pequeno
-                g.DrawRectangle(caneta, x + 1, y + 1, 11, 11);
-                g.DrawLines(caneta, [new Point(x + 4, y + 6), new Point(x + 6, y + 8), new Point(x + 10, y + 4)]);
-                break;
-            case DesktopTabIcon.Arquivos:
-                // Documento dobrado
-                g.DrawRectangle(caneta, x + 1, y + 2, 10, 11);
-                g.DrawLine(caneta, x + 8, y + 2, x + 8, y + 5);
-                g.DrawLine(caneta, x + 8, y + 5, x + 11, y + 5);
-                break;
-        }
-    }
-
     protected override void Dispose(bool disposing)
     {
         if (disposing)
         {
             _hover.Dispose();
-            Region?.Dispose();
         }
 
         base.Dispose(disposing);

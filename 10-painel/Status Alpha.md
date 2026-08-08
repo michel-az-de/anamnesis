@@ -4,7 +4,7 @@ aliases: [Painel Alpha, Roadmap Alpha]
 tags: [projeto/anamnesis, dashboard, alpha]
 type: dashboard
 created: 2026-08-04
-updated: 2026-08-07
+updated: 2026-08-08
 status: growing
 summary: Medição ponderada e auditável do caminho até uma alpha local testável.
 related: ["[[Anamnesis Home]]", "[[Projeto MOC]]", "[[Indice de SPEKs]]", "[[Protocolo de Agentes]]", "[[Roadmap de Produto]]"]
@@ -28,7 +28,7 @@ Duas limitações continuam registradas: um Worker morto no meio da transcriçã
 | Entrega para a alpha | Peso | Concluído | Avanço | Evidência atual |
 | --- | ---: | ---: | ---: | --- |
 | Especificações, ADRs e protocolo multi-LLM | 5% | 100% | 5% | SPEKs 001–004, ADRs 001–003 e protocolo versionados |
-| Solução .NET, qualidade e TDD inicial | 5% | 100% | 5% | Solução compilável e 327 testes automatizados verdes, incluindo regressões de navegação e contraste, busca local completa, exportação PDF/DOCX, publicação Obsidian, texto selecionável, ata narrativa, lembretes locais, cartões acionáveis, qualidade de transcrição, OBS, Docker, Tray, Worker black box, Desktop real, observabilidade, motion, detecção local e release Windows |
+| Solução .NET, qualidade e TDD inicial | 5% | 100% | 5% | Solução compilável e 350 testes automatizados verdes, incluindo abertura de produto, wizard, configuração real, hierarquia editorial do detalhe e do histórico de reuniões, estabilidade geométrica da navegação, cache local de agenda, regressões de contraste, busca local completa, exportação PDF/DOCX, publicação Obsidian, texto selecionável, ata narrativa, lembretes locais, cartões acionáveis, qualidade de transcrição, OBS, Docker, Tray, Worker black box, Desktop real, observabilidade, detecção local e release Windows |
 | Ciclo de vida de reunião no domínio | 10% | 100% | 10% | Estados, falha, retentativa, arquivamento e retenção cobertos por testes e persistência |
 | Fila local durável | 10% | 100% | 10% | `SqliteJobQueue` com reserva atômica, liberação e conclusão testadas |
 | Persistência de reuniões | 10% | 100% | 10% | `SqliteReuniaoRepository` persiste e restaura o agregado com testes em banco temporário |
@@ -93,6 +93,7 @@ A alpha estará pronta quando, em uma máquina Windows limpa e com pré-requisit
 | Busca local completa | SPEK 100% concluída | Título, resumo, decisões, tarefas e transcrição são pesquisáveis no SQLite com filtros, trecho contextual e abertura da aba correspondente ([[SPEK-056 Busca Local no Conteudo das Reunioes]]) |
 | Exportação local de ata | SPEK 100% concluída | PDF e DOCX são gerados localmente com escrita atômica, validação estrutural, paginação e renderização inspecionada ([[SPEK-057 Exportacao Local de Ata em PDF e DOCX]]) |
 | Publicação local no Obsidian | SPEK 100% concluída | Markdown idempotente em subpasta segura do vault, sem sobrescrever edição manual, acessar rede ou interferir na retenção ([[SPEK-036 Publicacao Local no Obsidian]]) |
+| Experiência de configuração e abertura | SPEK 100% concluída | Splash vetorial, wizard de três passos, formulário real persistido, motion respeitando o Windows e ícones de gravação cobertos por 350 testes Release ([[SPEK-058 Experiencia de Configuracao e Abertura]]) |
 
 ## Próximo incremento
 

@@ -4,7 +4,7 @@ aliases: [SPEK-029, Polimento Visual Desktop, Command Deck]
 tags: [especificacao, desktop, design-system, motion, windows, pos-alpha]
 type: spek
 created: 2026-08-05
-updated: 2026-08-07
+updated: 2026-08-08
 status: completed
 summary: Revisão visual sólida e precisa da POC para uma experiência desktop premium, sem transparências ou decoração excessiva.
 related: ["[[Status Alpha]]", "[[Design System Desktop]]", "[[SPEK-027 Desktop Windows para Estado Visivel]]", "[[SPEK-028 Console Local de Observabilidade]]"]
@@ -33,8 +33,8 @@ Transformar a POC desktop em um `Command Deck` premium, sólido, preciso e recon
 - Toda cor usada em uma superfície possui alpha 255.
 - Cartões usam contraste entre planos, borda discreta e raio contido. Não usam brilho, gradiente ou sombra pesada.
 - Botões principais, secundários, perigosos e itens de navegação possuem estados default, hover, pressionado, selecionado, foco e desabilitado.
-- A navegação usa transição espacial curta e direta, sem atrasar a interação.
-- Um novo comando de navegação conclui a transição anterior antes de iniciar outra; páginas nunca ficam sobrepostas, deslocadas ou presas fora do destino.
+- A navegação troca o conteúdo imediatamente e mantém sua geometria estável; motion fica restrito ao feedback de hover, pressionado e foco.
+- Páginas nunca coexistem durante a troca, nem ficam sobrepostas, deslocadas ou presas fora do destino.
 - Itens laterais mantêm folga mínima para que cantos e bordas não sejam recortados pelo contêiner.
 - Estados globais de sucesso, processamento e atenção usam fundo e texto semanticamente coerentes.
 - O canvas não possui animação contínua.
@@ -52,7 +52,7 @@ Transformar a POC desktop em um `Command Deck` premium, sólido, preciso e recon
 entrada do usuário
        |
        v
-hover ou clique -> mudança precisa de cor/borda -> transição espacial -> conteúdo estável
+hover ou clique -> mudança precisa de cor/borda -> troca imediata -> conteúdo estável
        |                                                               |
        +-------------------- preferência do Windows -------------------+
                                    remove motion
@@ -81,7 +81,7 @@ hover ou clique -> mudança precisa de cor/borda -> transição espacial -> cont
 - [x] Cartões e botões possuem raios contidos, bordas precisas e estados coerentes.
 - [x] Navegação usa ícones vetoriais consistentes e marcador selecionado discreto.
 - [x] Inputs, selects e toggles não exibem aparência WinForms padrão.
-- [x] A troca de páginas possui transição curta quando motion estiver habilitado.
+- [x] A troca de páginas é imediata mesmo quando motion estiver habilitado, sem deslocamento ou salto do conteúdo.
 - [x] A troca de páginas é imediata quando motion estiver desabilitado.
 - [x] Cliques consecutivos durante motion terminam com somente a última página visível, preenchendo todo o canvas.
 - [x] A navegação lateral não exibe pixels ou bordas recortadas no lado direito.
@@ -162,3 +162,40 @@ O feedback visual de 2026-08-05 reprovou a direção translúcida por parecer de
 - Green: uma única transição de página fica ativa; novo clique conclui a anterior antes de iniciar a próxima.
 - A largura dos itens laterais reserva dois pixels para pintura dos cantos e o estado global escolhe fundo semântico.
 - Validação isolada: 327 testes Release verdes, sem incluir as alterações de agenda ainda em andamento no checkout principal.
+
+## Correção de estabilidade visual 2026-08-08
+
+- O teste ao vivo reprovou a transição espacial porque a página nova podia permanecer uma largura inteira fora do canvas antes de saltar ao destino.
+- A navegação passa a trocar páginas de forma imediata, preservando motion somente nos estados dos controles.
+- A geometria do menu lateral e do conteúdo deve permanecer idêntica antes e depois de qualquer troca.
+- Red: o teste encontrou duas páginas simultâneas logo após o clique; Green: a troca mantém uma única página em `DockStyle.Fill`.
+- Validação isolada: 328 testes Release verdes, sendo 3 de Domain, 61 de Application e 264 de Infrastructure.
+
+## Revisão editorial do detalhe da reunião 2026-08-08
+
+O teste visual com uma ata real mostrou que a tela de detalhe ainda tinha aparência de protótipo: título sem contexto, cinco abas isoladas em cápsulas, conteúdo repetitivo e cartões altos demais para o texto disponível.
+
+- O cabeçalho do detalhe comunica contexto, título, metadados e estado da reunião em uma única hierarquia de leitura.
+- As abas formam uma navegação contínua, sem cápsulas ou bordas permanentes; somente a aba ativa recebe marcador de destaque.
+- Cada aba expõe um título editorial e uma descrição curta antes do conteúdo, evitando repetição mecânica entre aba e cartão.
+- Blocos de texto calculam sua altura a partir do conteúdo e preservam uma largura confortável de leitura, sem grandes áreas vazias.
+- Texto selecionável, atalho de cópia, foco visível, tema claro/escuro e escala por DPI continuam obrigatórios.
+- Red: testes de interface reprovam abas com região arredondada, ausência de contexto acessível e texto com tipografia compacta de protótipo.
+- Green: cabeçalho editorial, estado da reunião, abas contínuas com `AccessibleRole.PageTab`, títulos contextuais e blocos proporcionais foram implementados sem alterar os dados ou as ações existentes.
+- Evidência visual dark: `artifacts/poc-desktop/editorial-evidence/detail-decisions-dark.png`.
+- Validação Release: build com 0 avisos e 0 erros; 339 testes verdes, sendo 3 de Domain, 61 de Application e 275 de Infrastructure.
+
+## Revisão editorial do histórico de reuniões 2026-08-08
+
+O teste visual da listagem real mostrou filtros fragmentados, um vazio central sem função e reuniões apresentadas como cartões isolados sem navegação completa por teclado.
+
+- Busca, período e estado ocupam uma grade responsiva, com contexto e nomes acessíveis explícitos.
+- A área de resultados informa quantas reuniões estão visíveis e atualiza a contagem após filtros locais ou busca persistida.
+- Reuniões formam uma superfície contínua com separadores discretos, sem cápsulas, sombras ou espaços entre cartões.
+- Cada reunião expõe `AccessibleRole.ListItem`, foco visível e abertura por mouse, Enter ou Espaço.
+- Título, plataforma, data, duração, estado e trecho correspondente mantêm a mesma informação factual.
+- Red: testes reprovam a ausência de contexto e contagem, busca não responsiva, itens arredondados e falta de acionamento por teclado.
+- Green: busca e filtros passaram para uma grade responsiva; contagem acompanha o resultado; reuniões usam superfície contínua, `AccessibleRole.ListItem`, foco e abertura por Enter ou Espaço.
+- Evidências visuais dark: `artifacts/poc-desktop/editorial-evidence/meetings-before.png` e `artifacts/poc-desktop/editorial-evidence/meetings-after.png`.
+- Validação Release: build com 0 avisos e 0 erros; 341 testes verdes, sendo 3 de Domain, 61 de Application e 277 de Infrastructure.
+- Prévia instalada: `0.2.0-beta.13-ux-preview.1`, com hash do binário instalado igual ao payload, SQLite íntegro, 25 reuniões e 23 jobs preservados.
