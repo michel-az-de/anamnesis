@@ -225,3 +225,4 @@ O uso dos filtros de Observabilidade expôs uma `ObjectDisposedException`: o `Co
 - Red: um teste de ciclo de vida exige que o menu permaneça válido ao retornar de `Close` e seja descartado após o processamento da fila WinForms.
 - Green: o select agenda o descarte, mantém uma única referência de menu aberto e encerra o recurso no `Dispose` do controle.
 - Validação Release: 352 testes verdes, sendo 3 de Domain, 61 de Application e 288 de Infrastructure; os 25 testes de `DesktopPocFormTests` passaram em conjunto.
+- Prévia instalada: `0.2.0-beta.15-ux-preview.1`, com binário instalado igual ao payload, Tray responsivo, SQLite íntegro, 25 reuniões, 23 jobs, nenhum job pendente e nenhuma reunião ativa.
