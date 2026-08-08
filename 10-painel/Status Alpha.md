@@ -74,6 +74,7 @@ A alpha estará pronta quando, em uma máquina Windows limpa e com pré-requisit
 | Desktop com dados reais | SPEK 100% concluída | Histórico e jobs no SQLite, comandos reais, manifesto, recuperação de gravação órfã, publicação e E2E controlado de Tray + Worker |
 | Observabilidade operacional real | SPEK 100% concluída | Journal SQLite isolado, 14 códigos correlacionados, console com dados reais, retenção de 14 dias, canário de privacidade e publicação `artifacts/publish/SPEK-031` ([[ADR-015 Journal SQLite Isolado]]) |
 | Captura instantânea e detecção local | **SPEK 100% concluída** | Política assistida e automática opt-in, Core Audio + User32 reais, recuperação segura, JSONL sanitizado, E2E controlado, 249 testes verdes, baseline validado e roteiro de ensaio manual documentado ([[ADR-016 Deteccao Local por Core Audio e User32]], [[Ensaio Manual SPEK-032]]) |
+| Agenda conectada — contrato e cache | **SPEK 033 em progresso** | ADR-019 aceito, entidades ContaAgenda/EventoAgenda, contratos IAgendaAdapter/IAgendaCache/IAgendaTokenStore, SqliteAgendaCache com rebase atômico, WinCredTokenStore, 9 testes verdes, 291 testes totais verdes ([[ADR-019 OAuth Desktop e Cache Protegido para Agendas]]) |
 | Experiência Windows instalada | SPEK 100% concluída | Instalador `0.2.0-beta.1` validado nesta máquina e no runner `windows-2025`; identidade própria, uma instância, um atalho, startup `--background`, primeiro uso, Worker interno e desinstalação com logs comprovados pelo run `31068430123` ([[SPEK-045 Experiencia Windows Instalada e Primeiro Uso]]) |
 | Instalador resiliente com atualização e reparo | SPEK 100% concluída | O run `31109639731` migrou beta.1 para beta.4, preservou startup, atalho, configuração, banco e reunião, bloqueou dois downgrades modernos, reparou o Worker e desinstalou com encerramento cooperativo ([[SPEK-047 Instalador Resiliente com Atualizacao e Reparo]]) |
 | Concorrência de Worker e fila | SPEK 100% concluída | Mutex por banco impede dois Workers no mesmo job; Red registrado com `A reunião está em 'EmTranscricao'` e saída 1, Green com E2E de dois processos reais ([[ADR-012 Instancia Unica do Worker]]) |
@@ -95,11 +96,11 @@ A alpha estará pronta quando, em uma máquina Windows limpa e com pré-requisit
 
 ## Próximo incremento
 
-**Próximo ciclo: [[SPEK-033 Agenda Conectada]].** A SPEK-032 foi concluída com baseline validado e roteiro de ensaio manual documentado. O detector local está operacional em modo assistido e automático opt-in.
+**Próximo ciclo: [[SPEK-034 Google Calendar Adapter]].** SPEK-033 teve seu contrato, cache e token store implementados. Agora falta o adapter Google Calendar com OAuth PKCE, sincronização incremental e reconhecimento de links Meet.
 
 ## Roadmap pós-alpha
 
-O planejamento pós-alpha está documentado em [[Roadmap de Produto]]. As SPEKs 030, 031, 032, 036, 045, 046, 048, 049, 050, 051, 052, 053, 054, 056 e 057 foram concluídas; e as SPEKs 033 a 035 e 037 a 039 permanecem em rascunho para agendas Google e Microsoft, Trello e Azure DevOps.
+O planejamento pós-alpha está documentado em [[Roadmap de Produto]]. As SPEKs 030, 031, 032, 033 (contrato e cache), 036, 045, 046, 048, 049, 050, 051, 052, 053, 054, 056 e 057 foram concluídas; a SPEK-033 (adapters Google e Microsoft) e as SPEKs 034, 035, 037 a 039 permanecem em progresso para agendas conectadas, Trello e Azure DevOps.
 
 Esse roadmap não altera os 100% da alpha. Novos percentuais só serão criados quando houver uma versão-alvo com pesos próprios, evitando misturar produto futuro com a medição já encerrada.
 
