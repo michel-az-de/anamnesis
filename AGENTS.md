@@ -1,5 +1,7 @@
 # Protocolo de desenvolvimento — Anamnesis
 
+**Plano vivo (D15):** atividade que edita arquivo, roda comando com efeito ou delega a agente começa com um plano em `~/.claude/planos/<sessão>.md`, que passa por banca, é relido a cada ação e vira o handoff. Regra completa na seção D15 de `ATLAS_AGENT_DISCIPLINE_V1`, projetada em `~/.claude/CLAUDE.md` e `~/.codex/AGENTS.md`.
+
 ## Fonte de verdade
 
 O desenvolvimento é orientado pelas especificações em `30-especificacoes/`. A pasta `.speks/` é o manifesto oculto para ferramentas e agentes. Antes de alterar código:
